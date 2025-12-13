@@ -6,7 +6,7 @@ interface User {
   username: string;
   email: string;
   password: string;
-  role_id: string;
+  role_id: number; // Corrigé : doit être un entier correspondant à la table roles
 }
 
 async function seedDatabase() {
@@ -35,39 +35,43 @@ async function seedDatabase() {
       console.log('Ajout de nouveaux utilisateurs à la base de données existante...');
     }
 
-    // Données des utilisateurs
+    // Données des utilisateurs avec role_id correct
     const users: User[] = [
-      // Utilisateurs existants
       {
         username: 'admin',
         email: 'admin@example.com',
         password: await bcrypt.hash('admin123', 10),
-        role_id: 'admin'
+        role_id: 2 // Administrateur
       },
       {
         username: 'user1',
         email: 'user1@example.com',
         password: await bcrypt.hash('user1123', 10),
-        role_id: 'user'
+        role_id: 4 // MembreEquipe
       },
       {
         username: 'user2',
         email: 'user2@example.com',
         password: await bcrypt.hash('user2123', 10),
-        role_id: 'user'
+        role_id: 4
       },
-      // Nouveaux utilisateurs
       {
         username: 'manager1',
         email: 'manager@example.com',
         password: await bcrypt.hash('manager123', 10),
-        role_id: 'manager'
+        role_id: 3 // ChefProjet
       },
       {
         username: 'dev1',
         email: 'dev@example.com',
         password: await bcrypt.hash('dev1234', 10),
-        role_id: 'developer'
+        role_id: 4 // MembreEquipe
+      },
+      {
+        username: 'Directeur General',
+        email: 'directeur@example.com',
+        password: await bcrypt.hash('directeur123', 10),
+        role_id: 1 // Directeur General
       }
     ];
 
@@ -75,7 +79,6 @@ async function seedDatabase() {
     let addedUsers = 0;
     for (const user of users) {
       try {
-        // Vérifier si l'utilisateur existe déjà
         const [existing] = await connection.execute<RowDataPacket[]>(
           'SELECT id FROM users WHERE email = ?',
           [user.email]
@@ -86,10 +89,10 @@ async function seedDatabase() {
             'INSERT INTO users (username, email, password, role_id) VALUES (?, ?, ?, ?)',
             [user.username, user.email, user.password, user.role_id]
           );
-          console.log(`Utilisateur créé : ${user.email} (${user.role_id})`);
+          console.log(`Utilisateur créé : ${user.email} (role_id: ${user.role_id})`);
           addedUsers++;
         } else {
-          console.log(` L'utilisateur ${user.email} existe déjà, ignoré.`);
+          console.log(`L'utilisateur ${user.email} existe déjà, ignoré.`);
         }
       } catch (error) {
         console.error(`Erreur avec l'utilisateur ${user.email}:`, error);

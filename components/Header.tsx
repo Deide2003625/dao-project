@@ -106,10 +106,10 @@ export default function Header() {
       <div className="navbar-brand-wrapper d-flex justify-content-center">
         <div className="navbar-brand-inner-wrapper d-flex justify-content-between align-items-center w-100">
           <a className="navbar-brand brand-logo" href="#">
-            <Image src="/images/logo.svg" width={120} height={40} alt="logo" />
+            <Image src="/images/logo.png" width={120} height={40} alt="logo" />
           </a>
           <a className="navbar-brand brand-logo-mini" href="#">
-            <Image src="/images/logo-mini.svg" width={40} height={40} alt="logo mini" />
+            <Image src="/images/logo-mini.png" width={40} height={40} alt="logo mini" />
           </a>
           <button className="navbar-toggler navbar-toggler align-self-center" type="button">
             <span className="mdi mdi-sort-variant"></span>

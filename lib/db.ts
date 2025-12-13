@@ -4,8 +4,8 @@ import mysql from "mysql2/promise";
 // Création d'un pool de connexions au démarrage
 const pool = mysql.createPool({
   host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "",
+  user: process.env.DB_USER || "erwann",
+  password: process.env.DB_PASSWORD || "erwann",
   database: process.env.DB_NAME || "dao",
   waitForConnections: true,
   connectionLimit: 10, // Nombre maximum de connexions dans le pool

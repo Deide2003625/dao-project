@@ -170,7 +170,7 @@ export default function LoginForm() {
     <div className="auth-form-light text-center p-5" style={{ maxWidth: '400px', margin: '0 auto' }}>
       <div className="brand-logo mb-4">
         <Image
-          src="/images/logo.svg"
+          src="/images/logo.png"
           alt="Logo"
           width={180}
           height={60}

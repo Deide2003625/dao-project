@@ -159,6 +159,9 @@ export default function Page() {
         </div>
       </div>
 
+      {/*Progression globale */}
+      
+
       {/* TABLE */}
       <div className="row">
         <div className="col-12 stretch-card">
