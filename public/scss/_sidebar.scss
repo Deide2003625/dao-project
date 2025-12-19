@@ -8,10 +8,18 @@
   padding: 0;
   width: $sidebar-width-lg;
   z-index: 11;
-  transition: width $action-transition-duration $action-transition-timing-function, background $action-transition-duration $action-transition-timing-function;
-  -webkit-transition: width $action-transition-duration $action-transition-timing-function, background $action-transition-duration $action-transition-timing-function;
-  -moz-transition: width $action-transition-duration $action-transition-timing-function, background $action-transition-duration $action-transition-timing-function;
-  -ms-transition: width $action-transition-duration $action-transition-timing-function, background $action-transition-duration $action-transition-timing-function;
+  transition:
+    width $action-transition-duration $action-transition-timing-function,
+    background $action-transition-duration $action-transition-timing-function;
+  -webkit-transition:
+    width $action-transition-duration $action-transition-timing-function,
+    background $action-transition-duration $action-transition-timing-function;
+  -moz-transition:
+    width $action-transition-duration $action-transition-timing-function,
+    background $action-transition-duration $action-transition-timing-function;
+  -ms-transition:
+    width $action-transition-duration $action-transition-timing-function,
+    background $action-transition-duration $action-transition-timing-function;
   box-shadow: $sidebar-box-shadow;
   -webkit-box-shadow: $sidebar-box-shadow;
   -moz-box-shadow: $sidebar-box-shadow;
@@ -36,7 +44,8 @@
         @include display-flex;
         @include align-items(center);
         white-space: nowrap;
-        padding: $sidebar-menu-padding-top $sidebar-menu-padding-right $sidebar-menu-padding-bottom $sidebar-menu-padding-left;
+        padding: $sidebar-menu-padding-top $sidebar-menu-padding-right
+          $sidebar-menu-padding-bottom $sidebar-menu-padding-left;
         color: $sidebar-light-menu-color;
         @include transition-duration(0.45s);
         transition-property: color;
@@ -77,7 +86,7 @@
               display: block;
               font-size: 1rem;
               line-height: 10px;
-              @include transition(all .2s ease-in);
+              @include transition(all 0.2s ease-in);
             }
           }
         }
@@ -110,19 +119,19 @@
 
       &.active {
         > .nav-link {
-            background: $sidebar-light-menu-active-bg;
-            position: relative;
-            i,
-            .menu-title,
-            .menu-arrow {
-              color: $sidebar-light-menu-active-color;
-            }
+          background: $sidebar-light-menu-active-bg;
+          position: relative;
+          i,
+          .menu-title,
+          .menu-arrow {
+            color: $sidebar-light-menu-active-color;
+          }
         }
       }
     }
 
     &:not(.sub-menu) {
-      margin-top: .3rem;
+      margin-top: 0.3rem;
       > .nav-item {
         border-bottom: 1px solid $border-color;
         margin-top: 0;
@@ -132,21 +141,21 @@
         &:hover {
           > .nav-link {
             background: $sidebar-light-menu-hover-bg;
-            color: $sidebar-light-menu-hover-color;                                    
+            color: $sidebar-light-menu-hover-color;
           }
         }
       }
     }
     &.sub-menu {
       margin-bottom: 0;
-      margin-top:0;
+      margin-top: 0;
       list-style: none;
       padding: $sidebar-submenu-padding;
 
       .nav-item {
         padding: 0;
         &::before {
-          content: '';
+          content: "";
           position: absolute;
           width: 5px;
           height: 5px;

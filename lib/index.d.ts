@@ -1,6 +1,9 @@
 // Déclaration des types pour les modules dans le dossier lib
-declare module '@/lib/auth' {
-  export function authenticateUser(email: string, password: string): Promise<{
+declare module "@/lib/auth" {
+  export function authenticateUser(
+    email: string,
+    password: string,
+  ): Promise<{
     success: boolean;
     message?: string;
     user?: {
@@ -9,18 +12,26 @@ declare module '@/lib/auth' {
     };
   }>;
 
-  export function createUser(email: string, password: string, username?: string, roleId?: string): Promise<{
+  export function createUser(
+    email: string,
+    password: string,
+    username?: string,
+    roleId?: string,
+  ): Promise<{
     success: boolean;
     message?: string;
   }>;
 
-  export function updateUserPassword(email: string, newPassword: string): Promise<{
+  export function updateUserPassword(
+    email: string,
+    newPassword: string,
+  ): Promise<{
     success: boolean;
     message?: string;
   }>;
 }
 
-declare module '@/lib/db' {
-  import { Pool } from 'mysql2/promise';
+declare module "@/lib/db" {
+  import { Pool } from "mysql2/promise";
   export function db(): Promise<Pool>;
 }

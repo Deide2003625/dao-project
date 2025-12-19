@@ -11,16 +11,19 @@ const pool = mysql.createPool({
   connectionLimit: 10, // Nombre maximum de connexions dans le pool
   queueLimit: 0,
   enableKeepAlive: true,
-  keepAliveInitialDelay: 10000 // 10 secondes
+  keepAliveInitialDelay: 10000, // 10 secondes
 });
 
 // Vérification de la structure de la base de données au démarrage
 (async () => {
   try {
     await verifyDatabaseStructure(pool);
-    console.log('Vérification de la structure de la base de données terminée');
+    console.log("Vérification de la structure de la base de données terminée");
   } catch (error) {
-    console.error('Erreur lors de la vérification de la structure de la base de données:', error);
+    console.error(
+      "Erreur lors de la vérification de la structure de la base de données:",
+      error,
+    );
   }
 })();
 
@@ -29,7 +32,7 @@ export async function db() {
   try {
     return pool;
   } catch (error) {
-    console.error('Erreur lors de l\'obtention d\'une connexion:', error);
+    console.error("Erreur lors de l'obtention d'une connexion:", error);
     throw error;
   }
 }
@@ -43,7 +46,7 @@ async function verifyDatabaseStructure(connection: mysql.Pool) {
       FROM information_schema.TABLES 
       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users'
     `,
-      [process.env.DB_NAME || "dao"]
+      [process.env.DB_NAME || "dao"],
     );
 
     // Vérifiez si la table sessions existe
@@ -53,7 +56,7 @@ async function verifyDatabaseStructure(connection: mysql.Pool) {
       FROM information_schema.TABLES 
       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'sessions'
     `,
-      [process.env.DB_NAME || "dao"]
+      [process.env.DB_NAME || "dao"],
     );
 
     // Vérifiez si la table accounts existe
@@ -63,11 +66,11 @@ async function verifyDatabaseStructure(connection: mysql.Pool) {
       FROM information_schema.TABLES 
       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'accounts'
     `,
-      [process.env.DB_NAME || "dao"]
+      [process.env.DB_NAME || "dao"],
     );
 
     if (usersTable.length === 0) {
-      console.log('Création de la table users...');
+      console.log("Création de la table users...");
       await connection.execute(`
         CREATE TABLE users (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -79,17 +82,17 @@ async function verifyDatabaseStructure(connection: mysql.Pool) {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
-      
+
       // Créez un index sur la colonne email
       await connection.execute(`
         CREATE INDEX idx_email ON users(email);
       `);
-      
-      console.log('Table users créée avec succès');
+
+      console.log("Table users créée avec succès");
     }
 
     if (sessionsTable.length === 0) {
-      console.log('Création de la table sessions pour NextAuth...');
+      console.log("Création de la table sessions pour NextAuth...");
       await connection.execute(`
         CREATE TABLE sessions (
           id VARCHAR(255) NOT NULL,
@@ -100,11 +103,11 @@ async function verifyDatabaseStructure(connection: mysql.Pool) {
           PRIMARY KEY (id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
-      console.log('Table sessions créée avec succès');
+      console.log("Table sessions créée avec succès");
     }
 
     if (accountsTable.length === 0) {
-      console.log('Création de la table accounts pour NextAuth...');
+      console.log("Création de la table accounts pour NextAuth...");
       await connection.execute(`
         CREATE TABLE accounts (
           id VARCHAR(255) NOT NULL,
@@ -123,10 +126,13 @@ async function verifyDatabaseStructure(connection: mysql.Pool) {
           UNIQUE(provider, provider_account_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
-      console.log('Table accounts créée avec succès');
+      console.log("Table accounts créée avec succès");
     }
   } catch (error) {
-    console.error('Erreur lors de la vérification de la base de données:', error);
+    console.error(
+      "Erreur lors de la vérification de la base de données:",
+      error,
+    );
     throw error;
   }
 }

@@ -1,5 +1,5 @@
 // app/login/layout.tsx
-'use client';
+"use client";
 
 import { Inter } from "next/font/google";
 import "../globals.css";
@@ -24,27 +24,25 @@ export default function LoginLayout({
         href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css"
       />
       {/* Remplacement du fichier manquant par Bootstrap depuis CDN */}
-      <link 
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" 
+      <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
         rel="stylesheet"
-        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" 
+        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
         crossOrigin="anonymous"
       />
       <link rel="stylesheet" href="/css/style.css" />
-      
+
       {/* Scripts critiques */}
-      <Script 
-        src="https://code.jquery.com/jquery-3.6.0.min.js" 
+      <Script
+        src="https://code.jquery.com/jquery-3.6.0.min.js"
         strategy="beforeInteractive"
       />
-      
+
       <div className="container-scroller">
         <div className="container-fluid page-body-wrapper full-page-wrapper">
           <div className="content-wrapper d-flex align-items-center auth px-0">
             <div className="row w-100 mx-0">
-              <div className="col-lg-4 mx-auto">
-                {children}
-              </div>
+              <div className="col-lg-4 mx-auto">{children}</div>
             </div>
           </div>
         </div>

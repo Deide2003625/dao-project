@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 export default function Page() {
   return (
@@ -14,22 +14,35 @@ export default function Page() {
               </div>
               <div className="d-flex">
                 <i className="mdi mdi-home text-muted hover-cursor"></i>
-                <p className="text-muted mb-0 hover-cursor">&nbsp;/&nbsp;Dashboard&nbsp;/&nbsp;</p>
+                <p className="text-muted mb-0 hover-cursor">
+                  &nbsp;/&nbsp;Dashboard&nbsp;/&nbsp;
+                </p>
                 <p className="text-primary mb-0 hover-cursor">Analytics</p>
               </div>
             </div>
 
             <div className="d-flex justify-content-between align-items-end flex-wrap">
-              <button type="button" className="btn btn-light bg-white btn-icon mr-3 d-none d-md-block">
+              <button
+                type="button"
+                className="btn btn-light bg-white btn-icon mr-3 d-none d-md-block"
+              >
                 <i className="mdi mdi-download text-muted"></i>
               </button>
-              <button type="button" className="btn btn-light bg-white btn-icon mr-3 mt-2 mt-xl-0">
+              <button
+                type="button"
+                className="btn btn-light bg-white btn-icon mr-3 mt-2 mt-xl-0"
+              >
                 <i className="mdi mdi-clock-outline text-muted"></i>
               </button>
-              <button type="button" className="btn btn-light bg-white btn-icon mr-3 mt-2 mt-xl-0">
+              <button
+                type="button"
+                className="btn btn-light bg-white btn-icon mr-3 mt-2 mt-xl-0"
+              >
                 <i className="mdi mdi-plus text-muted"></i>
               </button>
-              <button className="btn btn-primary mt-2 mt-xl-0">Download report</button>
+              <button className="btn btn-primary mt-2 mt-xl-0">
+                Download report
+              </button>
             </div>
           </div>
         </div>
@@ -42,18 +55,46 @@ export default function Page() {
             <div className="card-body dashboard-tabs p-0">
               <ul className="nav nav-tabs px-4" role="tablist">
                 <li className="nav-item">
-                  <a className="nav-link active" id="overview-tab" data-bs-toggle="tab" href="#overview" role="tab">Overview</a>
+                  <a
+                    className="nav-link active"
+                    id="overview-tab"
+                    data-bs-toggle="tab"
+                    href="#overview"
+                    role="tab"
+                  >
+                    Overview
+                  </a>
                 </li>
                 <li className="nav-item">
-                  <a className="nav-link" id="sales-tab" data-bs-toggle="tab" href="#sales" role="tab">Sales</a>
+                  <a
+                    className="nav-link"
+                    id="sales-tab"
+                    data-bs-toggle="tab"
+                    href="#sales"
+                    role="tab"
+                  >
+                    Sales
+                  </a>
                 </li>
                 <li className="nav-item">
-                  <a className="nav-link" id="purchases-tab" data-bs-toggle="tab" href="#purchases" role="tab">Purchases</a>
+                  <a
+                    className="nav-link"
+                    id="purchases-tab"
+                    data-bs-toggle="tab"
+                    href="#purchases"
+                    role="tab"
+                  >
+                    Purchases
+                  </a>
                 </li>
               </ul>
 
               <div className="tab-content py-0 px-0">
-                <div className="tab-pane fade show active" id="overview" role="tabpanel">
+                <div
+                  className="tab-pane fade show active"
+                  id="overview"
+                  role="tabpanel"
+                >
                   <div className="d-flex flex-wrap justify-content-xl-between">
                     {/* block 1 */}
                     <div className="d-none d-xl-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 item">
@@ -61,13 +102,33 @@ export default function Page() {
                       <div className="d-flex flex-column justify-content-around">
                         <small className="mb-1 text-muted">Start date</small>
                         <div className="dropdown">
-                          <a className="btn btn-secondary dropdown-toggle p-0 bg-transparent border-0 text-dark shadow-none font-weight-medium" href="#" id="dropdownMenuLinkA" data-bs-toggle="dropdown">
+                          <a
+                            className="btn btn-secondary dropdown-toggle p-0 bg-transparent border-0 text-dark shadow-none font-weight-medium"
+                            href="#"
+                            id="dropdownMenuLinkA"
+                            data-bs-toggle="dropdown"
+                          >
                             <h5 className="mb-0 d-inline-block">26 Jul 2018</h5>
                           </a>
-                          <ul className="dropdown-menu" aria-labelledby="dropdownMenuLinkA">
-                            <li><a className="dropdown-item" href="#">12 Aug 2018</a></li>
-                            <li><a className="dropdown-item" href="#">22 Sep 2018</a></li>
-                            <li><a className="dropdown-item" href="#">21 Oct 2018</a></li>
+                          <ul
+                            className="dropdown-menu"
+                            aria-labelledby="dropdownMenuLinkA"
+                          >
+                            <li>
+                              <a className="dropdown-item" href="#">
+                                12 Aug 2018
+                              </a>
+                            </li>
+                            <li>
+                              <a className="dropdown-item" href="#">
+                                22 Sep 2018
+                              </a>
+                            </li>
+                            <li>
+                              <a className="dropdown-item" href="#">
+                                21 Oct 2018
+                              </a>
+                            </li>
                           </ul>
                         </div>
                       </div>
@@ -139,7 +200,10 @@ export default function Page() {
             <div className="card-body">
               <p className="card-title">Cash deposits</p>
               <p className="mb-4">To start a blog, think of a topic about...</p>
-              <div id="cash-deposits-chart-legend" className="d-flex justify-content-center pt-3"></div>
+              <div
+                id="cash-deposits-chart-legend"
+                className="d-flex justify-content-center pt-3"
+              ></div>
               <canvas id="cash-deposits-chart"></canvas>
             </div>
           </div>
@@ -151,7 +215,9 @@ export default function Page() {
               <p className="card-title">Total sales</p>
               <h1>$ 28835</h1>
               <h4>Gross sales over the years</h4>
-              <p className="text-muted">Today, many people rely on computers...</p>
+              <p className="text-muted">
+                Today, many people rely on computers...
+              </p>
               <div id="total-sales-chart-legend"></div>
             </div>
             <canvas id="total-sales-chart"></canvas>
@@ -160,7 +226,6 @@ export default function Page() {
       </div>
 
       {/*Progression globale */}
-      
 
       {/* TABLE */}
       <div className="row">
@@ -169,7 +234,10 @@ export default function Page() {
             <div className="card-body">
               <p className="card-title">Recent Purchases</p>
               <div className="table-responsive">
-                <table id="recent-purchases-listing" className="table table-hover">
+                <table
+                  id="recent-purchases-listing"
+                  className="table table-hover"
+                >
                   <thead>
                     <tr>
                       <th>Name</th>

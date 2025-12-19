@@ -1,6 +1,5 @@
 /* Layouts */
 
-
 // Sidebar Icon Only
 .sidebar-icon-only {
   @media (min-width: 992px) {
@@ -15,7 +14,7 @@
           .brand-logo-mini {
             display: none;
           }
-        }  
+        }
       }
       .navbar-menu-wrapper {
         width: calc(100% - #{$sidebar-width-icon});
@@ -29,12 +28,13 @@
           position: relative;
           .nav-link {
             display: block;
-            padding-left: .5rem;
-            padding-right: .5rem;            
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
             text-align: center;
             position: static;
             .menu-title,
-            .badge,.menu-sub-title {
+            .badge,
+            .menu-sub-title {
               display: none;
             }
             .menu-title {
@@ -80,12 +80,12 @@
                 width: $icon-only-collapse-width;
                 z-index: 1;
                 line-height: 1.8;
-                box-shadow: 4px 0px 7px 0px rgba(182, 185, 189, 0.25);              
+                box-shadow: 4px 0px 7px 0px rgba(182, 185, 189, 0.25);
                 @at-root #{selector-append(".rtl", &)} {
                   left: auto;
                   right: $sidebar-width-icon;
                   text-align: left;
-                  box-shadow: -4px 0px 7px 0px rgba(182, 185, 189, 0.25);                                
+                  box-shadow: -4px 0px 7px 0px rgba(182, 185, 189, 0.25);
                 }
                 &:after {
                   display: none;
@@ -100,7 +100,7 @@
             .collapse,
             .collapsing {
               display: block;
-              padding: .5rem 0;
+              padding: 0.5rem 0;
               background: $icon-only-menu-bg-light;
               @include border-radius(0 0 5px 0);
               position: absolute;
@@ -108,10 +108,10 @@
               width: $icon-only-collapse-width;
               box-shadow: 4px 4px 7px 0px rgba(182, 185, 189, 0.25);
               @at-root #{selector-append(".rtl", &)} {
-                  left: auto;
-                  right:$sidebar-width-icon;
-                  @include border-radius(0 0 0 5px);
-                  box-shadow: -4px 4px 7px 0px rgba(182, 185, 189, 0.25);
+                left: auto;
+                right: $sidebar-width-icon;
+                @include border-radius(0 0 0 5px);
+                box-shadow: -4px 4px 7px 0px rgba(182, 185, 189, 0.25);
               }
             }
           }
@@ -170,7 +170,7 @@
     }
 
     &::-webkit-scrollbar-track {
-      -webkit-box-shadow: inset 0 0 6px rgba(0,0,0,0.3);
+      -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
     }
 
     &::-webkit-scrollbar-thumb {

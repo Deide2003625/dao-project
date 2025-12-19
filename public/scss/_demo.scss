@@ -7,7 +7,7 @@
   }
 
   > .btn-group,
-  >  .btn-group-vertical {
+  > .btn-group-vertical {
     @extend .mt-2;
     @extend .mr-2;
   }
@@ -17,10 +17,10 @@
   }
 
   > h2,
-   > h3,
-   > h4,
-   > h5,
-   > h6,
+  > h3,
+  > h4,
+  > h5,
+  > h6,
   > h1 {
     border-top: 1px solid $border-color;
     padding: 0.5rem 0 0;
@@ -69,7 +69,7 @@
     &:not(:first-child) {
       span {
         margin-left: 25px;
-        @media(max-width: 576px) {
+        @media (max-width: 576px) {
           margin-left: 13px;
         }
       }
@@ -87,26 +87,26 @@
 }
 
 .nav-tabs {
-	border: 1px solid $border-color;
-	.nav-link {
-		background: $nav-tabs-link-bg;
-		color: $nav-tabs-link-color;
-		border-radius: 0;
-		border: 1px solid $border-color;
-		padding: 1rem 1.5rem .2rem 1.5rem;
-		@media (max-width: 767px) {
-			padding: 1rem .5rem .2rem .5rem;
-		}
-	}
-	.nav-item {
-		.nav-link {
-			border: 0;
-			background: transparent;
-			&.active {
-				border: 0;
-				border-bottom: 3px solid #5646ff;
-				color: theme-color(primary);
-			}
-		}
-	}
+  border: 1px solid $border-color;
+  .nav-link {
+    background: $nav-tabs-link-bg;
+    color: $nav-tabs-link-color;
+    border-radius: 0;
+    border: 1px solid $border-color;
+    padding: 1rem 1.5rem 0.2rem 1.5rem;
+    @media (max-width: 767px) {
+      padding: 1rem 0.5rem 0.2rem 0.5rem;
+    }
+  }
+  .nav-item {
+    .nav-link {
+      border: 0;
+      background: transparent;
+      &.active {
+        border: 0;
+        border-bottom: 3px solid #5646ff;
+        color: theme-color(primary);
+      }
+    }
+  }
 }
