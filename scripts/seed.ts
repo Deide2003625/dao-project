@@ -16,8 +16,8 @@ async function seedDatabase() {
     // Vérifier si la table users existe
     const [tables] = await connection.execute<RowDataPacket[]>(
       `SELECT TABLE_NAME 
-       FROM information_schema.TABLES 
-       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users'`,
+      FROM information_schema.TABLES 
+      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users'`,
       [process.env.DB_NAME || "dao"],
     );
 
