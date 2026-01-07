@@ -8,12 +8,16 @@ import { useRouter } from "next/navigation";
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [user, setUser] = useState<{
-    id: number;
+    id: string | number;
     username: string;
     email: string;
     url_photo: string;
     role_id: number;
   } | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
   const router = useRouter();
   const menuRef = useRef<HTMLLIElement>(null);
 
@@ -57,6 +61,44 @@ export default function Header() {
       }
     } else {
       setUser(null);
+    }
+  };
+
+  // Fonction pour charger les messages
+  const fetchMessages = async () => {
+    if (!user?.id) return;
+
+    setLoadingMessages(true);
+    try {
+      const response = await fetch(`/api/messages?userId=${user.id}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setMessages(data.messages);
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des messages:", error);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  // Fonction pour charger les notifications
+  const fetchNotifications = async () => {
+    if (!user?.id) return;
+
+    setLoadingNotifications(true);
+    try {
+      const response = await fetch(`/api/notifications?userId=${user.id}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setNotifications(data.notifications);
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des notifications:", error);
+    } finally {
+      setLoadingNotifications(false);
     }
   };
 
@@ -109,6 +151,14 @@ export default function Header() {
       );
     };
   }, []);
+
+  // Charger les messages et notifications quand l'utilisateur change
+  useEffect(() => {
+    if (user?.id) {
+      fetchMessages();
+      fetchNotifications();
+    }
+  }, [user?.id]);
 
   // Fermer le menu quand on clique en dehors
   useEffect(() => {
@@ -175,8 +225,11 @@ export default function Header() {
             />
           </a>
           <button
-            className="navbar-toggler navbar-toggler align-self-center"
+            className="navbar-toggler align-self-center"
             type="button"
+            onClick={() => {
+              document.body.classList.toggle("sidebar-icon-only");
+            }}
           >
             <span className="mdi mdi-sort-variant"></span>
           </button>
@@ -193,64 +246,48 @@ export default function Header() {
               aria-expanded="false"
             >
               <i className="mdi mdi-message-text mx-0"></i>
-              <span className="count"></span>
+              <span className="count">{messages.filter(m => !m.isRead).length}</span>
             </a>
 
             <div className="dropdown-menu dropdown-menu-right navbar-dropdown">
               <p className="mb-0 font-weight-normal float-left dropdown-header">
                 Messages
               </p>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <Image
-                    src="/images/faces/face4.jpg"
-                    width={40}
-                    height={40}
-                    className="profile-pic"
-                    alt="profile"
-                  />
-                </div>
-                <div className="item-content flex-grow">
-                  <h6 className="ellipsis font-weight-normal">David Grey</h6>
+              {loadingMessages ? (
+                <div className="dropdown-item">
                   <p className="font-weight-light small-text text-muted mb-0">
-                    The meeting is cancelled
+                    Chargement...
                   </p>
                 </div>
-              </a>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <Image
-                    src="/images/faces/face2.jpg"
-                    width={40}
-                    height={40}
-                    className="profile-pic"
-                    alt="profile"
-                  />
-                </div>
-                <div className="item-content flex-grow">
-                  <h6 className="ellipsis font-weight-normal">Tim Cook</h6>
+              ) : messages.length === 0 ? (
+                <div className="dropdown-item">
                   <p className="font-weight-light small-text text-muted mb-0">
-                    New product launch
+                    Aucun message
                   </p>
                 </div>
-              </a>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <Image
-                    src="/images/faces/face3.jpg"
-                    width={40}
-                    height={40}
-                    className="profile-pic"
-                    alt="profile"
-                  />
-                </div>
-                <div className="item-content flex-grow">
-                  <h6 className="ellipsis font-weight-normal">Johnson</h6>
-                  <p className="font-weight-light small-text text-muted mb-0">
-                    Upcoming board meeting
-                  </p>
-                </div>
-              </a>
+              ) : (
+                messages.slice(0, 3).map((message) => (
+                  <a key={message.id} className="dropdown-item">
+                    <div className="item-thumbnail">
+                      <Image
+                        src={message.sender.photo}
+                        width={40}
+                        height={40}
+                        className="profile-pic"
+                        alt="profile"
+                      />
+                    </div>
+                    <div className="item-content flex-grow">
+                      <h6 className="ellipsis font-weight-normal">
+                        {message.sender.name}
+                      </h6>
+                      <p className="font-weight-light small-text text-muted mb-0">
+                        {message.subject}
+                      </p>
+                    </div>
+                  </a>
+                ))
+              )}
             </div>
           </li>
 
@@ -263,51 +300,41 @@ export default function Header() {
               aria-expanded="false"
             >
               <i className="mdi mdi-bell mx-0"></i>
-              <span className="count"></span>
+              <span className="count">{notifications.filter(n => !n.isRead).length}</span>
             </a>
             <div className="dropdown-menu dropdown-menu-right navbar-dropdown">
               <p className="mb-0 font-weight-normal float-left dropdown-header">
                 Notifications
               </p>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <div className="item-icon bg-success">
-                    <i className="mdi mdi-information mx-0"></i>
-                  </div>
-                </div>
-                <div className="item-content">
-                  <h6 className="font-weight-normal">Application Error</h6>
-                  <p className="font-weight-light small-text mb-0 text-muted">
-                    Just now
+              {loadingNotifications ? (
+                <div className="dropdown-item">
+                  <p className="font-weight-light small-text text-muted mb-0">
+                    Chargement...
                   </p>
                 </div>
-              </a>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <div className="item-icon bg-warning">
-                    <i className="mdi mdi-settings mx-0"></i>
-                  </div>
-                </div>
-                <div className="item-content">
-                  <h6 className="font-weight-normal">Settings</h6>
-                  <p className="font-weight-light small-text mb-0 text-muted">
-                    Private message
+              ) : notifications.length === 0 ? (
+                <div className="dropdown-item">
+                  <p className="font-weight-light small-text text-muted mb-0">
+                    Aucune notification
                   </p>
                 </div>
-              </a>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <div className="item-icon bg-info">
-                    <i className="mdi mdi-account-box mx-0"></i>
-                  </div>
-                </div>
-                <div className="item-content">
-                  <h6 className="font-weight-normal">New user registration</h6>
-                  <p className="font-weight-light small-text mb-0 text-muted">
-                    2 days ago
-                  </p>
-                </div>
-              </a>
+              ) : (
+                notifications.slice(0, 3).map((notification) => (
+                  <a key={notification.id} className="dropdown-item">
+                    <div className="item-thumbnail">
+                      <div className={`item-icon ${notification.bgColor}`}>
+                        <i className={`mdi ${notification.icon} mx-0`}></i>
+                      </div>
+                    </div>
+                    <div className="item-content">
+                      <h6 className="font-weight-normal">{notification.title}</h6>
+                      <p className="font-weight-light small-text mb-0 text-muted">
+                        {notification.message}
+                      </p>
+                    </div>
+                  </a>
+                ))
+              )}
             </div>
           </li>
 

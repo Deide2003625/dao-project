@@ -104,7 +104,7 @@ export default function NewDaoPage() {
     return null;
   };
 
-  const handleSubmit = (e: any) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
     setError(null);
     const v = validate();
@@ -125,9 +125,29 @@ export default function NewDaoPage() {
       membres,
     };
 
-    // Ici on enverrait au backend via fetch POST /api/dao
-    console.log("Créer DAO", payload);
-    alert("DAO créé (simulation) : " + generatedNumber);
+    try {
+      const res = await fetch("/api/dao", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        setError(errorData.message || "Erreur lors de la création du DAO");
+        return;
+      }
+
+      const data = await res.json();
+      alert("DAO créé avec succès : " + data.numero);
+      // Rediriger vers la liste des DAO
+      window.location.href = "/dash/admin";
+    } catch (err) {
+      console.error("Error creating DAO:", err);
+      setError("Erreur réseau lors de la création du DAO");
+    }
   };
 
   return (

@@ -1,52 +1,27 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
+interface Dao {
+  id: number;
+  numero: string;
+  reference: string;
+  autorite: string;
+  date_depot: string;
+  chef_projet: string;
+}
 
 export default function DashboardChefEquipe() {
   const router = useRouter();
+  const [daos, setDaos] = useState<Dao[]>([]);
 
-  const daos = [
-    {
-      id: "dao-001",
-      number: "DAO-001",
-      objet: "Rénovation école primaire — Lot 1",
-      status: "En cours",
-      statusClass: "bg-yellow-100 text-yellow-800",
-      date: "12/11/2025",
-      progress: 60,
-      team: 4,
-    },
-    {
-      id: "dao-002",
-      number: "DAO-002",
-      objet: "Fourniture matériel informatique",
-      status: "À risque",
-      statusClass: "bg-red-100 text-red-800",
-      date: "04/11/2025",
-      progress: 30,
-      team: 3,
-    },
-    {
-      id: "dao-003",
-      number: "DAO-003",
-      objet: "Fourniture matériel informatique",
-      status: "À risque",
-      statusClass: "bg-red-100 text-red-800",
-      date: "04/11/2025",
-      progress: 30,
-      team: 3,
-    },
-    {
-      id: "dao-004",
-      number: "DAO-004",
-      objet: "Fourniture matériel informatique",
-      status: "À risque",
-      statusClass: "bg-red-100 text-red-800",
-      date: "04/11/2025",
-      progress: 30,
-      team: 3,
-    },
-  ];
+  useEffect(() => {
+    fetch('/api/dao')
+      .then(res => res.json())
+      .then(data => setDaos(data))
+      .catch(err => console.error('Error fetching DAOs:', err));
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
@@ -165,24 +140,14 @@ export default function DashboardChefEquipe() {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr>
-                        <td>Jeremy Ortega</td>
-                        <td>Levelled up</td>
-                        <td>Catalinaborough</td>
-                        <td>12/11/2025</td>
-                      </tr>
-                      <tr>
-                        <td>Alvin Fisher</td>
-                        <td>Ui design completed</td>
-                        <td>East Mayra</td>
-                        <td>04/11/2025</td>
-                      </tr>
-                      <tr>
-                        <td>John Doe</td>
-                        <td>Project completed</td>
-                        <td>New York</td>
-                        <td>01/12/2025</td>
-                      </tr>
+                      {daos.map(dao => (
+                        <tr key={dao.id}>
+                          <td>{dao.numero}</td>
+                          <td>{dao.reference}</td>
+                          <td>{dao.autorite}</td>
+                          <td>{dao.date_depot}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

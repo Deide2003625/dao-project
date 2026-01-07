@@ -1,52 +1,80 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function DashboardChefEquipe() {
-  const router = useRouter();
+interface Dao {
+  id: number;
+  numero: string;
+  reference: string;
+  autorite: string;
+  date_depot?: string;
+  statut?: string;
+  chef_projet?: string;
+}
 
-  const daos = [
-    {
-      id: "dao-001",
-      number: "DAO-001",
-      objet: "Rénovation école primaire — Lot 1",
-      status: "En cours",
-      statusClass: "bg-yellow-100 text-yellow-800",
-      date: "12/11/2025",
-      progress: 60,
-      team: 4,
-    },
-    {
-      id: "dao-002",
-      number: "DAO-002",
-      objet: "Fourniture matériel informatique",
-      status: "À risque",
-      statusClass: "bg-red-100 text-red-800",
-      date: "04/11/2025",
-      progress: 30,
-      team: 3,
-    },
-    {
-      id: "dao-003",
-      number: "DAO-003",
-      objet: "Rénovation école primaire — Lot 1",
-      status: "En cours",
-      statusClass: "bg-yellow-100 text-yellow-800",
-      date: "12/11/2025",
-      progress: 60,
-      team: 4,
-    },
-    {
-      id: "dao-004",
-      number: "DAO-004",
-      objet: "Rénovation école primaire — Lot 1",
-      status: "En cours",
-      statusClass: "bg-yellow-100 text-yellow-800",
-      date: "12/11/2025",
-      progress: 60,
-      team: 4,
-    },
-  ];
+export default function MyDaoPage() {
+  const router = useRouter();
+  const [daos, setDaos] = useState<Dao[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    loadDaos();
+  }, []);
+
+  async function loadDaos() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await fetch("/api/dao", { cache: "no-store" });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        console.error("API /api/dao error:", json);
+        setDaos([]);
+        setError(json?.message || "Erreur lors du chargement des DAO");
+        return;
+      }
+
+      // API renvoie { success: true, data: [...] }
+      const rows = Array.isArray(json?.data) ? (json.data as Dao[]) : [];
+      setDaos(rows);
+    } catch (err) {
+      console.error("Error fetching DAOs:", err);
+      setDaos([]);
+      setError("Erreur réseau lors du chargement des DAO");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 text-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="spinner-border" role="status">
+            <span className="sr-only">Chargement...</span>
+          </div>
+          <p className="mt-2">Chargement des DAO...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 text-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="alert alert-danger">{error}</div>
+          <button className="btn btn-primary mt-3" onClick={loadDaos}>
+            Réessayer
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
@@ -74,53 +102,67 @@ export default function DashboardChefEquipe() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {daos.map((dao) => (
-              <article
-                key={dao.id}
-                onClick={() => router.push(`/dash/admin/task/`)}
-                className="bg-white p-4 rounded shadow cursor-pointer hover:shadow-md"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold">N° {dao.number}</h3>
-                    <p className="text-sm text-gray-500 line-clamp-2">
-                      {dao.objet}
-                    </p>
+          {daos.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">Aucun DAO trouvé.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {daos.map((dao) => (
+                <article
+                  key={dao.id}
+                  onClick={() => router.push(`/dash/admin/task/`)}
+                  className="bg-white p-4 rounded shadow cursor-pointer hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold">N° {dao.numero}</h3>
+                      <p className="text-sm text-gray-500 line-clamp-2">
+                        {dao.reference} - {dao.autorite}
+                      </p>
+                    </div>
+                    <span
+                      className={`px-2 py-1 rounded text-xs ${
+                        dao.statut === "EN_COURS"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : dao.statut === "TERMINE"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      {dao.statut || "EN_COURS"}
+                    </span>
                   </div>
-                  <span
-                    className={`px-2 py-1 rounded text-xs ${dao.statusClass}`}
-                  >
-                    {dao.status}
-                  </span>
-                </div>
 
-                <div className="mt-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Date dépôt</span>
-                    <span className="font-medium">{dao.date}</span>
-                  </div>
-
-                  <div className="mt-2">
+                  <div className="mt-3">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Progress</span>
-                      <span className="font-medium">{dao.progress}%</span>
+                      <span className="text-gray-500">Date dépôt</span>
+                      <span className="font-medium">
+                        {dao.date_depot || "N/A"}
+                      </span>
                     </div>
-                    <div className="w-full bg-gray-100 h-2 rounded mt-2">
-                      <div
-                        className="h-2 bg-blue-600 rounded"
-                        style={{ width: `${dao.progress}%` }}
-                      />
+
+                    <div className="mt-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Progress</span>
+                        <span className="font-medium">0%</span>
+                      </div>
+                      <div className="w-full bg-gray-100 h-2 rounded mt-2">
+                        <div
+                          className="h-2 bg-blue-600 rounded"
+                          style={{ width: "0%" }}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="mt-3 text-sm text-gray-500">
-                  Équipe : {dao.team} membres
-                </div>
-              </article>
-            ))}
-          </div>
+                  <div className="mt-3 text-sm text-gray-500">
+                    Chef: {dao.chef_projet || "N/A"}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
       </main>
     </div>

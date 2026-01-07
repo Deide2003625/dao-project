@@ -1,6 +1,26 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+interface Purchase {
+  id: number;
+  name: string;
+  status_report: string;
+  office: string;
+  price: number;
+  date: string;
+  gross_amount: number;
+}
+
 export default function Page() {
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+
+  useEffect(() => {
+    fetch('/api/purchases')
+      .then(res => res.json())
+      .then(data => setPurchases(data))
+      .catch(err => console.error('Error fetching purchases:', err));
+  }, []);
   return (
     <>
       {/* ROW 1 - Header with breadcrumb */}
@@ -247,30 +267,16 @@ export default function Page() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>Jeremy Ortega</td>
-                      <td>Levelled up</td>
-                      <td>Catalinaborough</td>
-                      <td>$790</td>
-                      <td>06 Jan 2018</td>
-                      <td>$2,274,253</td>
-                    </tr>
-                    <tr>
-                      <td>Alvin Fisher</td>
-                      <td>Ui design completed</td>
-                      <td>East Mayra</td>
-                      <td>$23,230</td>
-                      <td>18 Jul 2018</td>
-                      <td>$83,127</td>
-                    </tr>
-                    <tr>
-                      <td>John Doe</td>
-                      <td>Project completed</td>
-                      <td>New York</td>
-                      <td>$12,450</td>
-                      <td>15 Mar 2018</td>
-                      <td>$145,200</td>
-                    </tr>
+                    {purchases.map(purchase => (
+                      <tr key={purchase.id}>
+                        <td>{purchase.name}</td>
+                        <td>{purchase.status_report}</td>
+                        <td>{purchase.office}</td>
+                        <td>${purchase.price.toLocaleString()}</td>
+                        <td>{new Date(purchase.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                        <td>${purchase.gross_amount.toLocaleString()}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

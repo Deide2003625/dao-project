@@ -1,6 +1,93 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+
+interface Dao {
+  id: number;
+  numero: string;
+  reference: string;
+  autorite: string;
+  date_depot?: string;
+  chef_projet?: string | null;
+  statut?: string | null; // optionnel si ajouter plus tard dans la DB
+}
+
 export default function Page() {
+  const [daos, setDaos] = useState<Dao[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>("");
+
+  async function loadDaos() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await fetch("/api/dao", { cache: "no-store" });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        console.error("API /api/dao error:", json);
+        setDaos([]);
+        setError(json?.message || "Erreur lors du chargement des DAO");
+        return;
+      }
+
+      // API renvoie { success: true, data: [...] }
+      const rows = Array.isArray(json?.data) ? (json.data as Dao[]) : [];
+      setDaos(rows);
+    } catch (err) {
+      console.error("Error fetching DAOs:", err);
+      setDaos([]);
+      setError("Erreur réseau lors du chargement des DAO");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDeleteDao(daoId: number) {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer ce DAO ?")) return;
+
+    try {
+      const res = await fetch(`/api/dao/${daoId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Erreur lors de la suppression");
+
+      // Recharger les DAOs
+      await loadDaos();
+    } catch (err) {
+      console.error("Error deleting DAO:", err);
+      alert("Erreur lors de la suppression du DAO");
+    }
+  }
+
+  async function handleUpdateStatut(daoId: number, statut: string) {
+    try {
+      const res = await fetch(`/api/dao/${daoId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ statut }),
+      });
+      if (!res.ok) throw new Error("Erreur lors de la mise à jour");
+
+      // Recharger les DAOs
+      await loadDaos();
+    } catch (err) {
+      console.error("Error updating DAO statut:", err);
+      alert("Erreur lors de la mise à jour du statut");
+    }
+  }
+
+  useEffect(() => {
+    loadDaos();
+  }, []);
+
+  const stats = useMemo(() => {
+    const total = daos.length;
+    const enCours = daos.filter((d) => String(d.statut || "").toUpperCase() === "EN_COURS").length;
+    const aRisque = daos.filter((d) => String(d.statut || "").toUpperCase() === "A_RISQUE").length;
+    const terminees = daos.filter((d) => String(d.statut || "").toUpperCase() === "TERMINEE").length;
+    return { total, enCours, aRisque, terminees };
+  }, [daos]);
+
   return (
     <>
       {/* ROW 1 - Header with breadcrumb */}
@@ -23,62 +110,53 @@ export default function Page() {
           <div className="card">
             <div className="card-body dashboard-tabs p-0">
               <div className="tab-content py-0 px-0">
-                <div
-                  className="tab-pane fade show active"
-                  id="overview"
-                  role="tabpanel"
-                >
+                <div className="tab-pane fade show active" id="overview" role="tabpanel">
                   <div className="d-flex flex-wrap justify-content-xl-between">
                     {/* block 1 */}
                     <div
                       className="d-none d-xl-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 item"
-                      style={{
-                        background: "linear-gradient(90deg, #f5f5f5, #e0e0e0)",
-                      }}
+                      style={{ background: "linear-gradient(90deg, #f5f5f5, #e0e0e0)" }}
                     >
                       <i className="mdi mdi-calendar icon-lg mr-3 text-secondary"></i>
                       <div className="d-flex flex-column justify-content-around">
                         <small className="mb-1 text-muted">Total DAO</small>
-                        <div className="dropdown"></div>
+                        <h4 className="mb-0">{stats.total}</h4>
                       </div>
                     </div>
 
                     {/* block 2 */}
                     <div
                       className="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 item"
-                      style={{
-                        background: "linear-gradient(90deg, #fff9c4, #fff176)",
-                      }}
+                      style={{ background: "linear-gradient(90deg, #fff9c4, #fff176)" }}
                     >
                       <i className="mdi mdi-timer-sand mr-3 icon-lg text-warning"></i>
                       <div className="d-flex flex-column justify-content-around">
                         <small className="mb-1 text-muted">En cours</small>
+                        <h4 className="mb-0">{stats.enCours}</h4>
                       </div>
                     </div>
 
                     {/* block 3 */}
                     <div
                       className="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 item"
-                      style={{
-                        background: "linear-gradient(90deg, #ffebee, #ef9a9a)",
-                      }}
+                      style={{ background: "linear-gradient(90deg, #ffebee, #ef9a9a)" }}
                     >
                       <i className="mdi mdi-alert mr-3 icon-lg text-danger"></i>
                       <div className="d-flex flex-column justify-content-around">
                         <small className="mb-1 text-muted">À risque</small>
+                        <h4 className="mb-0">{stats.aRisque}</h4>
                       </div>
                     </div>
 
                     {/* block 4 */}
                     <div
                       className="d-flex py-3 border-md-right flex-grow-1 align-items-center justify-content-center p-3 item"
-                      style={{
-                        background: "linear-gradient(90deg, #e8f5e9, #a5d6a7)",
-                      }}
+                      style={{ background: "linear-gradient(90deg, #e8f5e9, #a5d6a7)" }}
                     >
                       <i className="mdi mdi-checkbox-marked mr-3 icon-lg text-success"></i>
                       <div className="d-flex flex-column justify-content-around">
                         <small className="mb-1 text-muted">Terminées</small>
+                        <h4 className="mb-0">{stats.terminees}</h4>
                       </div>
                     </div>
                   </div>
@@ -110,39 +188,70 @@ export default function Page() {
         <div className="col-12 stretch-card">
           <div className="card">
             <div className="card-body">
-              <p className="card-title">Tous les DAO</p>
-              <div className="table-responsive">
-                <table
-                  id="recent-purchases-listing"
-                  className="table table-hover"
-                >
+              <div className="d-flex align-items-center justify-content-between">
+                <p className="card-title mb-0">Tous les DAO</p>
+                <div>
+                  <button className="btn btn-sm btn-outline-primary mr-2" onClick={loadDaos} disabled={loading}>
+                    Rafraîchir
+                  </button>
+                  <a href="/dash/admin/CreateDao" className="btn btn-sm btn-primary">
+                    Créer DAO
+                  </a>
+                </div>
+              </div>
+
+              {error ? <div className="alert alert-danger mt-3 mb-0">{error}</div> : null}
+
+              <div className="table-responsive mt-3">
+                <table id="recent-purchases-listing" className="table table-hover">
                   <thead>
                     <tr>
                       <th>Nom</th>
                       <th>Référence</th>
                       <th>Autorité contractante</th>
                       <th>Chef Projet</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>Jeremy Ortega</td>
-                      <td>Levelled up</td>
-                      <td>Catalinaborough</td>
-                      <td>Marie Dupont</td>
-                    </tr>
-                    <tr>
-                      <td>Alvin Fisher</td>
-                      <td>Ui design completed</td>
-                      <td>East Mayra</td>
-                      <td>Paul Martin</td>
-                    </tr>
-                    <tr>
-                      <td>John Doe</td>
-                      <td>Project completed</td>
-                      <td>New York</td>
-                      <td>Lucie Bernard</td>
-                    </tr>
+                    {loading ? (
+                      <tr>
+                        <td colSpan={5}>Chargement...</td>
+                      </tr>
+                    ) : daos.length === 0 ? (
+                      <tr>
+                        <td colSpan={5}>Aucun DAO pour le moment.</td>
+                      </tr>
+                    ) : (
+                      daos.map((dao) => (
+                        <tr key={dao.id}>
+                          {/* "Nom" : numero, sinon on peux mettre objet si on le renvoies */}
+                          <td>{dao.numero}</td>
+                          <td>{dao.reference}</td>
+                          <td>{dao.autorite}</td>
+                          <td>{dao.chef_projet ?? "-"}</td>
+                          <td>
+                            <select
+                              className="form-control form-control-sm"
+                              value={dao.statut || "EN_COURS"}
+                              onChange={(e) => handleUpdateStatut(dao.id, e.target.value)}
+                              disabled={loading}
+                            >
+                              <option value="EN_COURS">En cours</option>
+                              <option value="A_RISQUE">À risque</option>
+                              <option value="TERMINEE">Terminée</option>
+                            </select>
+                            <button
+                              className="btn btn-sm btn-danger ml-2"
+                              onClick={() => handleDeleteDao(dao.id)}
+                              disabled={loading}
+                            >
+                              Supprimer
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
