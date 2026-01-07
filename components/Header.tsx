@@ -7,13 +7,17 @@ import { useRouter } from "next/navigation";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [user, setUser] = useState<{ 
-    id: number;
-    username: string; 
+  const [user, setUser] = useState<{
+    id: string | number;
+    username: string;
     email: string;
-    url_photo: string; 
+    url_photo: string;
     role_id: number;
   } | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
   const router = useRouter();
   const menuRef = useRef<HTMLLIElement>(null);
 
@@ -22,43 +26,139 @@ export default function Header() {
     if (!url) return "/images/faces/face5.jpg";
     // Si l'URL commence par /uploads, on la laisse telle quelle car elle est déjà dans le dossier public
     // Sinon, on suppose que c'est un chemin relatif au dossier public
-    return url.startsWith('/') ? url : `/${url}`;
+    return url.startsWith("/") ? url : `/${url}`;
   };
 
-  // Récupérer l'utilisateur connecté depuis l'API
-  useEffect(() => {
-    async function fetchUser() {
+  // Fonction pour charger l'utilisateur depuis le localStorage
+  const loadUserFromLocalStorage = () => {
+    console.log("Chargement des données utilisateur depuis le localStorage...");
+    const storedUser = localStorage.getItem("user");
+    console.log(
+      "Chargement des données utilisateur depuis le localStorage:",
+      storedUser,
+    );
+
+    if (storedUser) {
       try {
-        const res = await fetch("/api/me", {
-          credentials: 'include', // Important pour envoyer les cookies
-          cache: 'no-store' // Pour éviter la mise en cache
-        });
-        
-        if (!res.ok) {
-          throw new Error('Erreur lors de la récupération des données utilisateur');
-        }
-        
-        const data = await res.json();
-        
-        if (data.user) {
-          setUser({
-            id: data.user.id,
-            username: data.user.username,
-            email: data.user.email,
-            url_photo: formatPhotoUrl(data.user.url_photo),
-            role_id: data.user.role_id || 0
-          });
-        } else {
-          setUser(null);
-        }
-      } catch (err) {
-        console.error("Erreur récupération utilisateur :", err);
+        const parsedUser = JSON.parse(storedUser);
+
+        const userData = {
+          id: parsedUser.id,
+          username:
+            parsedUser.username ||
+            parsedUser.email?.split("@")[0] ||
+            "Utilisateur",
+          email: parsedUser.email || "",
+          url_photo: formatPhotoUrl(parsedUser.url_photo || ""),
+          role_id: parsedUser.role_id || 0,
+        };
+
+        console.log("Données utilisateur formatées:", userData);
+        setUser(userData);
+      } catch (error) {
+        console.error("Erreur lors du parsing des données utilisateur:", error);
         setUser(null);
       }
+    } else {
+      setUser(null);
     }
-    
-    fetchUser();
+  };
+
+  // Fonction pour charger les messages
+  const fetchMessages = async () => {
+    if (!user?.id) return;
+
+    setLoadingMessages(true);
+    try {
+      const response = await fetch(`/api/messages?userId=${user.id}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setMessages(data.messages);
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des messages:", error);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  // Fonction pour charger les notifications
+  const fetchNotifications = async () => {
+    if (!user?.id) return;
+
+    setLoadingNotifications(true);
+    try {
+      const response = await fetch(`/api/notifications?userId=${user.id}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setNotifications(data.notifications);
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des notifications:", error);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  };
+
+  // Charger l'utilisateur au montage et écouter les changements
+  useEffect(() => {
+    // Charger les données initiales
+    loadUserFromLocalStorage();
+
+    // Fonction pour gérer les changements de stockage (depuis d'autres onglets)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "user" || e.key === null) {
+        console.log(
+          "Changement détecté dans le localStorage, rechargement des données utilisateur",
+        );
+        loadUserFromLocalStorage();
+      }
+    };
+
+    // Fonction pour gérer les mises à jour de l'utilisateur (même onglet)
+    const handleUserUpdated = (e: CustomEvent) => {
+      console.log(
+        "Événement userUpdated reçu, mise à jour des données utilisateur",
+      );
+      if (e.detail) {
+        setUser({
+          id: e.detail.id,
+          username:
+            e.detail.username || e.detail.email?.split("@")[0] || "Utilisateur",
+          email: e.detail.email || "",
+          url_photo: formatPhotoUrl(e.detail.url_photo || ""),
+          role_id: e.detail.role_id || 0,
+        });
+      } else {
+        loadUserFromLocalStorage();
+      }
+    };
+
+    // Ajouter les écouteurs d'événements
+    window.addEventListener("storage", handleStorageChange);
+    // @ts-ignore - TypeScript ne connaît pas encore ce type d'événement personnalisé
+    window.addEventListener("userUpdated", handleUserUpdated as EventListener);
+
+    // Nettoyer les écouteurs d'événements lors du démontage
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      // @ts-ignore
+      window.removeEventListener(
+        "userUpdated",
+        handleUserUpdated as EventListener,
+      );
+    };
   }, []);
+
+  // Charger les messages et notifications quand l'utilisateur change
+  useEffect(() => {
+    if (user?.id) {
+      fetchMessages();
+      fetchNotifications();
+    }
+  }, [user?.id]);
 
   // Fermer le menu quand on clique en dehors
   useEffect(() => {
@@ -86,57 +186,56 @@ export default function Header() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
       });
-      
+
+      // Supprimer les données de l'utilisateur du localStorage
+      localStorage.removeItem("user");
+      localStorage.removeItem("role");
+
       // Réinitialiser l'état utilisateur
       setUser(null);
-      
+
       // Rediriger vers la page de connexion
       router.push("/login");
       router.refresh();
     } catch (error) {
       console.error("Erreur lors de la déconnexion :", error);
-      // En cas d'erreur, on réinitialise quand même l'état et on redirige
+      // En cas d'erreur, on nettoie quand même le localStorage et on redirige
+      localStorage.removeItem("user");
+      localStorage.removeItem("role");
       setUser(null);
       router.push("/login");
     }
   };
+
+  console.log("Rendu du Header - État utilisateur:", user);
 
   return (
     <nav className="navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
       <div className="navbar-brand-wrapper d-flex justify-content-center">
         <div className="navbar-brand-inner-wrapper d-flex justify-content-between align-items-center w-100">
           <a className="navbar-brand brand-logo" href="#">
-            <Image src="/images/logo.svg" width={120} height={40} alt="logo" />
+            <Image src="/images/logo.png" width={120} height={40} alt="logo" />
           </a>
           <a className="navbar-brand brand-logo-mini" href="#">
-            <Image src="/images/logo-mini.svg" width={40} height={40} alt="logo mini" />
+            <Image
+              src="/images/logo-mini.png"
+              width={40}
+              height={40}
+              alt="logo mini"
+            />
           </a>
-          <button className="navbar-toggler navbar-toggler align-self-center" type="button">
+          <button
+            className="navbar-toggler align-self-center"
+            type="button"
+            onClick={() => {
+              document.body.classList.toggle("sidebar-icon-only");
+            }}
+          >
             <span className="mdi mdi-sort-variant"></span>
           </button>
         </div>
       </div>
-
       <div className="navbar-menu-wrapper d-flex align-items-center justify-content-end">
-        <ul className="navbar-nav mr-lg-4 w-100">
-          <li className="nav-item nav-search d-none d-lg-block w-100">
-            <div className="input-group">
-              <div className="input-group-prepend">
-                <span className="input-group-text" id="search">
-                  <i className="mdi mdi-magnify"></i>
-                </span>
-              </div>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Search now"
-                aria-label="search"
-                aria-describedby="search"
-              />
-            </div>
-          </li>
-        </ul>
-
         <ul className="navbar-nav navbar-nav-right">
           {/* Messages Dropdown */}
           <li className="nav-item dropdown mr-1">
@@ -147,38 +246,48 @@ export default function Header() {
               aria-expanded="false"
             >
               <i className="mdi mdi-message-text mx-0"></i>
-              <span className="count"></span>
+              <span className="count">{messages.filter(m => !m.isRead).length}</span>
             </a>
 
             <div className="dropdown-menu dropdown-menu-right navbar-dropdown">
-              <p className="mb-0 font-weight-normal float-left dropdown-header">Messages</p>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <Image src="/images/faces/face4.jpg" width={40} height={40} className="profile-pic" alt="profile" />
+              <p className="mb-0 font-weight-normal float-left dropdown-header">
+                Messages
+              </p>
+              {loadingMessages ? (
+                <div className="dropdown-item">
+                  <p className="font-weight-light small-text text-muted mb-0">
+                    Chargement...
+                  </p>
                 </div>
-                <div className="item-content flex-grow">
-                  <h6 className="ellipsis font-weight-normal">David Grey</h6>
-                  <p className="font-weight-light small-text text-muted mb-0">The meeting is cancelled</p>
+              ) : messages.length === 0 ? (
+                <div className="dropdown-item">
+                  <p className="font-weight-light small-text text-muted mb-0">
+                    Aucun message
+                  </p>
                 </div>
-              </a>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <Image src="/images/faces/face2.jpg" width={40} height={40} className="profile-pic" alt="profile" />
-                </div>
-                <div className="item-content flex-grow">
-                  <h6 className="ellipsis font-weight-normal">Tim Cook</h6>
-                  <p className="font-weight-light small-text text-muted mb-0">New product launch</p>
-                </div>
-              </a>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <Image src="/images/faces/face3.jpg" width={40} height={40} className="profile-pic" alt="profile" />
-                </div>
-                <div className="item-content flex-grow">
-                  <h6 className="ellipsis font-weight-normal">Johnson</h6>
-                  <p className="font-weight-light small-text text-muted mb-0">Upcoming board meeting</p>
-                </div>
-              </a>
+              ) : (
+                messages.slice(0, 3).map((message) => (
+                  <a key={message.id} className="dropdown-item">
+                    <div className="item-thumbnail">
+                      <Image
+                        src={message.sender.photo}
+                        width={40}
+                        height={40}
+                        className="profile-pic"
+                        alt="profile"
+                      />
+                    </div>
+                    <div className="item-content flex-grow">
+                      <h6 className="ellipsis font-weight-normal">
+                        {message.sender.name}
+                      </h6>
+                      <p className="font-weight-light small-text text-muted mb-0">
+                        {message.subject}
+                      </p>
+                    </div>
+                  </a>
+                ))
+              )}
             </div>
           </li>
 
@@ -191,48 +300,50 @@ export default function Header() {
               aria-expanded="false"
             >
               <i className="mdi mdi-bell mx-0"></i>
-              <span className="count"></span>
+              <span className="count">{notifications.filter(n => !n.isRead).length}</span>
             </a>
             <div className="dropdown-menu dropdown-menu-right navbar-dropdown">
-              <p className="mb-0 font-weight-normal float-left dropdown-header">Notifications</p>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <div className="item-icon bg-success">
-                    <i className="mdi mdi-information mx-0"></i>
-                  </div>
+              <p className="mb-0 font-weight-normal float-left dropdown-header">
+                Notifications
+              </p>
+              {loadingNotifications ? (
+                <div className="dropdown-item">
+                  <p className="font-weight-light small-text text-muted mb-0">
+                    Chargement...
+                  </p>
                 </div>
-                <div className="item-content">
-                  <h6 className="font-weight-normal">Application Error</h6>
-                  <p className="font-weight-light small-text mb-0 text-muted">Just now</p>
+              ) : notifications.length === 0 ? (
+                <div className="dropdown-item">
+                  <p className="font-weight-light small-text text-muted mb-0">
+                    Aucune notification
+                  </p>
                 </div>
-              </a>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <div className="item-icon bg-warning">
-                    <i className="mdi mdi-settings mx-0"></i>
-                  </div>
-                </div>
-                <div className="item-content">
-                  <h6 className="font-weight-normal">Settings</h6>
-                  <p className="font-weight-light small-text mb-0 text-muted">Private message</p>
-                </div>
-              </a>
-              <a className="dropdown-item">
-                <div className="item-thumbnail">
-                  <div className="item-icon bg-info">
-                    <i className="mdi mdi-account-box mx-0"></i>
-                  </div>
-                </div>
-                <div className="item-content">
-                  <h6 className="font-weight-normal">New user registration</h6>
-                  <p className="font-weight-light small-text mb-0 text-muted">2 days ago</p>
-                </div>
-              </a>
+              ) : (
+                notifications.slice(0, 3).map((notification) => (
+                  <a key={notification.id} className="dropdown-item">
+                    <div className="item-thumbnail">
+                      <div className={`item-icon ${notification.bgColor}`}>
+                        <i className={`mdi ${notification.icon} mx-0`}></i>
+                      </div>
+                    </div>
+                    <div className="item-content">
+                      <h6 className="font-weight-normal">{notification.title}</h6>
+                      <p className="font-weight-light small-text mb-0 text-muted">
+                        {notification.message}
+                      </p>
+                    </div>
+                  </a>
+                ))
+              )}
             </div>
           </li>
 
           {/* Profile Dropdown */}
-          <li className="nav-item nav-profile dropdown" ref={menuRef} style={{ position: "relative" }}>
+          <li
+            className="nav-item nav-profile dropdown"
+            ref={menuRef}
+            style={{ position: "relative" }}
+          >
             <a
               className="nav-link dropdown-toggle d-flex align-items-center"
               href="#"
@@ -240,26 +351,34 @@ export default function Header() {
               onClick={toggleMenu}
               style={{ cursor: "pointer" }}
             >
-              <div style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', marginRight: '8px' }}>
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  overflow: "hidden",
+                  marginRight: "8px",
+                }}
+              >
                 <Image
                   src={user?.url_photo || "/images/faces/face5.jpg"}
                   width={40}
                   height={40}
                   alt="Profile"
                   style={{
-                    objectFit: 'cover',
-                    width: '100%',
-                    height: '100%'
+                    objectFit: "cover",
+                    width: "100%",
+                    height: "100%",
                   }}
                   onError={(e) => {
                     // En cas d'erreur de chargement, utiliser l'image par défaut
                     const target = e.target as HTMLImageElement;
-                    target.src = '/images/faces/face5.jpg';
+                    target.src = "/images/faces/face5.jpg";
                   }}
                 />
               </div>
               <span className="nav-profile-name d-none d-sm-inline">
-                {user?.username || user?.email?.split('@')[0] || "Utilisateur"}
+                {user?.username || user?.email?.split("@")[0] || "Utilisateur"}
               </span>
             </a>
 
@@ -283,12 +402,22 @@ export default function Header() {
                 boxShadow: "0 0.5rem 1rem rgba(0,0,0,.175)",
               }}
             >
-              <Link href="/profile" className="dropdown-item" onClick={closeMenu}>
-                <i className="mdi mdi-settings text-primary" style={{ marginRight: "0.75rem", fontSize: "1.25rem" }}></i>
+              <Link
+                href="/profile"
+                className="dropdown-item"
+                onClick={closeMenu}
+              >
+                <i
+                  className="mdi mdi-settings text-primary"
+                  style={{ marginRight: "0.75rem", fontSize: "1.25rem" }}
+                ></i>
                 Profil
               </Link>
               <button onClick={handleLogout} className="dropdown-item">
-                <i className="mdi mdi-logout text-primary" style={{ marginRight: "0.75rem", fontSize: "1.25rem" }}></i>
+                <i
+                  className="mdi mdi-logout text-primary"
+                  style={{ marginRight: "0.75rem", fontSize: "1.25rem" }}
+                ></i>
                 Logout
               </button>
             </div>

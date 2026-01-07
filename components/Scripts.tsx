@@ -1,19 +1,16 @@
-import Script from 'next/script';
+import Script from "next/script";
 
 export default function Scripts() {
   return (
     <>
       {/* jQuery doit être chargé EN PREMIER */}
-      <Script 
-        src="https://code.jquery.com/jquery-3.6.0.min.js" 
-        strategy="beforeInteractive" 
+      <Script
+        src="https://code.jquery.com/jquery-3.6.0.min.js"
+        strategy="beforeInteractive"
       />
 
       {/* DataTables (dépend de jQuery) */}
-      <Script 
-        src="/js/jquery.dataTables.js" 
-        strategy="afterInteractive" 
-      />
+      <Script src="/js/jquery.dataTables.js" strategy="afterInteractive" />
 
       {/* Autres scripts */}
       <Script src="/js/Chart.min.js" strategy="afterInteractive" />

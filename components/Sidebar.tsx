@@ -1,76 +1,118 @@
-"use client"
+"use client";
+
+import { useEffect, useState } from "react";
 
 export default function Sidebar() {
+  const [roleId, setRoleId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      setRoleId(user.role_id);
+    }
+  }, []);
+
+  if (!roleId) return null; // évite le flash au chargement
+
   return (
     <nav className="sidebar sidebar-offcanvas" id="sidebar">
       <ul className="nav">
+        {/* DASHBOARD (tous les rôles) */}
         <li className="nav-item active">
-          <a className="nav-link" href="/">
+          <a
+            className="nav-link"
+            href={
+              roleId === 1
+                ? "/dash/DirecteurGeneral"
+                : roleId === 2
+                  ? "/dash/admin"
+                  : roleId === 3
+                    ? "/dash/ChefProjet"
+                    : roleId === 4
+                      ? "/dash/MembreEquipe"
+                      : "/dash/Lecteur"
+            }
+          >
             <i className="mdi mdi-view-dashboard menu-icon"></i>
             <span className="menu-title">Dashboard</span>
           </a>
         </li>
 
-        <li className="nav-item">
-          <a className="nav-link" href="/admin/add">
-            <i className="mdi mdi-account-plus menu-icon"></i>
-            <span className="menu-title">Ajouter un utilisateur</span>
-          </a>
-        </li>
+        {/* ADMIN SEULEMENT */}
+        {roleId === 2 && (
+          <>
+            <li className="nav-item">
+              <a className="nav-link" href="/admin/add">
+                <i className="mdi mdi-account-plus menu-icon"></i>
+                <span className="menu-title">Créer un utilisateur</span>
+              </a>
+            </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/dash/admin/CreateDao">
+                <i className="mdi mdi-folder-plus menu-icon"></i>
+                <span className="menu-title">Create DAO</span>
+              </a>
+            </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/dash/admin/MyDao/">
+                <i className="mdi mdi-file-document-multiple menu-icon"></i>
+                <span className="menu-title">Mes DAO</span>
+              </a>
+            </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/dash/admin/allDao/">
+                <i className="mdi mdi-file-document-multiple menu-icon"></i>
+                <span className="menu-title">Tous les DAO</span>
+              </a>
+            </li>
+          </>
+        )}
 
-        <li className="nav-item">
-          <a className="nav-link" href="#">
-            <i className="mdi mdi-view-headline menu-icon"></i>
-            <span className="menu-title">Form elements</span>
-          </a>
-        </li>
+        {/* CHEF DE PROJET */}
+        {roleId === 3 && (
+          <li className="nav-item">
+            <a className="nav-link" href="/dash/ChefProjet/MyDao/">
+              <i className="mdi mdi-file-document-multiple menu-icon"></i>
+              <span className="menu-title">Mes DAO</span>
+            </a>
+            <a className="nav-link" href="/dash/ChefProjet/MesEquipes/">
+              <i className="mdi mdi-account-group menu-icon"></i>
+              <span className="menu-title">Mes equipes</span>
+            </a>
+          </li>
+        )}
 
-        <li className="nav-item">
-          <a className="nav-link" href="#">
-            <i className="mdi mdi-chart-pie menu-icon"></i>
-            <span className="menu-title">Charts</span>
-          </a>
-        </li>
+        {/* DirecteurGeneral */}
+        {roleId === 1 && (
+          <li className="nav-item">
+            <a className="nav-link" href="/dash/admin/new-dao">
+              <i className="mdi mdi-folder-plus menu-icon"></i>
+              <span className="menu-title">Créer un DAO</span>
+            </a>
+          </li>
+        )}
 
-        <li className="nav-item">
-          <a className="nav-link" href="#">
-            <i className="mdi mdi-grid-large menu-icon"></i>
-            <span className="menu-title">Tables</span>
-          </a>
-        </li>
+        {/* MembreEquipe */}
+        {roleId === 4 && (
+          <li className="nav-item">
+            <a className="nav-link" href="/dash/MembreEquipe/task">
+              <i className="mdi mdi-file-document-multiple menu-icon"></i>
+              <span className="menu-title">Mes taches</span>
+            </a>
+          </li>
+        )}
 
-        <li className="nav-item">
-          <a className="nav-link" href="#">
-            <i className="mdi mdi-emoticon menu-icon"></i>
-            <span className="menu-title">Icons</span>
-          </a>
-        </li>
-
-        <li className="nav-item">
-          <a className="nav-link" data-bs-toggle="collapse" href="#auth">
-            <i className="mdi mdi-account menu-icon"></i>
-            <span className="menu-title">User Pages</span>
-            <i className="menu-arrow"></i>
-          </a>
-          <div className="collapse" id="auth">
-            <ul className="nav flex-column sub-menu">
-              <li className="nav-item"><a className="nav-link" href="#">Login</a></li>
-              <li className="nav-item"><a className="nav-link" href="#">Login 2</a></li>
-              <li className="nav-item"><a className="nav-link" href="#">Register</a></li>
-              <li className="nav-item"><a className="nav-link" href="#">Register 2</a></li>
-              <li className="nav-item"><a className="nav-link" href="#">Lockscreen</a></li>
-            </ul>
-          </div>
-        </li>
-
-        <li className="nav-item">
-          <a className="nav-link" href="#">
-            <i className="mdi mdi-file-document-box-outline menu-icon"></i>
-            <span className="menu-title">Documentation</span>
-          </a>
-        </li>
-
+        {/* Lecteur */}
+        {roleId === 5 && (
+          <li className="nav-item">
+            <a className="nav-link" href="/dash/admin/new-dao">
+              <i className="mdi mdi-folder-plus menu-icon"></i>
+              <span className="menu-title">Créer un DAO</span>
+            </a>
+          </li>
+        )}
       </ul>
     </nav>
-  )
+  );
 }
