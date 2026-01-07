@@ -86,10 +86,6 @@ export default function Sidebar() {
         {/* DirecteurGeneral */}
         {roleId === 1 && (
           <li className="nav-item">
-            <a className="nav-link" href="/dash/admin/new-dao">
-              <i className="mdi mdi-folder-plus menu-icon"></i>
-              <span className="menu-title">Créer un DAO</span>
-            </a>
           </li>
         )}
 
