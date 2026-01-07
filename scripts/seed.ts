@@ -77,6 +77,12 @@ async function seedDatabase() {
         password: await bcrypt.hash("directeur123", 10),
         role_id: 1, // Directeur General
       },
+      {
+        username: "Lecteur",
+        email: "lecteur@example.com",
+        password: await bcrypt.hash("lecteur123", 10),
+        role_id: 1, // Directeur General
+      },
     ];
 
     // Insérer les utilisateurs
