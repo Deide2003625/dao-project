@@ -1,4 +1,7 @@
+import dotenv from "dotenv";
 import mysql from "mysql2/promise";
+
+dotenv.config({ path: ".env.local" });
 
 const DB_HOST = process.env.DB_HOST || "localhost";
 const DB_USER = process.env.DB_USER;
@@ -221,4 +224,5 @@ async function _verifyDatabaseStructure(connection: mysql.Pool) {
   }
 
   console.log("Vérification DB terminée");
+  
 }
