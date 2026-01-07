@@ -1,74 +1,263 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Chart from "chart.js/auto";
 
-interface Purchase {
-  id: number;
-  name: string;
-  status_report: string;
-  office: string;
-  price: number;
-  date: string;
-  gross_amount: number;
-}
+// Les 15 tâches DAO
+const daoTasks = [
+  { id: 1, name: "Résumé sommaire DAO et Création du drive" },
+  { id: 2, name: "Demande de caution et garanties" },
+  { id: 3, name: "Identification et renseignement des profils dans le drive" },
+  { id: 4, name: "Identification et renseignement des ABE dans le drive" },
+  { id: 5, name: "Légalisation des ABE, diplômes, certificats, attestations et pièces administratives requis" },
+  { id: 6, name: "Indication directive d'élaboration de l'offre financier" },
+  { id: 7, name: "Elaboration de la méthodologie" },
+  { id: 8, name: "Planification prévisionnelle" },
+  { id: 9, name: "Identification des références précises des équipements et matériels" },
+  { id: 10, name: "Demande de cotation" },
+  { id: 11, name: "Elaboration du squelette des offres" },
+  { id: 12, name: "Rédaction du contenu des OF et OT" },
+  { id: 13, name: "Contrôle et validation des offres" },
+  { id: 14, name: "Impression et présentation des offres (Valider l'étiquette)" },
+  { id: 15, name: "Dépôt des offres et clôture" }
+];
+
+// Données des DAO avec progression des tâches
+const daoData = [
+  {
+    id: 1,
+    name: "DAO-2025-001",
+    reference: "Fourniture équipements",
+    authority: "Ministère Éducation",
+    closingDate: "10/01/2026",
+    status: "en cours",
+    tasksProgress: [100, 80, 60, 40, 30, 25, 20, 15, 10, 5, 0, 0, 0, 0, 0] // Exemple de progression rapide
+  },
+  {
+    id: 2,
+    name: "DAO-2025-002",
+    reference: "Construction bâtiment",
+    authority: "Ville de Paris",
+    closingDate: "15/02/2026",
+    status: "validé",
+    tasksProgress: [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100] // Toutes terminées
+  },
+  {
+    id: 3,
+    name: "DAO-2025-003",
+    reference: "Logiciel gestion",
+    authority: "Hôpital Central",
+    closingDate: "20/03/2026",
+    status: "rejeté",
+    tasksProgress: [100, 100, 100, 100, 80, 60, 40, 20, 10, 5, 0, 0, 0, 0, 0] // Progression moyenne, bloqué
+  }
+];
 
 export default function Page() {
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const chartRef = useRef<HTMLCanvasElement>(null);
+  const chartInstance = useRef<Chart | null>(null);
+  const [selectedDao, setSelectedDao] = useState(daoData[0]);
+  const [speedFilter, setSpeedFilter] = useState("all"); // "all", "fast", "slow", "notStarted"
 
   useEffect(() => {
-    fetch('/api/purchases')
-      .then(res => res.json())
-      .then(data => setPurchases(data))
-      .catch(err => console.error('Error fetching purchases:', err));
-  }, []);
+    if (chartRef.current) {
+      // Détruire l'ancien graphique s'il existe
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+      }
+
+      const ctx = chartRef.current.getContext("2d");
+      if (ctx) {
+        // Filtrer les tâches selon la vitesse
+        const filteredTasks = filterTasksBySpeed(selectedDao.tasksProgress);
+        
+        chartInstance.current = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: filteredTasks.map(task => `T${task.id}`),
+            datasets: [
+              {
+                label: 'Progression (%)',
+                data: filteredTasks.map(task => task.progress),
+                backgroundColor: filteredTasks.map(task => getProgressColor(task.progress)),
+                borderColor: filteredTasks.map(task => getBorderColor(task.progress)),
+                borderWidth: 1,
+                borderRadius: 4
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y', // Graphique horizontal pour mieux voir les 15 tâches
+            scales: {
+              x: {
+                beginAtZero: true,
+                max: 100,
+                grid: {
+                  color: 'rgba(0,0,0,0.05)'
+                },
+                title: {
+                  display: true,
+                  text: 'Progression (%)'
+                }
+              },
+              y: {
+                grid: {
+                  display: false
+                },
+                ticks: {
+                  callback: function(value, index) {
+                    // Afficher les noms des tâches tronqués
+                    const taskName = filteredTasks[index]?.name || '';
+                    return taskName.length > 30 ? taskName.substring(0, 30) + '...' : taskName;
+                  }
+                }
+              }
+            },
+            plugins: {
+              legend: {
+                position: 'top',
+                labels: {
+                  boxWidth: 12,
+                  padding: 20
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const taskIndex = context.dataIndex;
+                    const task = filteredTasks[taskIndex];
+                    const progress = context.parsed.x;
+                    return [
+                      `Tâche ${task.id + 1}: ${task.name}`,
+                      `Progression: ${progress}%`,
+                      `Statut: ${getProgressStatus(progress)}`
+                    ];
+                  }
+                }
+              },
+              title: {
+                display: true,
+                text: `Progression des 15 tâches - ${selectedDao.name}`,
+                font: {
+                  size: 16
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+  }, [selectedDao, speedFilter]);
+
+  // Filtrer les tâches selon la vitesse de progression
+  const filterTasksBySpeed = (progressArray: number[]) => {
+    return daoTasks.map((task, index) => ({
+      ...task,
+      progress: progressArray[index] || 0,
+      speed: getTaskSpeed(progressArray[index] || 0)
+    })).filter(task => {
+      if (speedFilter === "all") return true;
+      if (speedFilter === "fast") return task.speed === "fast";
+      if (speedFilter === "slow") return task.speed === "slow";
+      if (speedFilter === "notStarted") return task.speed === "notStarted";
+      return true;
+    });
+  };
+
+  // Déterminer la vitesse d'une tâche
+  const getTaskSpeed = (progress: number) => {
+    if (progress === 0) return "notStarted";
+    if (progress === 100) return "fast";
+    if (progress >= 70) return "fast";
+    if (progress >= 30) return "slow";
+    return "verySlow";
+  };
+
+  // Couleur selon la progression
+  const getProgressColor = (progress: number) => {
+    if (progress === 100) return '#28a745'; // Vert - Terminé
+    if (progress >= 70) return '#20c997'; // Vert clair - Bien avancé
+    if (progress >= 40) return '#ffc107'; // Jaune - En cours
+    if (progress >= 10) return '#fd7e14'; // Orange - Débuté
+    return '#dc3545'; // Rouge - Non commencé
+  };
+
+  const getBorderColor = (progress: number) => {
+    if (progress === 100) return '#218838';
+    if (progress >= 70) return '#1ba87e';
+    if (progress >= 40) return '#e0a800';
+    if (progress >= 10) return '#e06c14';
+    return '#c82333';
+  };
+
+  const getProgressStatus = (progress: number) => {
+    if (progress === 100) return "Terminé";
+    if (progress >= 70) return "Bien avancé";
+    if (progress >= 40) return "En bonne voie";
+    if (progress >= 10) return "Débuté";
+    return "Non commencé";
+  };
+
+  // Calculer la vitesse moyenne du DAO
+  const calculateAverageSpeed = (progressArray: number[]) => {
+    const startedTasks = progressArray.filter(p => p > 0);
+    if (startedTasks.length === 0) return 0;
+    return startedTasks.reduce((a, b) => a + b, 0) / startedTasks.length;
+  };
+
+  // Pourcentage de tâches terminées
+  const getCompletedPercentage = (progressArray: number[]) => {
+    const completed = progressArray.filter(p => p === 100).length;
+    return Math.round((completed / progressArray.length) * 100);
+  };
+
+  const handleDaoSelect = (daoId: number) => {
+    const dao = daoData.find(d => d.id === daoId);
+    if (dao) {
+      setSelectedDao(dao);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'validé':
+        return <span className="badge badge-success">Validé</span>;
+      case 'en cours':
+        return <span className="badge badge-warning">En cours</span>;
+      case 'rejeté':
+        return <span className="badge badge-danger">A risque</span>;
+      default:
+        return <span className="badge badge-secondary">{status}</span>;
+    }
+  };
+
   return (
     <>
-      {/* ROW 1 - Header with breadcrumb */}
+      {/* ================= HEADER ================= */}
       <div className="row">
         <div className="col-12 grid-margin">
           <div className="d-flex justify-content-between flex-wrap">
             <div className="d-flex align-items-end flex-wrap">
               <div className="mr-md-3 mr-xl-5">
-                <h2>Welcome back,</h2>
-                <p className="mb-md-0">Your analytics dashboard template.</p>
-              </div>
-              <div className="d-flex">
-                <i className="mdi mdi-home text-muted hover-cursor"></i>
-                <p className="text-muted mb-0 hover-cursor">
-                  &nbsp;/&nbsp;Dashboard&nbsp;/&nbsp;
+                <h2>Direction Générale</h2>
+                <p className="mb-md-0">
+                  Tableau de bord
                 </p>
-                <p className="text-primary mb-0 hover-cursor">Analytics</p>
               </div>
             </div>
 
             <div className="d-flex justify-content-between align-items-end flex-wrap">
-              <button
-                type="button"
-                className="btn btn-light bg-white btn-icon mr-3 d-none d-md-block"
-              >
-                <i className="mdi mdi-download text-muted"></i>
-              </button>
-              <button
-                type="button"
-                className="btn btn-light bg-white btn-icon mr-3 mt-2 mt-xl-0"
-              >
-                <i className="mdi mdi-clock-outline text-muted"></i>
-              </button>
-              <button
-                type="button"
-                className="btn btn-light bg-white btn-icon mr-3 mt-2 mt-xl-0"
-              >
-                <i className="mdi mdi-plus text-muted"></i>
-              </button>
-              <button className="btn btn-primary mt-2 mt-xl-0">
-                Download report
+              <button className="btn btn-primary">
+                Exporter le rapport des DAO
               </button>
             </div>
           </div>
         </div>
       </div>
-
-      {/* TABS SECTION */}
+      
+      {/* ================= TABS ================= */}
       <div className="row">
         <div className="col-12 grid-margin stretch-card">
           <div className="card">
@@ -77,134 +266,52 @@ export default function Page() {
                 <li className="nav-item">
                   <a
                     className="nav-link active"
-                    id="overview-tab"
                     data-bs-toggle="tab"
                     href="#overview"
-                    role="tab"
                   >
-                    Overview
-                  </a>
-                </li>
-                <li className="nav-item">
-                  <a
-                    className="nav-link"
-                    id="sales-tab"
-                    data-bs-toggle="tab"
-                    href="#sales"
-                    role="tab"
-                  >
-                    Sales
-                  </a>
-                </li>
-                <li className="nav-item">
-                  <a
-                    className="nav-link"
-                    id="purchases-tab"
-                    data-bs-toggle="tab"
-                    href="#purchases"
-                    role="tab"
-                  >
-                    Purchases
+                    Vue générale
                   </a>
                 </li>
               </ul>
 
               <div className="tab-content py-0 px-0">
+                {/* ================= OVERVIEW ================= */}
                 <div
                   className="tab-pane fade show active"
                   id="overview"
-                  role="tabpanel"
                 >
                   <div className="d-flex flex-wrap justify-content-xl-between">
-                    {/* block 1 */}
-                    <div className="d-none d-xl-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 item">
-                      <i className="mdi mdi-calendar-heart icon-lg mr-3 text-primary"></i>
-                      <div className="d-flex flex-column justify-content-around">
-                        <small className="mb-1 text-muted">Start date</small>
-                        <div className="dropdown">
-                          <a
-                            className="btn btn-secondary dropdown-toggle p-0 bg-transparent border-0 text-dark shadow-none font-weight-medium"
-                            href="#"
-                            id="dropdownMenuLinkA"
-                            data-bs-toggle="dropdown"
-                          >
-                            <h5 className="mb-0 d-inline-block">26 Jul 2018</h5>
-                          </a>
-                          <ul
-                            className="dropdown-menu"
-                            aria-labelledby="dropdownMenuLinkA"
-                          >
-                            <li>
-                              <a className="dropdown-item" href="#">
-                                12 Aug 2018
-                              </a>
-                            </li>
-                            <li>
-                              <a className="dropdown-item" href="#">
-                                22 Sep 2018
-                              </a>
-                            </li>
-                            <li>
-                              <a className="dropdown-item" href="#">
-                                21 Oct 2018
-                              </a>
-                            </li>
-                          </ul>
-                        </div>
+                    <div className="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3">
+                      <i className="mdi mdi-folder-multiple icon-lg mr-3 text-primary"></i>
+                      <div>
+                        <small className="text-muted">Total DAO</small>
+                        <h5 className="mb-0">3</h5>
                       </div>
                     </div>
 
-                    {/* block 2 */}
-                    <div className="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 item">
-                      <i className="mdi mdi-currency-usd mr-3 icon-lg text-danger"></i>
-                      <div className="d-flex flex-column justify-content-around">
-                        <small className="mb-1 text-muted">Revenue</small>
-                        <h5 className="mr-2 mb-0">$577545</h5>
+                    <div className="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3">
+                      <i className="mdi mdi-progress-clock icon-lg mr-3 text-warning"></i>
+                      <div>
+                        <small className="text-muted">DAO en cours</small>
+                        <h5 className="mb-0">1</h5>
                       </div>
                     </div>
 
-                    {/* block 3 */}
-                    <div className="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 item">
-                      <i className="mdi mdi-eye mr-3 icon-lg text-success"></i>
-                      <div className="d-flex flex-column justify-content-around">
-                        <small className="mb-1 text-muted">Total views</small>
-                        <h5 className="mr-2 mb-0">9833550</h5>
+                    <div className="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3">
+                      <i className="mdi mdi-alert mr-3 icon-lg text-danger"></i>
+                      <div>
+                        <small className="text-muted">DAO à risque</small>
+                        <h5 className="mb-0">1</h5>
                       </div>
                     </div>
 
-                    {/* block 4 */}
-                    <div className="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 item">
-                      <i className="mdi mdi-download mr-3 icon-lg text-warning"></i>
-                      <div className="d-flex flex-column justify-content-around">
-                        <small className="mb-1 text-muted">Downloads</small>
-                        <h5 className="mr-2 mb-0">2233783</h5>
+                    <div className="d-flex flex-grow-1 align-items-center justify-content-center p-3">
+                      <i className="mdi mdi-check-circle icon-lg mr-3 text-success"></i>
+                      <div>
+                        <small className="text-muted">DAO terminés</small>
+                        <h5 className="mb-0">1</h5>
                       </div>
                     </div>
-
-                    {/* block 5 */}
-                    <div className="d-flex py-3 border-md-right flex-grow-1 align-items-center justify-content-center p-3 item">
-                      <i className="mdi mdi-flag mr-3 icon-lg text-danger"></i>
-                      <div className="d-flex flex-column justify-content-around">
-                        <small className="mb-1 text-muted">Flagged</small>
-                        <h5 className="mr-2 mb-0">3497843</h5>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SALES TAB */}
-                <div className="tab-pane fade" id="sales" role="tabpanel">
-                  <div className="p-4">
-                    <h4>Sales Data</h4>
-                    <p>Sales information will be displayed here.</p>
-                  </div>
-                </div>
-
-                {/* PURCHASES TAB */}
-                <div className="tab-pane fade" id="purchases" role="tabpanel">
-                  <div className="p-4">
-                    <h4>Purchases Data</h4>
-                    <p>Purchases information will be displayed here.</p>
                   </div>
                 </div>
               </div>
@@ -213,68 +320,108 @@ export default function Page() {
         </div>
       </div>
 
-      {/* CHARTS */}
-      <div className="row">
-        <div className="col-lg-7 grid-margin stretch-card">
-          <div className="card">
-            <div className="card-body">
-              <p className="card-title">Cash deposits</p>
-              <p className="mb-4">To start a blog, think of a topic about...</p>
-              <div
-                id="cash-deposits-chart-legend"
-                className="d-flex justify-content-center pt-3"
-              ></div>
-              <canvas id="cash-deposits-chart"></canvas>
-            </div>
-          </div>
-        </div>
 
-        <div className="col-lg-5 grid-margin stretch-card">
+      {/* ================= GRAPHIQUE DES TÂCHES ================= */}
+      <div className="row">
+        <div className="col-md-8 grid-margin stretch-card">
           <div className="card">
             <div className="card-body">
-              <p className="card-title">Total sales</p>
-              <h1>$ 28835</h1>
-              <h4>Gross sales over the years</h4>
-              <p className="text-muted">
-                Today, many people rely on computers...
-              </p>
-              <div id="total-sales-chart-legend"></div>
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <h4 className="card-title mb-0">Progression des tâches</h4>
+                <div className="btn-group">
+                  <button 
+                    className={`btn btn-sm ${selectedDao.id === 1 ? 'btn-primary' : 'btn-outline-primary'}`}
+                    onClick={() => handleDaoSelect(1)}
+                  >
+                    DAO-001
+                  </button>
+                  <button 
+                    className={`btn btn-sm ${selectedDao.id === 2 ? 'btn-primary' : 'btn-outline-primary'}`}
+                    onClick={() => handleDaoSelect(2)}
+                  >
+                    DAO-002
+                  </button>
+                  <button 
+                    className={`btn btn-sm ${selectedDao.id === 3 ? 'btn-primary' : 'btn-outline-primary'}`}
+                    onClick={() => handleDaoSelect(3)}
+                  >
+                    DAO-003
+                  </button>
+                </div>
+              </div>
+              
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <p className="text-muted mb-0">
+                  Suivi du <strong>{selectedDao.name}</strong> : {selectedDao.reference}
+                </p>
+              </div>
+              <div className="chart-container" style={{ height: "500px", position: "relative" }}>
+                <canvas ref={chartRef} id="daoBarChart"></canvas>
+              </div>
             </div>
-            <canvas id="total-sales-chart"></canvas>
           </div>
         </div>
       </div>
 
-      {/* TABLE */}
+      {/* ================= TABLE DAO ================= */}
       <div className="row">
         <div className="col-12 stretch-card">
           <div className="card">
             <div className="card-body">
-              <p className="card-title">Recent Purchases</p>
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <p className="card-title mb-0">Liste des DAO</p>
+                <small className="text-muted">Cliquez sur "Sélectionner" pour voir le détail des tâches</small>
+              </div>
               <div className="table-responsive">
-                <table
-                  id="recent-purchases-listing"
-                  className="table table-hover"
-                >
+                <table className="table table-hover">
                   <thead>
                     <tr>
-                      <th>Name</th>
-                      <th>Status report</th>
-                      <th>Office</th>
-                      <th>Price</th>
-                      <th>Date</th>
-                      <th>Gross amount</th>
+                      <th>Nom</th>
+                      <th>Référence</th>
+                      <th>Autorité contractante</th>
+                      <th>Date de clôture</th>
+                      <th>Status</th>
+                      <th>Tâches terminées</th>
+                      <th>Progression moyenne</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {purchases.map(purchase => (
-                      <tr key={purchase.id}>
-                        <td>{purchase.name}</td>
-                        <td>{purchase.status_report}</td>
-                        <td>{purchase.office}</td>
-                        <td>${purchase.price.toLocaleString()}</td>
-                        <td>{new Date(purchase.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                        <td>${purchase.gross_amount.toLocaleString()}</td>
+                    {daoData.map((dao) => (
+                      <tr 
+                        key={dao.id} 
+                        className={selectedDao.id === dao.id ? 'table-primary' : ''}
+                      >
+                        <td>{dao.name}</td>
+                        <td>{dao.reference}</td>
+                        <td>{dao.authority}</td>
+                        <td>{dao.closingDate}</td>
+                        <td>{getStatusBadge(dao.status)}</td>
+                        <td>
+                          <div className="d-flex align-items-center">
+                            <span className="text-success mr-1">
+                              {dao.tasksProgress.filter(p => p === 100).length}
+                            </span>
+                            <span>/15</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="d-flex align-items-center">
+                            <div className="progress flex-grow-1 mr-2" style={{ height: "8px" }}>
+                              <div
+                                className="progress-bar bg-primary"
+                                role="progressbar"
+                                style={{ width: `${calculateAverageSpeed(dao.tasksProgress)}%` }}
+                              ></div>
+                            </div>
+                            <span>{Math.round(calculateAverageSpeed(dao.tasksProgress))}%</span>
+                          </div>
+                        </td>
+                        <td>
+                          <button className="btn btn-sm btn-outline-info ml-2">
+                            <a href="/dash/DirecteurGeneral/task">Détails</a>
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
