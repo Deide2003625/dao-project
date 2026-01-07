@@ -88,7 +88,7 @@ export default function DaoDetailStatic() {
       <header className="bg-white border-b p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <Link href="/dash/ChefProjet/MyDao">
+            <Link href="/dash/DirecteurGeneral/">
               <ArrowLeft />
             </Link>
             <div className="min-w-0">
@@ -193,7 +193,7 @@ export default function DaoDetailStatic() {
 }
 
 /* ======================
-   TÂCHE (MODIFS LIMITÉES)
+   TÂCHE (MODIFICATION UNIQUEMENT DANS LA STRUCTURE D'AFFICHAGE)
 ====================== */
 
 function TaskItem({
@@ -210,12 +210,18 @@ function TaskItem({
   return (
     <div className="border rounded p-3 mb-3">
       <h3 className="text-sm font-medium">{task.name}</h3>
-
+      
       <div className="mt-2">
+        {/* MODIFICATION ICI : Mise de "Assigne à" au-dessus de "Avancement" */}
+        <div className="mb-1">
+          <span className="text-xs">Assigne a: </span>
+        </div>
+        
         <div className="flex justify-between text-xs mb-1">
           <span>Avancement</span>
           <span>{task.progress}%</span>
         </div>
+        
         <div className="w-full bg-gray-200 h-2 rounded">
           <div
             className="h-2 bg-blue-600 rounded"
@@ -227,48 +233,12 @@ function TaskItem({
       {/* BOUTONS MODIFIÉS UNIQUEMENT */}
       <div className="flex gap-2 mt-3">
         <button
-          onClick={() => setShowProgress(!showProgress)}
-          className="flex-1 text-xs border rounded py-1 hover:bg-gray-100"
-        >
-          Progression
-        </button>
-
-        <button
           onClick={onCommentClick}
           className="flex-1 text-xs border rounded py-1 hover:bg-gray-100"
         >
           Commentaires
         </button>
       </div>
-
-      {showProgress && (
-        <div className="mt-3 bg-gray-50 p-3 rounded">
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={task.progress}
-            onChange={(e) => onProgressChange(Number(e.target.value))}
-            className="w-full"
-          />
-
-          <div className="flex justify-between mt-2">
-            <button
-              onClick={() => onProgressChange(task.progress - 5)}
-              className="px-2 py-1 text-xs border rounded"
-            >
-              <Minus size={14} />
-            </button>
-            <button
-              onClick={() => onProgressChange(task.progress + 5)}
-              className="px-2 py-1 text-xs border rounded"
-            >
-              <Plus size={14} />
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

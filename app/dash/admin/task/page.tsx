@@ -193,7 +193,7 @@ export default function DaoDetailStatic() {
 }
 
 /* ======================
-   TÂCHE (MODIFS LIMITÉES)
+   TÂCHE (MODIFICATION UNIQUEMENT DANS LA STRUCTURE D'AFFICHAGE)
 ====================== */
 
 function TaskItem({
@@ -210,12 +210,18 @@ function TaskItem({
   return (
     <div className="border rounded p-3 mb-3">
       <h3 className="text-sm font-medium">{task.name}</h3>
-
+      
       <div className="mt-2">
+        {/* MODIFICATION ICI : Mise de "Assigne à" au-dessus de "Avancement" */}
+        <div className="mb-1">
+          <span className="text-xs">Assigne a: </span>
+        </div>
+        
         <div className="flex justify-between text-xs mb-1">
           <span>Avancement</span>
           <span>{task.progress}%</span>
         </div>
+        
         <div className="w-full bg-gray-200 h-2 rounded">
           <div
             className="h-2 bg-blue-600 rounded"
