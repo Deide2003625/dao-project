@@ -15,6 +15,9 @@ export default function NewDaoPage() {
   const [users, setUsers] = useState<
     Array<{ id: number; username: string; role: string }>
   >([]);
+  const [teamLeaders, setTeamLeaders] = useState<
+    Array<{ id: number; username: string; role: string }>
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [membresOpen, setMembresOpen] = useState(false);
   const membresRef = useRef<HTMLDivElement | null>(null);
@@ -35,17 +38,74 @@ export default function NewDaoPage() {
     (async () => {
       try {
         const res = await fetch("/api/users");
-        if (!res.ok) return;
+        if (!res.ok) {
+          console.error("Erreur lors de la récupération des utilisateurs:", await res.text());
+          return;
+        }
         const data = await res.json();
-        // On suppose que l'API renvoie un tableau d'utilisateurs avec un champ `role` ou `role_id`.
-        const list = (data.users || data).map((u: any) => ({
-          id: u.id,
-          username: u.username || u.email || `user-${u.id}`,
-          role: u.role || (u.role_id === 1 ? "admin" : "user"),
-        }));
-        // Afficher tous les utilisateurs (inclut les admins)
-        setUsers(list);
+        console.log("Données brutes de l'API:", JSON.stringify(data, null, 2));
+        
+        // Vérifier la structure des données
+        const usersData = Array.isArray(data) ? data : (data.users || []);
+        console.log("Liste des utilisateurs (après extraction):", JSON.stringify(usersData, null, 2));
+        
+        // Afficher les clés du premier utilisateur (si disponible)
+        if (usersData.length > 0) {
+          console.log("Clés du premier utilisateur:", Object.keys(usersData[0]));
+          console.log("Valeurs du premier utilisateur:", JSON.stringify(usersData[0], null, 2));
+          
+          // Afficher les rôles disponibles
+          const roles = [...new Set(usersData.map((u: any) => ({
+            role_id: u.role_id,
+            roleName: u.roleName,
+            role: u.role
+          })))];
+          console.log("Rôles trouvés dans les données:", JSON.stringify(roles, null, 2));
+        }
+        
+        // Fonction pour obtenir le nom du rôle en fonction de l'ID
+        const getRoleName = (roleId: string | number): string => {
+          const id = String(roleId);
+          switch (id) {
+            case '1': return 'Admin';
+            case '2': return 'Admin';
+            case '3': return 'ChefProjet';
+            case '4': return 'MembreEquipe';
+            default: return 'Utilisateur';
+          }
+        };
+
+        // Pour les membres d'équipe (role_id = '4' ou 4)
+        const membersList = usersData
+          .filter((u: any) => {
+            const roleId = String(u.role_id || u.role);
+            return roleId === '4';
+          })
+          .map((u: any) => ({
+            id: u.id,
+            username: u.username || u.email || `user-${u.id}`,
+            role: u.roleName || getRoleName(u.role_id || u.role),
+            role_id: u.role_id || u.role
+          }));
+        console.log("Membres d'équipe:", membersList);
+        setUsers(membersList);
+
+        // Pour les chefs d'équipe (rôles '2' ou 2, '3' ou 3)
+        const teamLeadersList = usersData
+          .filter((u: any) => {
+            const roleId = String(u.role_id || u.role);
+            return roleId === '2' || roleId === '3';
+          })
+          .map((u: any) => ({
+            id: u.id,
+            username: u.username || u.email || `user-${u.id}`,
+            role: getRoleName(u.role_id || u.role),
+            role_id: u.role_id || u.role
+          }));
+        console.log("Chefs d'équipe:", teamLeadersList);
+        setTeamLeaders(teamLeadersList);
       } catch (err) {
+        console.error("Erreur lors du chargement des utilisateurs:", err);
         // En cas d'erreur on laisse la liste vide
       }
     })();
@@ -237,12 +297,16 @@ export default function NewDaoPage() {
                 onChange={(e) => setChefEquipe(e.target.value)}
                 required
               >
-                <option value="">Non assigné</option>
-                {users.map((u) => (
-                  <option key={u.id} value={String(u.id)}>
-                    {u.username}
-                  </option>
-                ))}
+                <option value="">Sélectionnez un chef d'équipe</option>
+                {teamLeaders.length > 0 ? (
+                  teamLeaders.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.username} ({user.role})
+                    </option>
+                  ))
+                ) : (
+                  <option disabled>Aucun chef d'équipe disponible</option>
+                )}
               </select>
             </div>
 

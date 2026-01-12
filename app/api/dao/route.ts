@@ -95,6 +95,7 @@ export async function GET() {
         d.autorite,
         d.date_depot,
         d.statut,
+        d.chef_id,
         u.username as chef_projet
       FROM daos d
       LEFT JOIN users u ON d.chef_id = u.id
@@ -177,13 +178,7 @@ export async function POST(req: NextRequest) {
       idToRole[Number(r.id)] = String(r.role_id);
     });
 
-    // Chef must have chef role (role_id 3 = ChefProjet)
-    if (chefEquipe && String(idToRole[Number(chefEquipe)]) !== "3") {
-      return NextResponse.json(
-        { success: false, message: "Le chef d'équipe sélectionné n'a pas le rôle ChefProjet" },
-        { status: 400 },
-      );
-    }
+    // Vérification du rôle ChefProjet supprimée pour permettre à n'importe quel utilisateur d'être chef d'équipe
 
     // Members must have member role (role_id 4 = MembreEquipe)
     for (const m of membres || []) {

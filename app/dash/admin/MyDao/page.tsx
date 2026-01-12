@@ -27,7 +27,36 @@ export default function MyDaoPage() {
     try {
       setLoading(true);
       setError("");
+      // Récupérer l'utilisateur courant depuis le localStorage (même logique que le Header)
+      const storedUser =
+        typeof window !== "undefined" ? localStorage.getItem("user") : null;
 
+      if (!storedUser) {
+        setDaos([]);
+        setError("Utilisateur non authentifié");
+        return;
+      }
+
+      let currentUserId: number | null = null;
+      let roleId: number | null = null;
+      try {
+        const parsed = JSON.parse(storedUser);
+        currentUserId = Number(parsed.id);
+        roleId = Number(parsed.role_id ?? parsed.roleId);
+      } catch (e) {
+        console.error("Erreur lors du parsing de l'utilisateur depuis localStorage:", e);
+        setDaos([]);
+        setError("Utilisateur non authentifié");
+        return;
+      }
+
+      if (!currentUserId || Number.isNaN(currentUserId)) {
+        setDaos([]);
+        setError("Utilisateur non authentifié");
+        return;
+      }
+
+      // Récupérer tous les DAO
       const res = await fetch("/api/dao", { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
 
@@ -40,7 +69,13 @@ export default function MyDaoPage() {
 
       // API renvoie { success: true, data: [...] }
       const rows = Array.isArray(json?.data) ? (json.data as Dao[]) : [];
-      setDaos(rows);
+
+      // Filtrer pour ne garder que les DAO dont le chef correspond à l'utilisateur courant
+      const filtered = rows.filter(
+        (dao: any) => Number(dao.chef_id) === Number(currentUserId),
+      );
+
+      setDaos(filtered);
     } catch (err) {
       console.error("Error fetching DAOs:", err);
       setDaos([]);
