@@ -21,6 +21,53 @@ export default function AllDaoPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
+  const computeStatus = (dao: Dao): { label: string; className: string } => {
+    const today = new Date();
+    const rawStatut = String(dao.statut || "").toUpperCase();
+
+    // 1) Si terminé (équivalent à 100% d'avancement) => vert
+    if (rawStatut === "TERMINEE" || rawStatut === "TERMINE") {
+      return {
+        label: "Terminée",
+        className: "bg-green-100 text-green-800",
+      };
+    }
+
+    // 2) Sinon, on applique la règle sur la date de dépôt
+    if (!dao.date_depot) {
+      return {
+        label: "En cours",
+        className: "bg-yellow-100 text-yellow-800",
+      };
+    }
+
+    const dateDepot = new Date(dao.date_depot);
+    const diffMs = dateDepot.getTime() - today.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    // Si Date dépôt - Date aujourd'hui ≥ 5 jours => En cours (jaune)
+    if (diffDays >= 5 || diffDays === 4) {
+      return {
+        label: "EN COURS",
+        className: "bg-yellow-100 text-yellow-800",
+      };
+    }
+
+    // Si Date dépôt - Date aujourd'hui ≤ 3 jours (ou passée) => À risque (rouge)
+    if (diffDays <= 3) {
+      return {
+        label: "À risque",
+        className: "bg-red-100 text-red-800",
+      };
+    }
+
+    // Fallback
+    return {
+      label: "En cours",
+      className: "bg-yellow-100 text-yellow-800",
+    };
+  };
+
   useEffect(() => {
     loadDaos();
   }, []);
@@ -134,19 +181,16 @@ export default function AllDaoPage() {
                         {dao.reference} - {dao.autorite}
                       </p>
                     </div>
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        dao.statut === "EN_COURS"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : dao.statut === "TERMINE"
-                          ? "bg-green-100 text-green-800"
-                          : dao.statut === "ANNULE"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {dao.statut || "EN_COURS"}
-                    </span>
+                    {(() => {
+                      const s = computeStatus(dao);
+                      return (
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${s.className}`}
+                        >
+                          {s.label}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <div className="mt-4 space-y-2">

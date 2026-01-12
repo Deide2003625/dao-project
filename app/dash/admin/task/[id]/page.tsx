@@ -88,7 +88,7 @@ export default function DaoDetailStatic() {
       <header className="bg-white border-b p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <Link href="/dash/ChefProjet/MyDao">
+            <Link href="/dash/admin/allDao">
               <ArrowLeft />
             </Link>
             <div className="min-w-0">

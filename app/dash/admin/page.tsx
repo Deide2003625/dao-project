@@ -17,6 +17,53 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
+  const computeStatus = (dao: Dao): { label: string; className: string } => {
+    const today = new Date();
+    const rawStatut = String(dao.statut || "").toUpperCase();
+
+    // Si terminé (équivalent à 100% d'avancement) => vert
+    if (rawStatut === "TERMINEE" || rawStatut === "TERMINE") {
+      return {
+        label: "Terminée",
+        className: "badge bg-success text-white",
+      };
+    }
+
+    // Sinon, appliquer les règles sur la date de dépôt
+    if (!dao.date_depot) {
+      return {
+        label: "En cours",
+        className: "badge bg-warning text-dark",
+      };
+    }
+
+    const dateDepot = new Date(dao.date_depot);
+    // Nombre de jours restants : date_depot - aujourd'hui
+    const diffMs = dateDepot.getTime() - today.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    // ≥ 5 jours (ou 4) => En cours (jaune)
+    if (diffDays >= 5 || diffDays === 4) {
+      return {
+        label: "EN COURS",
+        className: "badge bg-warning text-dark",
+      };
+    }
+
+    // ≤ 3 jours ou passé => À risque (rouge)
+    if (diffDays <= 3) {
+      return {
+        label: "À risque",
+        className: "badge bg-danger text-white",
+      };
+    }
+
+    return {
+      label: "En cours",
+      className: "badge bg-warning text-dark",
+    };
+  };
+
   async function loadDaos() {
     try {
       setLoading(true);
@@ -82,9 +129,50 @@ export default function Page() {
 
   const stats = useMemo(() => {
     const total = daos.length;
-    const enCours = daos.filter((d) => String(d.statut || "").toUpperCase() === "EN_COURS").length;
-    const aRisque = daos.filter((d) => String(d.statut || "").toUpperCase() === "A_RISQUE").length;
-    const terminees = daos.filter((d) => String(d.statut || "").toUpperCase() === "TERMINEE").length;
+
+    let enCours = 0;
+    let aRisque = 0;
+    let terminees = 0;
+
+    const today = new Date();
+
+    daos.forEach((d) => {
+      const statut = String(d.statut || "").toUpperCase();
+
+      // 1) Si terminé (équivalent à 100% d'avancement) => carte verte
+      if (statut === "TERMINEE") {
+        terminees += 1;
+        return;
+      }
+
+      // 2) Sinon, appliquer les règles sur la date de dépôt
+      if (!d.date_depot) {
+        // Pas de date => considérer comme en cours
+        enCours += 1;
+        return;
+      }
+
+      const dateDepot = new Date(d.date_depot);
+      // Nombre de jours restants avant la date de dépôt : date_depot - aujourd'hui
+      const diffMs = dateDepot.getTime() - today.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      // Si Date dépôt - Date aujourd'hui ≥ 5 jours => En cours (jaune)
+      if (diffDays >= 5) {
+        enCours += 1;
+        return;
+      }
+
+      // Si Date dépôt - Date aujourd'hui ≤ 3 jours => À risque (rouge)
+      if (diffDays <= 3) {
+        aRisque += 1;
+        return;
+      }
+
+      // Cas intermédiaire (par ex. 4 jours) => En cours par défaut
+      enCours += 1;
+    });
+
     return { total, enCours, aRisque, terminees };
   }, [daos]);
 
@@ -210,6 +298,7 @@ export default function Page() {
                       <th>Référence</th>
                       <th>Autorité contractante</th>
                       <th>Chef Projet</th>
+                      <th>Statut</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -231,22 +320,18 @@ export default function Page() {
                           <td>{dao.autorite}</td>
                           <td>{dao.chef_projet ?? "-"}</td>
                           <td>
-                            <select
-                              className="form-control form-control-sm"
-                              value={dao.statut || "EN_COURS"}
-                              onChange={(e) => handleUpdateStatut(dao.id, e.target.value)}
-                              disabled={loading}
-                            >
-                              <option value="EN_COURS">En cours</option>
-                              <option value="A_RISQUE">À risque</option>
-                              <option value="TERMINEE">Terminée</option>
-                            </select>
+                            {(() => {
+                              const s = computeStatus(dao);
+                              return <span className={s.className}>{s.label}</span>;
+                            })()}
+                          </td>
+                          <td>
                             <button
                               className="btn btn-sm btn-danger ml-2"
                               onClick={() => handleDeleteDao(dao.id)}
                               disabled={loading}
                             >
-                              Supprimer
+                              <i className="mdi mdi-delete"></i>
                             </button>
                           </td>
                         </tr>
