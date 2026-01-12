@@ -1,235 +1,307 @@
 "use client";
-
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+ 
+import { useState, useMemo } from "react";
+import {
+  ArrowLeft,
+  X,
+  Send,
+  User,
+  Minus,
+  Plus,
+} from "lucide-react";
 import Link from "next/link";
-import { ArrowLeft, Download, MoreVertical, Check, X, Send, User } from "lucide-react";
-
-interface Dao {
-  id: number;
-  numero: string;
-  reference: string;
-  autorite: string;
-  date_depot?: string;
-  statut?: string;
-  chef_projet?: string;
-  chef_id?: number;
-  team_id?: string;
-}
-
-interface User {
-  id: number;
-  username: string;
-  email: string;
-  role: string;
-  role_id: string;
-}
-
-export default function DaoListPage() {
-  const router = useRouter();
-  const [daos, setDaos] = useState<Dao[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>("");
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    loadUserAndDaos();
-  }, []);
-
-  async function loadUserAndDaos() {
-    try {
-      setLoading(true);
-      setError("");
-
-      // Fetch current user
-      const userRes = await fetch("/api/me", { cache: "no-store" });
-      const userJson = await userRes.json().catch(() => ({}));
-      if (!userRes.ok || !userJson.user) {
-        setError("Utilisateur non authentifié");
-        return;
-      }
-      setCurrentUser(userJson.user);
-
-      // Fetch all DAOs
-      const daoRes = await fetch("/api/dao", { cache: "no-store" });
-      const daoJson = await daoRes.json().catch(() => ({}));
-
-      if (!daoRes.ok) {
-        console.error("API /api/dao error:", daoJson);
-        setDaos([]);
-        setError(daoJson?.message || "Erreur lors du chargement des DAO");
-        return;
-      }
-
-      // API renvoie { success: true, data: [...] }
-      const allDaos = Array.isArray(daoJson?.data) ? (daoJson.data as Dao[]) : [];
-
-      // Filter DAOs based on user role
-      let filteredDaos = allDaos;
-      const userRole = userJson.user.role_id;
-
-      if (userRole === "2") {
-        // Admin - voit tous les DAOs
-        filteredDaos = allDaos;
-      } else if (userRole === "3") {
-        // ChefProjet - voit ses DAOs
-        filteredDaos = allDaos.filter((dao) => dao.chef_id === userJson.user.id);
-      } else if (userRole === "4") {
-        // MembreEquipe - voit les DAOs de son équipe
-        // Pour cela, il faudrait récupérer les équipes de l'utilisateur
-        // Pour l'instant, on laisse tous les DAOs (à améliorer)
-        filteredDaos = allDaos;
-      }
-
-      setDaos(filteredDaos);
-    } catch (err) {
-      console.error("Error fetching data:", err);
-      setDaos([]);
-      setError("Erreur réseau lors du chargement des données");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 text-gray-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="spinner-border" role="status">
-            <span className="sr-only">Chargement...</span>
-          </div>
-          <p className="mt-2">Chargement des DAO...</p>
-        </div>
-      </div>
+ 
+/* ======================
+   DONNÉES DE BASE (INCHANGÉES)
+====================== */
+ 
+const daoTasks = [
+  { id: 1, name: "Résumé sommaire DAO et Création du drive", progress: 10, comment: "À faire" },
+  { id: 2, name: "Demande de caution et garanties", progress: 0, comment: "À faire" },
+  { id: 3, name: "Identification et renseignement des profils dans le drive", progress: 0, comment: "À faire" },
+  { id: 4, name: "Identification et renseignement des ABE dans le drive", progress: 0, comment: "À faire" },
+  { id: 5, name: "Légalisation des ABE, diplômes, certificats, attestations et pièces administratives requis", progress: 0, comment: "À faire" },
+  { id: 6, name: "Indication directive d'élaboration de l'offre financier", progress: 0, comment: "À faire" },
+  { id: 7, name: "Elaboration de la méthodologie", progress: 0, comment: "À faire" },
+  { id: 8, name: "Planification prévisionnelle", progress: 0, comment: "À faire" },
+  { id: 9, name: "Identification des références précises des équipements et matériels", progress: 0, comment: "À faire" },
+  { id: 10, name: "Demande de cotation", progress: 60, comment: "En cours" },
+  { id: 11, name: "Elaboration du squelette des offres", progress: 0, comment: "À faire" },
+  { id: 12, name: "Rédaction du contenu des OF et OT", progress: 30, comment: "Brouillon" },
+  { id: 13, name: "Contrôle et validation des offres", progress: 0, comment: "À faire" },
+  { id: 14, name: "Impression et présentation des offres (Valider l'étiquette)", progress: 0, comment: "À faire" },
+  { id: 15, name: "Dépôt des offres et clôture", progress: 0, comment: "À faire" },
+];
+ 
+const commentsData = [
+  {
+    taskId: 1,
+    comments: [
+      {
+        id: 1,
+        user: "Jean",
+        role: "Chef de projet",
+        text: "N'oubliez pas d'ajouter les références du DCE.",
+        time: "Il y a 1 heure",
+      },
+    ],
+  },
+];
+ 
+/* ======================
+   COMPOSANT PRINCIPAL
+====================== */
+ 
+export default function DaoDetailStatic() {
+  const [tasks, setTasks] = useState(daoTasks);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [newComment, setNewComment] = useState("");
+ 
+  const dao = {
+    numero: "DAO-2025-001",
+    objet: "Rénovation école primaire — Lot 1",
+  };
+ 
+  /* 🔢 PROGRESSION GLOBALE (LIÉE AUX 15 TÂCHES) */
+  const globalProgress = useMemo(() => {
+    const total = tasks.reduce((sum, t) => sum + t.progress, 0);
+    return Math.round(total / tasks.length);
+  }, [tasks]);
+ 
+  const updateProgress = (id: number, value: number) => {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? { ...t, progress: Math.min(100, Math.max(0, value)) }
+          : t
+      )
     );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 text-gray-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="alert alert-danger">{error}</div>
-          <button className="btn btn-primary mt-3" onClick={loadUserAndDaos}>
-            Réessayer
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  };
+ 
+  const taskComments =
+    selectedTaskId &&
+    commentsData.find((c) => c.taskId === selectedTaskId);
+ 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
-      {/* Header */}
-      <header className="flex items-center justify-between bg-white p-4 border-b">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dash/admin"
-            className="text-gray-600 hover:text-black"
-          >
-            <ArrowLeft />
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold">Gestion des DAO</h1>
-            <p className="text-sm text-gray-500">Tous les DAO accessibles</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* HEADER */}
+      <header className="bg-white border-b p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link href="/dash/ChefProjet/MyDao">
+              <ArrowLeft />
+            </Link>
+            <div className="min-w-0">
+              <h1 className="font-bold truncate">{dao.numero}</h1>
+              <p className="text-sm text-gray-500 truncate">{dao.objet}</p>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <input
-            placeholder="Rechercher (n°, référence, autorité...)"
-            className="px-3 py-2 border rounded w-72 text-sm"
-          />
-          <button className="px-3 py-2 bg-blue-600 text-white rounded text-sm">
-            Filtrer
+ 
+          <button className="px-4 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 text-sm">
+            Supprimer
           </button>
         </div>
       </header>
-
-      <main className="p-6">
-        {/* DAO list */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm text-gray-500">
-              Cliquez sur un DAO pour voir les détails et tâches
-            </span>
-            <span className="text-sm text-gray-500">
-              {daos.length} DAO{daos.length > 1 ? 's' : ''} trouvé{daos.length > 1 ? 's' : ''}
-            </span>
+     
+      <main className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+ 
+        {/* INFOS DAO — corrigé */}
+        <section className="bg-white rounded shadow p-4">
+          <h2 className="font-semibold mb-3">Informations générales</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <Info label="Objet" value={dao.objet} />
+            <Info label="Référence" value={dao.reference ?? "—"} />
+            <Info label="Autorité contractante" value={dao.autorite ?? "—"} />
+            <Info label="Date de dépôt" value={dao.dateDepot ?? "—"} />
+            <Info label="Chef Projet" value="Users" />
+            <Info label="Equipe" value="5" />
           </div>
-
-          {daos.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">Aucun DAO trouvé pour votre rôle.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {daos.map((dao) => (
-                <article
-                  key={dao.id}
-                  onClick={() => router.push(`/dash/admin/task/${dao.id}`)}
-                  className="bg-white p-4 rounded shadow cursor-pointer hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg">N° {dao.numero}</h3>
-                      <p className="text-sm text-gray-600 line-clamp-2 mt-1">
-                        {dao.reference} - {dao.autorite}
-                      </p>
-                    </div>
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        dao.statut === "EN_COURS"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : dao.statut === "TERMINE"
-                          ? "bg-green-100 text-green-800"
-                          : dao.statut === "ANNULE"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {dao.statut || "EN_COURS"}
-                    </span>
-                  </div>
-
-                  <div className="mt-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Date dépôt</span>
-                      <span className="font-medium">
-                        {dao.date_depot || "N/A"}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Chef projet</span>
-                      <span className="font-medium">
-                        {dao.chef_projet || "N/A"}
-                      </span>
-                    </div>
-
-                    <div className="mt-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Progression</span>
-                        <span className="font-medium">0%</span>
-                      </div>
-                      <div className="w-full bg-gray-100 h-2 rounded mt-2">
-                        <div
-                          className="h-2 bg-blue-600 rounded"
-                          style={{ width: "0%" }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex justify-end">
-                    <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                      Voir détails →
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
+        </section>
+       
+        {/* 🔢 PROGRESSION GLOBALE */}
+        <section className="bg-white rounded shadow p-4">
+          <div className="flex justify-between text-sm mb-2">
+            <span className="font-medium">Progression globale</span>
+            <span className="font-semibold">{globalProgress}%</span>
+          </div>
+          <div className="w-full bg-gray-200 h-3 rounded">
+            <div
+              className="h-3 bg-green-600 rounded transition-all"
+              style={{ width: `${globalProgress}%` }}
+            />
+          </div>
+        </section>
+ 
+        {/* TÂCHES */}
+        <section className="bg-white rounded shadow p-4">
+          <h2 className="font-semibold mb-3">Tâches</h2>
+ 
+          {tasks.map((task) => (
+            <TaskItem
+              key={task.id}
+              task={task}
+              onProgressChange={(v) => updateProgress(task.id, v)}
+              onCommentClick={() => setSelectedTaskId(task.id)}
+            />
+          ))}
         </section>
       </main>
+ 
+      {/* COMMENTAIRES */}
+      {selectedTaskId && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={() => setSelectedTaskId(null)}
+          />
+ 
+          <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-xl flex flex-col">
+            <div className="border-b p-4 flex justify-between items-center">
+              <p className="font-semibold">Commentaires</p>
+              <button onClick={() => setSelectedTaskId(null)}>
+                <X />
+              </button>
+            </div>
+ 
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {taskComments?.comments.map((comment) => (
+                <div
+                  key={comment.id}
+                  className="bg-gray-50 rounded-lg p-4 shadow-sm"
+                >
+                  <div className="flex justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <User size={16} className="text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{comment.user}</p>
+                        <p className="text-xs text-gray-500">{comment.role}</p>
+                      </div>
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      {comment.time}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700">{comment.text}</p>
+                </div>
+              ))}
+            </div>
+ 
+            <div className="border-t p-3 flex gap-2">
+              <input
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Écrire un commentaire..."
+                className="flex-1 border rounded px-3 py-2 text-sm"
+              />
+              <button className="bg-blue-600 text-white p-2 rounded">
+                <Send size={16} />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
+ 
+/* ======================
+   TÂCHE (INCHANGÉE)
+====================== */
+ 
+function TaskItem({
+  task,
+  onProgressChange,
+  onCommentClick,
+}: {
+  task: { id: number; name: string; progress: number; comment: string };
+  onProgressChange: (v: number) => void;
+  onCommentClick: () => void;
+}) {
+  const [showProgress, setShowProgress] = useState(false);
+ 
+  return (
+    <div className="border rounded p-3 mb-3">
+      <h3 className="text-sm font-medium">{task.name}</h3>
+     
+      <div className="mt-2">
+ 
+        <div className="mb-1">
+          <span className="text-xs">Assigne a: </span>
+        </div>
+       
+        <div className="flex justify-between text-xs mb-1">
+          <span>Avancement</span>
+          <span>{task.progress}%</span>
+        </div>
+       
+        <div className="w-full bg-gray-200 h-2 rounded">
+          <div
+            className="h-2 bg-blue-600 rounded"
+            style={{ width: `${task.progress}%` }}
+          />
+        </div>
+      </div>
+ 
+      <div className="flex gap-2 mt-3">
+        <button
+          onClick={() => setShowProgress(!showProgress)}
+          className="flex-1 text-xs border rounded py-1 hover:bg-gray-100"
+        >
+          Progression
+        </button>
+ 
+        <button
+          onClick={onCommentClick}
+          className="flex-1 text-xs border rounded py-1 hover:bg-gray-100"
+        >
+          Commentaires
+        </button>
+      </div>
+ 
+      {showProgress && (
+        <div className="mt-3 bg-gray-50 p-3 rounded">
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={task.progress}
+            onChange={(e) => onProgressChange(Number(e.target.value))}
+            className="w-full"
+          />
+ 
+          <div className="flex justify-between mt-2">
+            <button
+              onClick={() => onProgressChange(task.progress - 5)}
+              className="px-2 py-1 text-xs border rounded"
+            >
+              <Minus size={14} />
+            </button>
+            <button
+              onClick={() => onProgressChange(task.progress + 5)}
+              className="px-2 py-1 text-xs border rounded"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+ 
+/* ======================
+   COMPOSANT INFO
+====================== */
+ 
+function Info({ label, value }: { label: string; value: any }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-xs text-gray-500">{label}</span>
+      <span className="font-medium">{value}</span>
+    </div>
+  );
+}
+ 
