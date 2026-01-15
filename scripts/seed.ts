@@ -1,9 +1,7 @@
-import dotenv from "dotenv";
 import { db, verifyDatabaseStructure } from "../lib/db";
 import bcrypt from "bcrypt";
 import { RowDataPacket } from "mysql2";
 
-dotenv.config({ path: ".env.local" });
 interface User {
   username: string;
   email: string;

@@ -1,4 +1,11 @@
+import path from "path";
+import dotenv from "dotenv";
 import mysql from "mysql2/promise";
+
+dotenv.config({
+  path: path.join(process.cwd(), ".env.local"),
+  override: true, // écrase même si les variables sont déjà définies
+});
 
 const DB_HOST = process.env.DB_HOST || "localhost";
 const DB_USER = process.env.DB_USER;
