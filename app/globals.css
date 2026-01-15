@@ -1,5 +1,5 @@
 @import "tailwindcss";
-
+@import "@mdi/font/css/materialdesignicons.min.css";
 /* ============================
    IMPORTS DES CSS DU TEMPLATE MAJESTIC
    TRÈS IMPORTANT - Ces fichiers doivent être dans votre dossier public/

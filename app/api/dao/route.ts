@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import * as yup from "yup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,6 +81,16 @@ async function getNextDaoNumero(connection: any) {
   return generatedNumero;
 }
 
+const createDaoSchema = yup.object().shape({
+  date_depot: yup.date().required("Date de dépôt requise"),
+  objet: yup.string().trim().min(1, "Objet requis").max(255, "Objet trop long"),
+  description: yup.string().trim().min(1, "Description requise").max(1000, "Description trop longue"),
+  reference: yup.string().trim().min(1, "Référence requise").max(255, "Référence trop longue"),
+  autorite: yup.string().trim().min(1, "Autorité requise").max(255, "Autorité trop longue"),
+  chefEquipe: yup.number().integer().positive("Chef d'équipe invalide").required("Chef d'équipe requis"),
+  membres: yup.array().of(yup.number().integer().positive()).min(1, "Au moins un membre requis"),
+});
+
 export async function GET() {
   try {
     const connection = await db();
@@ -132,6 +143,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+
+    // Validation des données d'entrée
+    await createDaoSchema.validate(body, { abortEarly: false });
+
     const {
       date_depot,
       objet,

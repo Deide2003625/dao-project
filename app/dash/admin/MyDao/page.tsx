@@ -233,7 +233,7 @@ export default function MyDaoPage() {
                   </div>
 
                   <div className="mt-3 text-sm text-gray-500">
-                    Chef: {dao.chef_projet || "N/A"}
+                    Chef Projet: {dao.chef_projet || "N/A"}
                   </div>
                 </article>
               ))}
