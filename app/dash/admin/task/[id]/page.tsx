@@ -12,7 +12,7 @@ import {
 import Link from "next/link";
  
 /* ======================
-   DONNÉES DE BASE (INCHANGÉES)
+   DONNÉES DE BASE
 ====================== */
  
 const daoTasks = [
@@ -56,32 +56,38 @@ export default function DaoDetailStatic() {
   const [tasks, setTasks] = useState(daoTasks);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [newComment, setNewComment] = useState("");
+  const [editingTask, setEditingTask] = useState<number | null>(null);
+  const [showComments, setShowComments] = useState<number | null>(null);
  
   const dao = {
     numero: "DAO-2025-001",
     objet: "Rénovation école primaire — Lot 1",
+    reference: "REF-2025-001",
+    autorite: "Mairie de Cotonou",
+    dateDepot: "15 janvier 2025",
+    chefProjet: "Jean Dupont",
+    equipe: "5 membres"
   };
  
-  /* 🔢 PROGRESSION GLOBALE (LIÉE AUX 15 TÂCHES) */
+  /* PROGRESSION GLOBALE */
   const globalProgress = useMemo(() => {
     const total = tasks.reduce((sum, t) => sum + t.progress, 0);
     return Math.round(total / tasks.length);
   }, [tasks]);
- 
+
   const updateProgress = (id: number, value: number) => {
+    const newValue = Math.min(100, Math.max(0, value));
     setTasks((prev) =>
       prev.map((t) =>
-        t.id === id
-          ? { ...t, progress: Math.min(100, Math.max(0, value)) }
-          : t
+        t.id === id ? { ...t, progress: newValue } : t
       )
     );
   };
- 
-  const taskComments =
-    selectedTaskId &&
-    commentsData.find((c) => c.taskId === selectedTaskId);
- 
+
+  const taskComments = selectedTaskId
+    ? commentsData.find((c) => c.taskId === selectedTaskId)
+    : undefined;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* HEADER */}
@@ -96,29 +102,29 @@ export default function DaoDetailStatic() {
               <p className="text-sm text-gray-500 truncate">{dao.objet}</p>
             </div>
           </div>
- 
+
           <button className="px-4 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 text-sm">
             Supprimer
           </button>
         </div>
       </header>
-     
+
       <main className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
- 
-        {/* INFOS DAO — corrigé */}
+
+        {/* INFOS DAO */}
         <section className="bg-white rounded shadow p-4">
           <h2 className="font-semibold mb-3">Informations générales</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <Info label="Objet" value={dao.objet} />
-            <Info label="Référence" value={dao.reference ?? "—"} />
-            <Info label="Autorité contractante" value={dao.autorite ?? "—"} />
-            <Info label="Date de dépôt" value={dao.dateDepot ?? "—"} />
-            <Info label="Chef Projet" value="Users" />
-            <Info label="Equipe" value="5" />
+            <Info label="Référence" value={dao.reference} />
+            <Info label="Autorité contractante" value={dao.autorite} />
+            <Info label="Date de dépôt" value={dao.dateDepot} />
+            <Info label="Chef Projet" value={dao.chefProjet} />
+            <Info label="Equipe" value={dao.equipe} />
           </div>
         </section>
-       
-        {/* 🔢 PROGRESSION GLOBALE */}
+
+        {/* PROGRESSION GLOBALE */}
         <section className="bg-white rounded shadow p-4">
           <div className="flex justify-between text-sm mb-2">
             <span className="font-medium">Progression globale</span>
@@ -131,40 +137,44 @@ export default function DaoDetailStatic() {
             />
           </div>
         </section>
- 
+
         {/* TÂCHES */}
         <section className="bg-white rounded shadow p-4">
           <h2 className="font-semibold mb-3">Tâches</h2>
- 
+
           {tasks.map((task) => (
             <TaskItem
               key={task.id}
               task={task}
               onProgressChange={(v) => updateProgress(task.id, v)}
               onCommentClick={() => setSelectedTaskId(task.id)}
+              editingTask={editingTask}
+              setEditingTask={setEditingTask}
+              showComments={showComments}
+              setShowComments={setShowComments}
             />
           ))}
         </section>
       </main>
- 
+
       {/* COMMENTAIRES */}
       {selectedTaskId && (
         <>
           <div
-            className="fixed inset-0 bg-black/50"
+            className="fixed inset-0 bg-black/50 z-40"
             onClick={() => setSelectedTaskId(null)}
           />
- 
-          <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-xl flex flex-col">
+
+          <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-xl flex flex-col z-50">
             <div className="border-b p-4 flex justify-between items-center">
               <p className="font-semibold">Commentaires</p>
               <button onClick={() => setSelectedTaskId(null)}>
                 <X />
               </button>
             </div>
- 
+
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {taskComments?.comments.map((comment) => (
+              {taskComments && taskComments.comments.map((comment: { id: number; user: string; role: string; text: string; time: string }) => (
                 <div
                   key={comment.id}
                   className="bg-gray-50 rounded-lg p-4 shadow-sm"
@@ -186,8 +196,13 @@ export default function DaoDetailStatic() {
                   <p className="text-sm text-gray-700">{comment.text}</p>
                 </div>
               ))}
+              {(!taskComments || taskComments.comments.length === 0) && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Aucun commentaire pour cette tâche
+                </p>
+              )}
             </div>
- 
+
             <div className="border-t p-3 flex gap-2">
               <input
                 value={newComment}
@@ -205,62 +220,71 @@ export default function DaoDetailStatic() {
     </div>
   );
 }
- 
+
 /* ======================
-   TÂCHE (INCHANGÉE)
+   TÂCHE
 ====================== */
- 
+
 function TaskItem({
   task,
   onProgressChange,
   onCommentClick,
+  editingTask,
+  setEditingTask,
+  showComments,
+  setShowComments,
 }: {
   task: { id: number; name: string; progress: number; comment: string };
   onProgressChange: (v: number) => void;
   onCommentClick: () => void;
+  editingTask: number | null;
+  setEditingTask: (id: number | null) => void;
+  showComments: number | null;
+  setShowComments: (id: number | null) => void;
 }) {
-  const [showProgress, setShowProgress] = useState(false);
- 
   return (
     <div className="border rounded p-3 mb-3">
       <h3 className="text-sm font-medium">{task.name}</h3>
-     
+
       <div className="mt-2">
- 
         <div className="mb-1">
-          <span className="text-xs">Assigne a: </span>
+          <span className="text-xs">Assigné à: Non assigné</span>
         </div>
-       
+
         <div className="flex justify-between text-xs mb-1">
           <span>Avancement</span>
           <span>{task.progress}%</span>
         </div>
-       
+
         <div className="w-full bg-gray-200 h-2 rounded">
           <div
-            className="h-2 bg-blue-600 rounded"
+            className="h-2 bg-blue-600 rounded transition-all"
             style={{ width: `${task.progress}%` }}
           />
         </div>
       </div>
- 
-      <div className="flex gap-2 mt-3">
+
+      <div className="flex gap-3 mt-3">
         <button
-          onClick={() => setShowProgress(!showProgress)}
-          className="flex-1 text-xs border rounded py-1 hover:bg-gray-100"
+          onClick={() =>
+            setEditingTask(editingTask === task.id ? null : task.id)
+          }
+          className="px-3 py-1 text-xs border rounded hover:bg-gray-100"
         >
           Progression
         </button>
- 
+
         <button
-          onClick={onCommentClick}
-          className="flex-1 text-xs border rounded py-1 hover:bg-gray-100"
+          onClick={() =>
+            setShowComments(showComments === task.id ? null : task.id)
+          }
+          className="px-3 py-1 text-xs border rounded hover:bg-gray-100"
         >
           Commentaires
         </button>
       </div>
- 
-      {showProgress && (
+
+      {editingTask === task.id && (
         <div className="mt-3 bg-gray-50 p-3 rounded">
           <input
             type="range"
@@ -268,35 +292,85 @@ function TaskItem({
             max={100}
             step={5}
             value={task.progress}
-            onChange={(e) => onProgressChange(Number(e.target.value))}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              if (value <= 100) {
+                onProgressChange(value);
+              }
+            }}
             className="w-full"
           />
- 
+
           <div className="flex justify-between mt-2">
             <button
               onClick={() => onProgressChange(task.progress - 5)}
-              className="px-2 py-1 text-xs border rounded"
+              disabled={task.progress <= 0}
+              className={`w-8 h-8 flex items-center justify-center border rounded ${
+                task.progress <= 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'
+              }`}
             >
               <Minus size={14} />
             </button>
             <button
-              onClick={() => onProgressChange(task.progress + 5)}
-              className="px-2 py-1 text-xs border rounded"
+              onClick={() => {
+                if (task.progress < 100) {
+                  onProgressChange(task.progress + 5);
+                }
+              }}
+              disabled={task.progress >= 100}
+              className={`w-8 h-8 flex items-center justify-center border rounded ${
+                task.progress >= 100 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'
+              }`}
             >
               <Plus size={14} />
             </button>
           </div>
         </div>
       )}
+
+      {showComments === task.id && (
+        <div className="mt-3 bg-gray-50 p-3 rounded">
+          <div className="space-y-4">
+            {commentsData.find((c) => c.taskId === task.id)?.comments.map((comment: { id: number; user: string; role: string; text: string; time: string }) => (
+              <div
+                key={comment.id}
+                className="bg-white rounded-lg p-4 shadow-sm"
+              >
+                <div className="flex justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <User size={16} className="text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{comment.user}</p>
+                      <p className="text-xs text-gray-500">{comment.role}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {comment.time}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-700">{comment.text}</p>
+              </div>
+            ))}
+            {!commentsData.find((c) => c.taskId === task.id) && (
+              <p className="text-xs text-gray-500 text-center py-4">
+                Aucun commentaire pour cette tâche
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
  
 /* ======================
    COMPOSANT INFO
 ====================== */
  
-function Info({ label, value }: { label: string; value: any }) {
+function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col">
       <span className="text-xs text-gray-500">{label}</span>
@@ -304,4 +378,3 @@ function Info({ label, value }: { label: string; value: any }) {
     </div>
   );
 }
- 
