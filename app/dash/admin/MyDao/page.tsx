@@ -18,6 +18,8 @@ export default function MyDaoPage() {
   const [daos, setDaos] = useState<Dao[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "enCours" | "aRisque">("all");
 
   const computeStatus = (dao: Dao): { label: string; className: string } => {
     const today = new Date();
@@ -127,6 +129,26 @@ export default function MyDaoPage() {
     }
   }
 
+  const filteredDaos = daos.filter((dao: Dao) => {
+    const term = searchTerm.toLowerCase();
+    const numero = dao.numero?.toLowerCase() || "";
+    const reference = dao.reference?.toLowerCase() || "";
+    const autorite = dao.autorite?.toLowerCase() || "";
+
+    const matchesSearch = !term
+      ? true
+      : numero.includes(term) || reference.includes(term) || autorite.includes(term);
+
+    const rawStatut = String(dao.statut || "");
+    const normalizedStatus =
+      rawStatut === "aRisque" || rawStatut === "enCours" ? rawStatut : undefined;
+
+    const matchesStatus =
+      statusFilter === "all" || normalizedStatus === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 text-gray-800 flex items-center justify-center">
@@ -163,9 +185,23 @@ export default function MyDaoPage() {
           <input
             placeholder="Rechercher (n°, objet, équipe...)"
             className="px-3 py-2 border rounded w-72 text-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <button className="px-3 py-2 bg-blue-600 text-white rounded text-sm">
-            Filtrer
+          <button
+            className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
+            type="button"
+            onClick={() =>
+              setStatusFilter((prev) =>
+                prev === "all" ? "enCours" : prev === "enCours" ? "aRisque" : "all",
+              )
+            }
+          >
+            {statusFilter === "all"
+              ? "Tous les statuts"
+              : statusFilter === "enCours"
+                ? "En cours seulement"
+                : "À risque seulement"}
           </button>
         </div>
       </header>
@@ -179,13 +215,13 @@ export default function MyDaoPage() {
             </span>
           </div>
 
-          {daos.length === 0 ? (
+          {filteredDaos.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500">Aucun DAO trouvé.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {daos.map((dao) => (
+              {filteredDaos.map((dao) => (
                 <article
                   key={dao.id}
                   onClick={() => router.push(`/dash/admin/task/`)}

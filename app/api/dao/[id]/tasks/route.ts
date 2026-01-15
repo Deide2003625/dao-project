@@ -40,16 +40,34 @@ async function ensureTaskTables(connection: any) {
   `);
 }
 
+const DEFAULT_TASK_TITLES: string[] = [
+  "Résumé sommaire DAO et Création du drive",
+  "Demande de caution et garanties",
+  "Identification et renseignement des profils dans le drive",
+  "Identification et renseignement des ABE dans le drive",
+  "Légalisation des ABE, diplômes, certificats, attestations et pièces administratives requis",
+  "Indication directive d'élaboration de l'offre financier",
+  "Elaboration de la méthodologie",
+  "Planification prévisionnelle",
+  "Identification des références précises des équipements et matériels",
+  "Demande de cotation",
+  "Elaboration du squelette des offres",
+  "Rédaction du contenu des OF et OT",
+  "Contrôle et validation des offres",
+  "Impression et présentation des offres (Valider l'étiquette)",
+  "Dépôt des offres et clôture",
+];
+
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: { id: string } },
 ) {
   try {
-    const { id } = await params;
+    const { id } = params;
     const connection = await db();
     await ensureTaskTables(connection);
 
-    const [rows]: any = await connection.execute(
+    let [rows]: any = await connection.execute(
       `
       SELECT
         t.id,
@@ -70,6 +88,43 @@ export async function GET(
       [id],
     );
 
+    if (!rows || rows.length === 0) {
+      const today = new Date().toISOString().slice(0, 10);
+
+      for (const titre of DEFAULT_TASK_TITLES) {
+        await connection.execute(
+          `
+          INSERT INTO tasks (dao_id, titre, description, statut, date_creation, priorite)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+          [Number(id), titre, null, "a_faire", today, "moyenne"],
+        );
+      }
+
+      const [seeded]: any = await connection.execute(
+        `
+        SELECT
+          t.id,
+          t.dao_id,
+          t.titre,
+          t.description,
+          t.statut,
+          t.date_creation,
+          t.date_echeance,
+          t.priorite,
+          t.assigned_to,
+          u.username AS assigned_username
+        FROM tasks t
+        LEFT JOIN users u ON t.assigned_to = u.id
+        WHERE t.dao_id = ?
+        ORDER BY t.created_at DESC
+      `,
+        [id],
+      );
+
+      rows = seeded;
+    }
+
     return NextResponse.json({ success: true, data: rows || [] });
   } catch (err: any) {
     console.error("API /api/dao/[id]/tasks GET error:", err?.message, err);
@@ -82,10 +137,10 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: { id: string } },
 ) {
   try {
-    const { id } = await params;
+    const { id } = params;
     const body = await req.json();
     const {
       titre,

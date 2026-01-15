@@ -80,14 +80,17 @@ async function getNextDaoNumero(connection: any) {
   return generatedNumero;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const connection = await db();
 
     // crée les tables si besoin
     await ensureTables(connection);
 
-    const [rows]: any = await connection.execute(`
+    const { searchParams } = new URL(req.url);
+    const chefId = searchParams.get("chefId");
+
+    let query = `
       SELECT 
         d.id,
         d.numero,
@@ -99,8 +102,18 @@ export async function GET() {
         u.username as chef_projet
       FROM daos d
       LEFT JOIN users u ON d.chef_id = u.id
-      ORDER BY d.created_at DESC
-    `);
+    `;
+
+    const params: any[] = [];
+
+    if (chefId) {
+      query += " WHERE d.chef_id = ?";
+      params.push(Number(chefId));
+    }
+
+    query += " ORDER BY d.created_at DESC";
+
+    const [rows]: any = await connection.execute(query, params);
 
     // Calculer le statut pour chaque DAO basé sur la date de dépôt
     const daosWithStatus = rows.map((dao: any) => {
