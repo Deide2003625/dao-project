@@ -157,7 +157,7 @@ export default function ChefProjetTasksPage() {
           <div>
             <h1 className="font-bold text-sm">DAO #{daoId}</h1>
             <p className="text-xs text-gray-500">
-              Gestion des 15 taches standard et assignation aux membres de l'equipe
+              Gestion des taches standard et assignation aux membres de l'equipe
             </p>
           </div>
         </div>
@@ -165,8 +165,7 @@ export default function ChefProjetTasksPage() {
 
       <main className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
         <section className="bg-white rounded shadow p-4">
-          <h2 className="font-semibold mb-3 text-sm">Créer une tache (table task)</h2>
-
+          
           <form
             className="flex flex-col sm:flex-row gap-3 items-start"
             onSubmit={async (e) => {
