@@ -223,7 +223,7 @@ export default function Page() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'validé':
-        return <span className="badge badge-success">Validé</span>;
+        return <span className="badge badge-success">Terminé</span>;
       case 'en cours':
         return <span className="badge badge-warning">En cours</span>;
       case 'rejeté':
@@ -243,7 +243,7 @@ export default function Page() {
               <div className="mr-md-3 mr-xl-5">
                 <h2>Direction Générale</h2>
                 <p className="mb-md-0">
-                  Tableau de bord
+                  Tableau de bord 
                 </p>
               </div>
             </div>
