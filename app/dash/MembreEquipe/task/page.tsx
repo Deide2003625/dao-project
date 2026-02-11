@@ -139,22 +139,67 @@ export default function MembreEquipeDashboard() {
 
   // Fetch comments for a task
   const fetchComments = async (taskId: number) => {
+    console.log(`Fetching comments for task ${taskId}...`);
     try {
       const response = await fetch(`/api/tasks/${taskId}/comments`);
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
+      console.log('Response status:', response.status);
+      
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+      
+      if (!response.ok) {
+        console.error('Erreur API - Status:', response.status);
+        console.error('Headers:', Object.fromEntries(response.headers.entries()));
+        
+        let errorData;
+        try {
+          errorData = responseText ? JSON.parse(responseText) : 'Pas de contenu JSON';
+          console.error('Erreur API détaillée:', errorData);
+        } catch (e) {
+          console.error('Impossible de parser la réponse d\'erreur comme JSON:', e);
+          console.error('Contenu de la réponse:', responseText);
+        }
+        
+        // Initialiser un tableau vide pour éviter les erreurs d'affichage
+        setComments(prev => ({
+          ...prev,
+          [taskId]: []
+        }));
+        return;
+      }
+      
+      // Si la réponse est OK, essayer de la parser
+      try {
+        const result = JSON.parse(responseText);
+        console.log('Parsed response:', result);
+        
+        if (result && result.success) {
           setComments(prev => ({
             ...prev,
-            [taskId]: result.data || []
+            [taskId]: Array.isArray(result.data) ? result.data : []
+          }));
+        } else {
+          console.error('Réponse API invalide:', result);
+          setComments(prev => ({
+            ...prev,
+            [taskId]: []
           }));
         }
-      } else {
-        const errorData = await response.json();
-        console.error('Erreur API:', errorData);
+      } catch (parseError) {
+        console.error('Erreur lors de l\'analyse de la réponse JSON:', parseError);
+        console.error('Contenu de la réponse:', responseText);
+        setComments(prev => ({
+          ...prev,
+          [taskId]: []
+        }));
       }
     } catch (error) {
       console.error('Erreur lors du chargement des commentaires:', error);
+      // En cas d'erreur, initialiser avec un tableau vide
+      setComments(prev => ({
+        ...prev,
+        [taskId]: []
+      }));
     }
   };
 
