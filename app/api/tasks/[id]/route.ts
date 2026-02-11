@@ -104,6 +104,49 @@ export async function PUT(
       assigned_to,
     } = body || {};
 
+    const connection = await db();
+    await ensureTaskTables(connection);
+
+    // Récupérer la tâche actuelle pour vérifier
+    const [currentTask]: any = await connection.execute(
+      "SELECT dao_id, titre FROM tasks WHERE id = ?",
+      [id]
+    );
+
+    if (!currentTask || currentTask.length === 0) {
+      return NextResponse.json(
+        { success: false, message: "Tâche non trouvée" },
+        { status: 404 },
+      );
+    }
+
+    const daoId = currentTask[0].dao_id;
+    const taskTitle = currentTask[0].titre;
+
+    // Vérifier si c'est une mise à jour de statut
+    if (statut !== undefined) {
+      // Récupérer toutes les tâches du DAO
+      const [allTasks]: any = await connection.execute(
+        "SELECT id, titre, statut FROM tasks WHERE dao_id = ? ORDER BY id",
+        [daoId]
+      );
+
+      // Vérifier si la première tâche (id le plus petit) est terminée
+      const firstTask = allTasks[0];
+      const isFirstTask = firstTask && firstTask.id === parseInt(id);
+
+      // Si ce n'est pas la première tâche et que la première n'est pas terminée
+      if (!isFirstTask && firstTask && firstTask.statut !== 'termine') {
+        return NextResponse.json(
+          { 
+            success: false, 
+            message: `Impossible de modifier cette tâche. La première tâche "${firstTask.titre}" doit être terminée en premier (100%).` 
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -142,9 +185,6 @@ export async function PUT(
         { status: 400 },
       );
     }
-
-    const connection = await db();
-    await ensureTaskTables(connection);
 
     values.push(id);
     await connection.execute(

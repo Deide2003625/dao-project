@@ -68,7 +68,7 @@ export default function NewDaoPage() {
           const id = String(roleId);
           switch (id) {
             case '1': return 'Admin';
-            case '2': return 'Admin';
+            case '2': return 'DG';
             case '3': return 'ChefProjet';
             case '4': return 'MembreEquipe';
             default: return 'Utilisateur';
@@ -90,11 +90,11 @@ export default function NewDaoPage() {
         console.log("Membres d'équipe:", membersList);
         setUsers(membersList);
 
-        // Pour les chefs d'équipe (rôles '2' ou 2, '3' ou 3)
+        // Pour les chefs d'équipe (rôles '1', '2', '3' = Admin, DG, ChefProjet)
         const teamLeadersList = usersData
           .filter((u: any) => {
             const roleId = String(u.role_id || u.role);
-            return roleId === '2' || roleId === '3';
+            return roleId === '1' || roleId === '2' || roleId === '3';
           })
           .map((u: any) => ({
             id: u.id,
@@ -175,7 +175,6 @@ export default function NewDaoPage() {
 
     // Exemple de payload
     const payload = {
-      numero: generatedNumber,
       date_depot: dateDepot,
       objet,
       description,

@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     // Récupère la session et l'utilisateur
     const dbPool = await db();
     const [rows] = await dbPool.query<RowDataPacket[]>(
-      `SELECT users.id, users.username, users.email, users.url_photo
+      `SELECT users.id, users.username, users.email, users.url_photo, users.role_id
        FROM sessions
        JOIN users ON users.id = sessions.user_id
        WHERE sessions.session_token = ? 
@@ -38,6 +38,7 @@ export async function GET(request: Request) {
       console.log("Valeur de username:", rows[0].username);
       console.log("Valeur de email:", rows[0].email);
       console.log("Valeur de url_photo:", rows[0].url_photo);
+      console.log("Valeur de role_id:", rows[0].role_id);
     }
 
     return NextResponse.json({ user: rows[0] });

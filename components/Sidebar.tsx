@@ -24,7 +24,7 @@ export default function Sidebar() {
             className="nav-link"
             href={
               roleId === 1
-                ? "/dash/DirecteurGeneral"
+                ? "/dash/ChefProjet"  // Admin peut aussi être chef de projet
                 : roleId === 2
                   ? "/dash/admin"
                   : roleId === 3

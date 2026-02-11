@@ -24,7 +24,7 @@ async function ensureTables(connection: any) {
       autorite VARCHAR(255),
       chef_id BIGINT UNSIGNED,
       team_id VARCHAR(100),
-      statut ENUM('aRisque', 'enCours') DEFAULT 'enCours',
+      statut ENUM('aRisque', 'enCours', 'terminee') DEFAULT 'enCours',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
@@ -32,7 +32,7 @@ async function ensureTables(connection: any) {
   // Ajouter la colonne statut si elle n'existe pas
   try {
     await connection.execute(`
-      ALTER TABLE daos ADD COLUMN statut ENUM('aRisque', 'enCours') DEFAULT 'enCours'
+      ALTER TABLE daos ADD COLUMN statut ENUM('aRisque', 'enCours', 'terminee') DEFAULT 'enCours'
     `);
   } catch (err) {
     // Colonne existe déjà, ignorer l'erreur
@@ -177,12 +177,15 @@ export async function POST(req: NextRequest) {
       idToRole[Number(r.id)] = String(r.role_id);
     });
 
-    // Chef must have chef role (role_id 3 = ChefProjet)
-    if (chefEquipe && String(idToRole[Number(chefEquipe)]) !== "3") {
-      return NextResponse.json(
-        { success: false, message: "Le chef d'équipe sélectionné n'a pas le rôle ChefProjet" },
-        { status: 400 },
-      );
+    // Chef must have chef role (role_id 1 = Admin, 2 = DG, or 3 = ChefProjet)
+    if (chefEquipe) {
+      const chefRole = String(idToRole[Number(chefEquipe)]);
+      if (chefRole !== "1" && chefRole !== "2" && chefRole !== "3") {
+        return NextResponse.json(
+          { success: false, message: "Le chef d'équipe sélectionné doit avoir un rôle Admin, DG ou ChefProjet" },
+          { status: 400 },
+        );
+      }
     }
 
     // Members must have member role (role_id 4 = MembreEquipe)

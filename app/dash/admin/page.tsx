@@ -22,18 +22,25 @@ export default function Page() {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/dao", { cache: "no-store" });
+      // Récupérer l'utilisateur connecté
+      const userRes = await fetch("/api/me", { cache: "no-store" });
+      const userData = userRes.ok ? await userRes.json() : {};
+      
+      const userId = userData.user?.id;
+      const userRole = userData.user?.role_id;
+
+      const res = await fetch(`/api/dao/stats?userId=${userId}&userRole=${userRole}`, { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        console.error("API /api/dao error:", json);
+        console.error("API /api/dao/stats error:", json);
         setDaos([]);
         setError(json?.message || "Erreur lors du chargement des DAO");
         return;
       }
 
-      // API renvoie { success: true, data: [...] }
-      const rows = Array.isArray(json?.data) ? (json.data as Dao[]) : [];
+      // API renvoie { success: true, data: { daos: [...], stats: {...} } }
+      const rows = Array.isArray(json?.data?.daos) ? (json.data.daos as Dao[]) : [];
       setDaos(rows);
     } catch (err) {
       console.error("Error fetching DAOs:", err);
@@ -82,9 +89,9 @@ export default function Page() {
 
   const stats = useMemo(() => {
     const total = daos.length;
-    const enCours = daos.filter((d) => String(d.statut || "").toUpperCase() === "EN_COURS").length;
-    const aRisque = daos.filter((d) => String(d.statut || "").toUpperCase() === "A_RISQUE").length;
-    const terminees = daos.filter((d) => String(d.statut || "").toUpperCase() === "TERMINEE").length;
+    const enCours = daos.filter((d) => d.statut === 'enCours').length;
+    const aRisque = daos.filter((d) => d.statut === 'aRisque').length;
+    const terminees = daos.filter((d) => d.statut === 'terminee').length;
     return { total, enCours, aRisque, terminees };
   }, [daos]);
 
@@ -210,17 +217,18 @@ export default function Page() {
                       <th>Référence</th>
                       <th>Autorité contractante</th>
                       <th>Chef Projet</th>
+                      <th>Status</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={5}>Chargement...</td>
+                        <td colSpan={6}>Chargement...</td>
                       </tr>
                     ) : daos.length === 0 ? (
                       <tr>
-                        <td colSpan={5}>Aucun DAO pour le moment.</td>
+                        <td colSpan={6}>Aucun DAO pour le moment.</td>
                       </tr>
                     ) : (
                       daos.map((dao) => (
@@ -231,18 +239,19 @@ export default function Page() {
                           <td>{dao.autorite}</td>
                           <td>{dao.chef_projet ?? "-"}</td>
                           <td>
-                            <select
-                              className="form-control form-control-sm"
-                              value={dao.statut || "EN_COURS"}
-                              onChange={(e) => handleUpdateStatut(dao.id, e.target.value)}
-                              disabled={loading}
-                            >
-                              <option value="EN_COURS">En cours</option>
-                              <option value="A_RISQUE">À risque</option>
-                              <option value="TERMINEE">Terminée</option>
-                            </select>
+                            <span className={`badge ${
+                              dao.statut === 'enCours' ? 'bg-warning' : 
+                              dao.statut === 'aRisque' ? 'bg-danger' : 
+                              dao.statut === 'terminee' ? 'bg-success' : 'bg-secondary'
+                            }`}>
+                              {dao.statut === 'enCours' ? 'En cours' : 
+                               dao.statut === 'aRisque' ? 'À risque' : 
+                               dao.statut === 'terminee' ? 'Terminée' : dao.statut}
+                            </span>
+                          </td>
+                          <td>
                             <button
-                              className="btn btn-sm btn-danger ml-2"
+                              className="btn btn-sm btn-danger"
                               onClick={() => handleDeleteDao(dao.id)}
                               disabled={loading}
                             >
