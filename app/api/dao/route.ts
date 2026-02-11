@@ -228,7 +228,7 @@ export async function POST(req: NextRequest) {
         description,
         reference,
         autorite,
-        'EN_COURS',
+        'enCours',
         Number(chefEquipe),
         teamId,
       ],
