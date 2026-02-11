@@ -46,63 +46,51 @@ async function seedDatabase() {
     const users: User[] = [
       {
         username: "admin",
-        email: "admin@dao.com",
+        email: "admin@example.com",
         password: await bcrypt.hash("admin123", 10),
         role_id: 2, // Administrateur
       },
       {
-        username: "superadmin",
-        email: "superadmin@dao.com",
-        password: await bcrypt.hash("superadmin123", 10),
-        role_id: 2, // Super Administrateur
-      },
-      {
-        username: "lio",
-        email: "lio@dao.com",
-        password: await bcrypt.hash("lio123", 10),
-        role_id: 2, // Administrateur
-      },
-      {
-        username: "directeur",
-        email: "directeur@dao.com",
-        password: await bcrypt.hash("directeur123", 10),
-        role_id: 1, // Directeur General
-      },
-      {
         username: "user1",
-        email: "user1@dao.com",
+        email: "user1@example.com",
         password: await bcrypt.hash("user1123", 10),
         role_id: 4, // MembreEquipe
       },
       {
         username: "user2",
-        email: "user2@dao.com",
+        email: "user2@example.com",
         password: await bcrypt.hash("user2123", 10),
-        role_id: 4, // MembreEquipe
+        role_id: 4,
       },
       {
         username: "manager1",
-        email: "manager@dao.com",
+        email: "manager@example.com",
         password: await bcrypt.hash("manager123", 10),
         role_id: 3, // ChefProjet
       },
       {
-        username: "chef_projet1",
-        email: "chef1@dao.com",
-        password: await bcrypt.hash("chef123", 10),
-        role_id: 3, // ChefProjet
-      },
-      {
         username: "dev1",
-        email: "dev1@dao.com",
+        email: "dev@example.com",
         password: await bcrypt.hash("dev1234", 10),
         role_id: 4, // MembreEquipe
       },
       {
-        username: "membre1",
-        email: "membre1@dao.com",
-        password: await bcrypt.hash("membre123", 10),
-        role_id: 4, // MembreEquipe
+        username: "Directeur General",
+        email: "directeur@example.com",
+        password: await bcrypt.hash("directeur123", 10),
+        role_id: 1, // Directeur General
+      },
+      {
+        username: "lio",
+        email: "lio@example.com",
+        password: await bcrypt.hash("lio123", 10),
+        role_id: 2, // Administrateur
+      },
+      {
+        username: "erwann",
+        email: "erwann@example.com",
+        password: await bcrypt.hash("erwann123", 10),
+        role_id: 2, // Administrateur
       },
     ];
 

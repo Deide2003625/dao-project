@@ -29,7 +29,7 @@ export default function Page() {
           <div className="d-flex justify-content-between flex-wrap">
             <div className="d-flex align-items-end flex-wrap">
               <div className="mr-md-3 mr-xl-5">
-                <h2>Welcome back,</h2>
+                <h2>Bienvenue,</h2>
                 <p className="mb-md-0">Your analytics dashboard template.</p>
               </div>
               <div className="d-flex">

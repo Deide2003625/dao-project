@@ -238,7 +238,7 @@ export default function Header() {
       <div className="navbar-menu-wrapper d-flex align-items-center justify-content-end">
         <ul className="navbar-nav navbar-nav-right">
           {/* Messages Dropdown */}
-          <li className="nav-item dropdown mr-1">
+          <li className="nav-item dropdown mr-2">
             <a
               className="nav-link count-indicator dropdown-toggle d-flex justify-content-center align-items-center"
               href="#"
@@ -292,7 +292,7 @@ export default function Header() {
           </li>
 
           {/* Notifications */}
-          <li className="nav-item dropdown mr-4">
+          <li className="nav-item dropdown mr-2">
             <a
               className="nav-link count-indicator dropdown-toggle d-flex align-items-center justify-content-center notification-dropdown"
               href="#"

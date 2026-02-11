@@ -17,70 +17,30 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
-  const computeStatus = (dao: Dao): { label: string; className: string } => {
-    const today = new Date();
-    const rawStatut = String(dao.statut || "").toUpperCase();
-
-    // Si terminé (équivalent à 100% d'avancement) => vert
-    if (rawStatut === "TERMINEE" || rawStatut === "TERMINE") {
-      return {
-        label: "Terminée",
-        className: "badge bg-success text-white",
-      };
-    }
-
-    // Sinon, appliquer les règles sur la date de dépôt
-    if (!dao.date_depot) {
-      return {
-        label: "En cours",
-        className: "badge bg-warning text-dark",
-      };
-    }
-
-    const dateDepot = new Date(dao.date_depot);
-    // Nombre de jours restants : date_depot - aujourd'hui
-    const diffMs = dateDepot.getTime() - today.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    // ≥ 5 jours (ou 4) => En cours (jaune)
-    if (diffDays >= 5 || diffDays === 4) {
-      return {
-        label: "EN COURS",
-        className: "badge bg-warning text-dark",
-      };
-    }
-
-    // ≤ 3 jours ou passé => À risque (rouge)
-    if (diffDays <= 3) {
-      return {
-        label: "À risque",
-        className: "badge bg-danger text-white",
-      };
-    }
-
-    return {
-      label: "En cours",
-      className: "badge bg-warning text-dark",
-    };
-  };
-
   async function loadDaos() {
     try {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/dao", { cache: "no-store" });
+      // Récupérer l'utilisateur connecté
+      const userRes = await fetch("/api/me", { cache: "no-store" });
+      const userData = userRes.ok ? await userRes.json() : {};
+      
+      const userId = userData.user?.id;
+      const userRole = userData.user?.role_id;
+
+      const res = await fetch(`/api/dao/stats?userId=${userId}&userRole=${userRole}`, { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        console.error("API /api/dao error:", json);
+        console.error("API /api/dao/stats error:", json);
         setDaos([]);
         setError(json?.message || "Erreur lors du chargement des DAO");
         return;
       }
 
-      // API renvoie { success: true, data: [...] }
-      const rows = Array.isArray(json?.data) ? (json.data as Dao[]) : [];
+      // API renvoie { success: true, data: { daos: [...], stats: {...} } }
+      const rows = Array.isArray(json?.data?.daos) ? (json.data.daos as Dao[]) : [];
       setDaos(rows);
     } catch (err) {
       console.error("Error fetching DAOs:", err);
@@ -129,50 +89,9 @@ export default function Page() {
 
   const stats = useMemo(() => {
     const total = daos.length;
-
-    let enCours = 0;
-    let aRisque = 0;
-    let terminees = 0;
-
-    const today = new Date();
-
-    daos.forEach((d) => {
-      const statut = String(d.statut || "").toUpperCase();
-
-      // 1) Si terminé (équivalent à 100% d'avancement) => carte verte
-      if (statut === "TERMINEE") {
-        terminees += 1;
-        return;
-      }
-
-      // 2) Sinon, appliquer les règles sur la date de dépôt
-      if (!d.date_depot) {
-        // Pas de date => considérer comme en cours
-        enCours += 1;
-        return;
-      }
-
-      const dateDepot = new Date(d.date_depot);
-      // Nombre de jours restants avant la date de dépôt : date_depot - aujourd'hui
-      const diffMs = dateDepot.getTime() - today.getTime();
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-      // Si Date dépôt - Date aujourd'hui ≥ 5 jours => En cours (jaune)
-      if (diffDays >= 5) {
-        enCours += 1;
-        return;
-      }
-
-      // Si Date dépôt - Date aujourd'hui ≤ 3 jours => À risque (rouge)
-      if (diffDays <= 3) {
-        aRisque += 1;
-        return;
-      }
-
-      // Cas intermédiaire (par ex. 4 jours) => En cours par défaut
-      enCours += 1;
-    });
-
+    const enCours = daos.filter((d) => d.statut === 'enCours').length;
+    const aRisque = daos.filter((d) => d.statut === 'aRisque').length;
+    const terminees = daos.filter((d) => d.statut === 'terminee').length;
     return { total, enCours, aRisque, terminees };
   }, [daos]);
 
@@ -184,7 +103,7 @@ export default function Page() {
           <div className="d-flex justify-content-between flex-wrap">
             <div className="d-flex align-items-end flex-wrap">
               <div className="mr-md-3 mr-xl-5">
-                <h2>Welcome back ADMIN,</h2>
+                <h2>Bienvenue Admin,</h2>
                 <p className="mb-md-0">Voici les statistiques de vos DAO.</p>
               </div>
             </div>
@@ -298,18 +217,18 @@ export default function Page() {
                       <th>Référence</th>
                       <th>Autorité contractante</th>
                       <th>Chef Projet</th>
-                      <th>Statut</th>
+                      <th>Status</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={5}>Chargement...</td>
+                        <td colSpan={6}>Chargement...</td>
                       </tr>
                     ) : daos.length === 0 ? (
                       <tr>
-                        <td colSpan={5}>Aucun DAO pour le moment.</td>
+                        <td colSpan={6}>Aucun DAO pour le moment.</td>
                       </tr>
                     ) : (
                       daos.map((dao) => (
@@ -320,18 +239,23 @@ export default function Page() {
                           <td>{dao.autorite}</td>
                           <td>{dao.chef_projet ?? "-"}</td>
                           <td>
-                            {(() => {
-                              const s = computeStatus(dao);
-                              return <span className={s.className}>{s.label}</span>;
-                            })()}
+                            <span className={`badge ${
+                              dao.statut === 'enCours' ? 'bg-warning' : 
+                              dao.statut === 'aRisque' ? 'bg-danger' : 
+                              dao.statut === 'terminee' ? 'bg-success' : 'bg-secondary'
+                            }`}>
+                              {dao.statut === 'enCours' ? 'En cours' : 
+                               dao.statut === 'aRisque' ? 'À risque' : 
+                               dao.statut === 'terminee' ? 'Terminée' : dao.statut}
+                            </span>
                           </td>
                           <td>
                             <button
-                              className="btn btn-sm btn-danger ml-2"
+                              className="btn btn-sm btn-danger"
                               onClick={() => handleDeleteDao(dao.id)}
                               disabled={loading}
                             >
-                              <i className="mdi mdi-delete"></i>
+                              Supprimer
                             </button>
                           </td>
                         </tr>

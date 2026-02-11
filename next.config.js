@@ -2,15 +2,12 @@
 const path = require("path");
 
 const nextConfig = {
-  // Configuration de Turbopack
   experimental: {
     serverActions: {
       bodySizeLimit: "2mb",
     },
-    // Désactive Turbopack pour utiliser Webpack
-    turbo: false,
   },
-  // Configuration des alias pour la compatibilité avec Webpack
+
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
@@ -18,7 +15,7 @@ const nextConfig = {
     };
     return config;
   },
-  // Configuration des en-têtes pour les API
+
   async headers() {
     return [
       {
@@ -39,15 +36,11 @@ const nextConfig = {
       },
     ];
   },
-  // Désactive le mode strict pour éviter les problèmes de compatibilité
+
   reactStrictMode: true,
-  // Désactive la vérification de type pendant la compilation
+
   typescript: {
     ignoreBuildErrors: false,
-  },
-  // Désactive la vérification ESLint pendant la compilation
-  eslint: {
-    ignoreDuringBuilds: true,
   },
 };
 

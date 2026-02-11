@@ -26,20 +26,16 @@ async function ensureTaskTables(connection: any) {
   `);
 
   await connection.execute(`
-    CREATE TABLE IF NOT EXISTS comments (
+    CREATE TABLE IF NOT EXISTS task_comments (
       id INT AUTO_INCREMENT PRIMARY KEY,
       task_id INT NOT NULL,
       user_id BIGINT UNSIGNED NOT NULL,
       text TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      mentioned_user_id BIGINT UNSIGNED,
-      is_public BOOLEAN DEFAULT TRUE,
-      INDEX idx_comments_task (task_id),
-      INDEX idx_comments_user (user_id),
-      INDEX idx_comments_mentioned (mentioned_user_id),
-      CONSTRAINT fk_comments_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-      CONSTRAINT fk_comments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      CONSTRAINT fk_comments_mentioned FOREIGN KEY (mentioned_user_id) REFERENCES users(id) ON DELETE SET NULL
+      INDEX idx_task_comments_task (task_id),
+      INDEX idx_task_comments_user (user_id),
+      CONSTRAINT fk_task_comments_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+      CONSTRAINT fk_task_comments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 }
@@ -53,10 +49,10 @@ function roleLabel(roleId: string | null | undefined) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const connection = await db();
     await ensureTaskTables(connection);
 
@@ -67,14 +63,10 @@ export async function GET(
         c.text,
         c.created_at,
         c.user_id,
-        c.mentioned_user_id,
-        c.is_public,
         u.username,
-        u.role_id,
-        u2.username as mentioned_username
-      FROM comments c
+        u.role_id
+      FROM task_comments c
       LEFT JOIN users u ON c.user_id = u.id
-      LEFT JOIN users u2 ON c.mentioned_user_id = u2.id
       WHERE c.task_id = ?
       ORDER BY c.created_at DESC
     `,
@@ -83,14 +75,10 @@ export async function GET(
 
     const data = (rows || []).map((row: any) => ({
       id: row.id,
-      task_id: id,
-      user_id: row.user_id,
-      content: row.text,
+      text: row.text,
       created_at: row.created_at,
-      user_name: row.username || "Utilisateur",
-      mentioned_user_id: row.mentioned_user_id || null,
-      mentioned_user_name: row.mentioned_username || null,
-      is_public: row.is_public !== 0, // Convertir en booléen (MySQL retourne 0/1)
+      user_id: row.user_id,
+      user: row.username || "Utilisateur",
       role: roleLabel(row.role_id),
     }));
 
@@ -106,16 +94,16 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
-    const { user_id, content, mentioned_user_id, is_public } = body;
+    const { text, user_id } = body || {};
 
-    if (!user_id || !content) {
+    if (!text || !user_id) {
       return NextResponse.json(
-        { success: false, message: "Champs obligatoires manquants" },
+        { success: false, message: "Texte et utilisateur requis" },
         { status: 400 },
       );
     }
@@ -123,49 +111,12 @@ export async function POST(
     const connection = await db();
     await ensureTaskTables(connection);
 
-    // Insérer le commentaire avec les informations de mention
-    const [result]: any = await connection.execute(
-      `INSERT INTO comments 
-       (task_id, user_id, text, mentioned_user_id, is_public) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [
-        id,
-        user_id,
-        content,
-        mentioned_user_id || null,
-        is_public !== false // Par défaut true si non spécifié
-      ]
+    const [insertRes]: any = await connection.execute(
+      `INSERT INTO task_comments (task_id, user_id, text) VALUES (?, ?, ?)`,
+      [Number(id), Number(user_id), text],
     );
 
-    // Récupérer le commentaire inséré avec les noms d'utilisateurs
-    const [rows]: any = await connection.execute(
-      `SELECT 
-        c.*, 
-        u1.username as user_name,
-        u2.username as mentioned_username
-       FROM comments c
-       LEFT JOIN users u1 ON c.user_id = u1.id
-       LEFT JOIN users u2 ON c.mentioned_user_id = u2.id
-       WHERE c.id = ?`,
-      [result.insertId]
-    );
-
-    const comment = {
-      id: rows[0].id,
-      task_id: rows[0].task_id,
-      user_id: rows[0].user_id,
-      content: rows[0].text,
-      created_at: rows[0].created_at,
-      user_name: rows[0].user_name || 'Utilisateur',
-      mentioned_user_id: rows[0].mentioned_user_id || null,
-      mentioned_user_name: rows[0].mentioned_username || null,
-      is_public: rows[0].is_public !== 0
-    };
-
-    return NextResponse.json({ 
-      success: true, 
-      data: comment 
-    });
+    return NextResponse.json({ success: true, id: insertRes?.insertId });
   } catch (err: any) {
     console.error("API /api/tasks/[id]/comments POST error:", err?.message, err);
     return NextResponse.json(

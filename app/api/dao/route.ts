@@ -24,7 +24,7 @@ async function ensureTables(connection: any) {
       autorite VARCHAR(255),
       chef_id BIGINT UNSIGNED,
       team_id VARCHAR(100),
-      statut ENUM('aRisque', 'enCours') DEFAULT 'enCours',
+      statut ENUM('aRisque', 'enCours', 'terminee') DEFAULT 'enCours',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
@@ -32,7 +32,7 @@ async function ensureTables(connection: any) {
   // Ajouter la colonne statut si elle n'existe pas
   try {
     await connection.execute(`
-      ALTER TABLE daos ADD COLUMN statut ENUM('aRisque', 'enCours') DEFAULT 'enCours'
+      ALTER TABLE daos ADD COLUMN statut ENUM('aRisque', 'enCours', 'terminee') DEFAULT 'enCours'
     `);
   } catch (err) {
     // Colonne existe déjà, ignorer l'erreur
@@ -80,17 +80,14 @@ async function getNextDaoNumero(connection: any) {
   return generatedNumero;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const connection = await db();
 
     // crée les tables si besoin
     await ensureTables(connection);
 
-    const { searchParams } = new URL(req.url);
-    const chefId = searchParams.get("chefId");
-
-    let query = `
+    const [rows]: any = await connection.execute(`
       SELECT 
         d.id,
         d.numero,
@@ -98,22 +95,11 @@ export async function GET(req: NextRequest) {
         d.autorite,
         d.date_depot,
         d.statut,
-        d.chef_id,
         u.username as chef_projet
       FROM daos d
       LEFT JOIN users u ON d.chef_id = u.id
-    `;
-
-    const params: any[] = [];
-
-    if (chefId) {
-      query += " WHERE d.chef_id = ?";
-      params.push(Number(chefId));
-    }
-
-    query += " ORDER BY d.created_at DESC";
-
-    const [rows]: any = await connection.execute(query, params);
+      ORDER BY d.created_at DESC
+    `);
 
     // Calculer le statut pour chaque DAO basé sur la date de dépôt
     const daosWithStatus = rows.map((dao: any) => {
@@ -191,7 +177,16 @@ export async function POST(req: NextRequest) {
       idToRole[Number(r.id)] = String(r.role_id);
     });
 
-    // Vérification du rôle ChefProjet supprimée pour permettre à n'importe quel utilisateur d'être chef d'équipe
+    // Chef must have chef role (role_id 1 = Admin, 2 = DG, or 3 = ChefProjet)
+    if (chefEquipe) {
+      const chefRole = String(idToRole[Number(chefEquipe)]);
+      if (chefRole !== "1" && chefRole !== "2" && chefRole !== "3") {
+        return NextResponse.json(
+          { success: false, message: "Le chef d'équipe sélectionné doit avoir un rôle Admin, DG ou ChefProjet" },
+          { status: 400 },
+        );
+      }
+    }
 
     // Members must have member role (role_id 4 = MembreEquipe)
     for (const m of membres || []) {
@@ -228,7 +223,7 @@ export async function POST(req: NextRequest) {
         description,
         reference,
         autorite,
-        'enCours',
+        'enCours', // <-- corrigé ici
         Number(chefEquipe),
         teamId,
       ],
