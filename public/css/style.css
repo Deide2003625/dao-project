@@ -22734,17 +22734,6 @@ dl li {
   border-radius: 100%;
   background: #ff4747;
   top: 9px;
-  display: none; /* Caché par défaut */
-}
-
-/* Afficher le point rouge seulement si le compteur est > 0 */
-.navbar
-  .navbar-menu-wrapper
-  .navbar-nav
-  .nav-item.dropdown
-  .count-indicator
-  .count:not(:empty) {
-  display: block;
 }
 
 .navbar

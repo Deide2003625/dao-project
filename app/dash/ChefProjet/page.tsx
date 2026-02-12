@@ -1,96 +1,58 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-
-interface Dao {
-  id: number;
-  numero: string;
-  reference: string;
-  autorite: string;
-  date_depot?: string;
-  chef_projet?: string | null;
-  statut?: string | null;
-}
 
 export default function DashboardChefEquipe() {
   const router = useRouter();
-  const [daos, setDaos] = useState<Dao[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>("");
-  const [currentUser, setCurrentUser] = useState<{ username: string; id: number } | null>(null);
 
-  async function loadDaos() {
-    try {
-      setLoading(true);
-      setError("");
-
-      // Récupérer l'utilisateur connecté
-      const userRes = await fetch("/api/me", { cache: "no-store" });
-      const userData = userRes.ok ? await userRes.json() : {};
-      
-      const userId = userData.user?.id;
-      const userRole = userData.user?.role_id;
-      const username = userData.user?.username;
-
-      // Sauvegarder les infos de l'utilisateur connecté
-      if (userId && username) {
-        setCurrentUser({ username, id: userId });
-      }
-
-      console.log(`Chargement des DAO pour ${username} (role: ${userRole}, id: ${userId})`);
-
-      const res = await fetch(`/api/dao/stats?userId=${userId}&userRole=${userRole}`, { cache: "no-store" });
-      const json = await res.json().catch(() => {});
-
-      console.log("Réponse brute de l'API /api/dao/stats:", json);
-      console.log("Status de la réponse:", res.status);
-      console.log("OK de la réponse:", res.ok);
-
-      if (!res.ok) {
-        console.error("API /api/dao/stats error:", json);
-        setDaos([]);
-        setError(json?.message || "Erreur lors du chargement des DAO");
-        return;
-      }
-
-      const rows = Array.isArray(json?.data?.daos) ? (json.data.daos as Dao[]) : [];
-      console.log(`DAO trouvés pour ${username}:`, rows.length);
-      console.log("Détail des DAO:", rows);
-      setDaos(rows);
-    } catch (err) {
-      console.error("Error fetching DAOs:", err);
-      setDaos([]);
-      setError("Erreur réseau lors du chargement des DAO");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadDaos();
-  }, []);
-
-  const stats = useMemo(() => {
-    const total = daos.length;
-    const enCours = daos.filter((d) => d.statut === 'enCours').length;
-    const aRisque = daos.filter((d) => d.statut === 'aRisque').length;
-    const terminees = daos.filter((d) => d.statut === 'terminee').length;
-    return { total, enCours, aRisque, terminees };
-  }, [daos]);
+  const daos = [
+    {
+      id: "dao-001",
+      number: "DAO-001",
+      objet: "Rénovation école primaire — Lot 1",
+      status: "En cours",
+      statusClass: "bg-yellow-100 text-yellow-800",
+      date: "12/11/2025",
+      progress: 60,
+      team: 4,
+    },
+    {
+      id: "dao-002",
+      number: "DAO-002",
+      objet: "Fourniture matériel informatique",
+      status: "À risque",
+      statusClass: "bg-red-100 text-red-800",
+      date: "04/11/2025",
+      progress: 30,
+      team: 3,
+    },
+    {
+      id: "dao-003",
+      number: "DAO-003",
+      objet: "Fourniture matériel informatique",
+      status: "À risque",
+      statusClass: "bg-red-100 text-red-800",
+      date: "04/11/2025",
+      progress: 30,
+      team: 3,
+    },
+    {
+      id: "dao-004",
+      number: "DAO-004",
+      objet: "Fourniture matériel informatique",
+      status: "À risque",
+      statusClass: "bg-red-100 text-red-800",
+      date: "04/11/2025",
+      progress: 30,
+      team: 3,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
       {/* Header */}
       <header className="flex items-center justify-between bg-white p-4 border-b">
-        <div>
-          <h1 className="text-xl font-bold">Mes DAO</h1>
-          {currentUser && (
-            <p className="text-sm text-gray-600">
-              Connecté en tant que {currentUser.username}
-            </p>
-          )}
-        </div>
+        <h1 className="text-xl font-bold">Mes DAO</h1>
 
         <div className="flex items-center gap-3">
           <input
@@ -128,7 +90,6 @@ export default function DashboardChefEquipe() {
                         <i className="mdi mdi-calendar icon-lg mr-3 text-secondary"></i>
                         <div className="d-flex flex-column">
                           <small className="text-muted">Total assignés</small>
-                          <h4 className="mb-0">{stats.total}</h4>
                         </div>
                       </div>
 
@@ -143,7 +104,6 @@ export default function DashboardChefEquipe() {
                         <i className="mdi mdi-timer-sand icon-lg mr-3 text-warning"></i>
                         <div className="d-flex flex-column">
                           <small className="text-muted">En cours</small>
-                          <h4 className="mb-0">{stats.enCours}</h4>
                         </div>
                       </div>
 
@@ -158,7 +118,6 @@ export default function DashboardChefEquipe() {
                         <i className="mdi mdi-alert icon-lg mr-3 text-danger"></i>
                         <div className="d-flex flex-column">
                           <small className="text-muted">À risque</small>
-                          <h4 className="mb-0">{stats.aRisque}</h4>
                         </div>
                       </div>
                     </div>
@@ -191,16 +150,8 @@ export default function DashboardChefEquipe() {
           <div className="col-12 stretch-card">
             <div className="card">
               <div className="card-body">
-                <div className="d-flex align-items-center justify-content-between">
-                  <p className="card-title mb-0">Tous mes DAO</p>
-                  <button className="btn btn-sm btn-outline-primary" onClick={loadDaos} disabled={loading}>
-                    Rafraîchir
-                  </button>
-                </div>
-
-                {error ? <div className="alert alert-danger mt-3 mb-0">{error}</div> : null}
-
-                <div className="table-responsive mt-3">
+                <p className="card-title">Tous mes DAO</p>
+                <div className="table-responsive">
                   <table
                     id="recent-purchases-listing"
                     className="table table-hover"
@@ -210,40 +161,28 @@ export default function DashboardChefEquipe() {
                         <th>Nom</th>
                         <th>Référence</th>
                         <th>Autorité contractante</th>
-                        <th>Status</th>
                         <th>Date de clôture</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {loading ? (
-                        <tr>
-                          <td colSpan={5}>Chargement...</td>
-                        </tr>
-                      ) : daos.length === 0 ? (
-                        <tr>
-                          <td colSpan={5}>Aucun DAO assigné pour le moment.</td>
-                        </tr>
-                      ) : (
-                        daos.map((dao) => (
-                          <tr key={dao.id}>
-                            <td>{dao.numero}</td>
-                            <td>{dao.reference}</td>
-                            <td>{dao.autorite}</td>
-                            <td>
-                              <span className={`badge ${
-                                dao.statut === 'enCours' ? 'bg-warning' : 
-                                dao.statut === 'aRisque' ? 'bg-danger' : 
-                                dao.statut === 'terminee' ? 'bg-success' : 'bg-secondary'
-                              }`}>
-                                {dao.statut === 'enCours' ? 'En cours' : 
-                                 dao.statut === 'aRisque' ? 'À risque' : 
-                                 dao.statut === 'terminee' ? 'Terminée' : dao.statut}
-                              </span>
-                            </td>
-                            <td>{dao.date_depot || '-'}</td>
-                          </tr>
-                        ))
-                      )}
+                      <tr>
+                        <td>Jeremy Ortega</td>
+                        <td>Levelled up</td>
+                        <td>Catalinaborough</td>
+                        <td>12/11/2025</td>
+                      </tr>
+                      <tr>
+                        <td>Alvin Fisher</td>
+                        <td>Ui design completed</td>
+                        <td>East Mayra</td>
+                        <td>04/11/2025</td>
+                      </tr>
+                      <tr>
+                        <td>John Doe</td>
+                        <td>Project completed</td>
+                        <td>New York</td>
+                        <td>01/12/2025</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>

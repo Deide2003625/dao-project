@@ -102,9 +102,9 @@ export default function Sidebar() {
         {/* Lecteur */}
         {roleId === 5 && (
           <li className="nav-item">
-            <a className="nav-link" href="/dash/Lecteur/allDao">
+            <a className="nav-link" href="/dash/admin/new-dao">
               <i className="mdi mdi-folder-plus menu-icon"></i>
-              <span className="menu-title">Tous les DAO</span>
+              <span className="menu-title">Créer un DAO</span>
             </a>
           </li>
         )}

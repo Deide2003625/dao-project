@@ -1,7 +1,3 @@
 {
-  "sqltools.connections": [],
-  "cSpell.ignoreWords": [
-    "Êtes"
-  ],
-  "semgrep.scan.onlyGitDirty": false
+  "sqltools.connections": []
 }

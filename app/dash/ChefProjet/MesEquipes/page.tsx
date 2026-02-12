@@ -1,193 +1,100 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
 import {
   Users,
   Search,
   ChevronRight,
   User,
 } from "lucide-react";
-import Link from "next/link";
 
-// Données simulées des équipes
-const teamsData = [
-  {
-    id: 1,
-    name: "Équipe Technique",
-    leader: "Jean Dupont",
-    memberCount: 8,
-    daoCount: 5,
-    status: "active",
-    members: [
-      {
-        id: 1,
-        name: "Marie Curie",
-        role: "Ingénieur Structure",
-        status: "available",
-      },
-      { id: 2, name: "Pierre Martin", role: "Architecte", status: "busy" },
-      {
-        id: 3,
-        name: "Sophie Bernard",
-        role: "Spécialiste Électricité",
-        status: "available",
-      },
-      {
-        id: 4,
-        name: "Thomas Leroy",
-        role: "Spécialiste Plomberie",
-        status: "offline",
-      },
-    ],
-    daos: [
-      { id: 1, name: "DAO-2025-001", progress: 65 },
-      { id: 2, name: "DAO-2025-003", progress: 30 },
-      { id: 3, name: "DAO-2025-005", progress: 85 },
-    ],
-  },
-  {
-    id: 2,
-    name: "Équipe Administrative",
-    leader: "Élise Lambert",
-    memberCount: 6,
-    daoCount: 3,
-    status: "active",
-    members: [
-      {
-        id: 1,
-        name: "Paul Durand",
-        role: "Gestionnaire de contrat",
-        status: "available",
-      },
-      {
-        id: 2,
-        name: "Catherine Moreau",
-        role: "Comptable",
-        status: "available",
-      },
-    ],
-    daos: [
-      { id: 1, name: "DAO-2025-002", progress: 45 },
-      { id: 2, name: "DAO-2025-004", progress: 20 },
-    ],
-  },
-  {
-    id: 3,
-    name: "Équipe Achats",
-    leader: "Marc Dubois",
-    memberCount: 7,
-    daoCount: 4,
-    status: "active",
-    members: [
-      {
-        id: 1,
-        name: "Nicolas Petit",
-        role: "Responsable Achats",
-        status: "busy",
-      },
-      {
-        id: 2,
-        name: "Isabelle Blanc",
-        role: "Assistant Achats",
-        status: "available",
-      },
-    ],
-    daos: [
-      { id: 1, name: "DAO-2025-006", progress: 75 },
-      { id: 2, name: "DAO-2025-007", progress: 90 },
-    ],
-  },
-  {
-    id: 4,
-    name: "Équipe Qualité",
-    leader: "Lucie Petit",
-    memberCount: 5,
-    daoCount: 2,
-    status: "inactive",
-    members: [
-      {
-        id: 1,
-        name: "Antoine Gauthier",
-        role: "Auditeur Qualité",
-        status: "offline",
-      },
-      {
-        id: 2,
-        name: "Julie Lefevre",
-        role: "Contrôleur Qualité",
-        status: "offline",
-      },
-    ],
-    daos: [{ id: 1, name: "DAO-2025-008", progress: 15 }],
-  },
-];
+interface ApiTeamDao {
+  daoId: number;
+  numero: string;
+  objet: string | null;
+  chefName: string | null;
+  members: { id: number; name: string }[];
+}
 
-// Tous les DAOs pour le résumé
-const allDaos = [
-  {
-    id: 1,
-    name: "DAO-2025-001",
-    team: "Équipe Technique",
-    progress: 65,
-    deadline: "2025-04-15",
-  },
-  {
-    id: 2,
-    name: "DAO-2025-002",
-    team: "Équipe Administrative",
-    progress: 45,
-    deadline: "2025-04-20",
-  },
-  {
-    id: 3,
-    name: "DAO-2025-003",
-    team: "Équipe Technique",
-    progress: 30,
-    deadline: "2025-04-25",
-  },
-  {
-    id: 4,
-    name: "DAO-2025-004",
-    team: "Équipe Administrative",
-    progress: 20,
-    deadline: "2025-05-01",
-  },
-  {
-    id: 5,
-    name: "DAO-2025-005",
-    team: "Équipe Technique",
-    progress: 85,
-    deadline: "2025-04-10",
-  },
-  {
-    id: 6,
-    name: "DAO-2025-006",
-    team: "Équipe Achats",
-    progress: 75,
-    deadline: "2025-04-18",
-  },
-  {
-    id: 7,
-    name: "DAO-2025-007",
-    team: "Équipe Achats",
-    progress: 90,
-    deadline: "2025-04-12",
-  },
-  {
-    id: 8,
-    name: "DAO-2025-008",
-    team: "Équipe Qualité",
-    progress: 15,
-    deadline: "2025-05-05",
-  },
-];
+interface TeamData {
+  id: number;
+  name: string;
+  leader: string;
+  memberCount: number;
+  daoCount: number;
+  status: string;
+  members: { id: number; name: string; role: string; status: string }[];
+  daos: { id: number; name: string; progress: number }[];
+}
 
 export default function ChefProjetDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTeam, setSelectedTeam] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [teamsData, setTeamsData] = useState<TeamData[]>([]);
 
-  // Filtrer les équipes
+  useEffect(() => {
+    try {
+      const storedUser = localStorage.getItem("user");
+      if (!storedUser) {
+        return;
+      }
+
+      const user = JSON.parse(storedUser);
+      const chefId = user?.id;
+      if (!chefId) {
+        return;
+      }
+
+      (async () => {
+        try {
+          const res = await fetch(`/api/chef-teams?chefId=${chefId}`);
+          if (!res.ok) {
+            console.error("Erreur chargement équipes chef", await res.text());
+            return;
+          }
+
+          const json = await res.json();
+          const apiData: ApiTeamDao[] = json?.data || [];
+
+          const mapped: TeamData[] = apiData.map((item, index) => {
+            const members = (item.members || []).map((m) => ({
+              id: m.id,
+              name: m.name,
+              role: "Membre d'équipe",
+              status: "available",
+            }));
+
+            return {
+              id: item.daoId,
+              name: item.numero,
+
+              leader: item.chefName || "",
+              memberCount: members.length,
+              daoCount: 1,
+              status: "active",
+              members,
+              daos: [
+                {
+                  id: item.daoId,
+                  name: item.objet || item.numero,
+                  progress: 0,
+                },
+              ],
+            };
+          });
+
+          setTeamsData(mapped);
+        } catch (e) {
+          console.error("Erreur réseau chargement équipes chef", e);
+        }
+      })();
+    } catch (e) {
+      console.error("Erreur lecture utilisateur depuis localStorage (MesEquipes)", e);
+    }
+  }, []);
+
   const filteredTeams = teamsData.filter((team) => {
     const matchesSearch =
       team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -197,15 +104,22 @@ export default function ChefProjetDashboard() {
     return matchesSearch && matchesStatus;
   });
 
-  // Calcul des statistiques
   const stats = {
     totalTeams: teamsData.length,
     activeTeams: teamsData.filter((t) => t.status === "active").length,
     totalMembers: teamsData.reduce((sum, team) => sum + team.memberCount, 0),
     totalDaos: teamsData.reduce((sum, team) => sum + team.daoCount, 0),
-    averageProgress: Math.round(
-      allDaos.reduce((sum, dao) => sum + dao.progress, 0) / allDaos.length,
-    ),
+    averageProgress:
+      teamsData.length === 0
+        ? 0
+        : Math.round(
+            teamsData.reduce(
+              (sum, team) =>
+                sum + team.daos.reduce((s, d) => s + d.progress, 0),
+              0,
+            ) /
+              teamsData.reduce((sum, team) => sum + team.daos.length, 0),
+          ),
   };
 
   return (
@@ -386,16 +300,15 @@ export default function ChefProjetDashboard() {
                             </h4>
                             <div className="space-y-3">
                               {team.daos.map((dao) => (
-                                <Link
+                                <div
                                   key={dao.id}
-                                  href={`/dash/ChefProjet/Mes-DAO/${dao.id}`}
-                                  className="block p-3 border rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                                  className="block p-3 border rounded-lg bg-white"
                                 >
                                   <div className="flex justify-between items-center mb-2">
-                                    <span className="font-medium text-sm">
+                                    <span className="font-medium text-sm text-blue-600">
                                       {dao.name}
                                     </span>
-                                    <span className="text-sm font-semibold">
+                                    <span className="text-sm font-semibold text-blue-600">
                                       {dao.progress}%
                                     </span>
                                   </div>
@@ -405,7 +318,7 @@ export default function ChefProjetDashboard() {
                                       style={{ width: `${dao.progress}%` }}
                                     />
                                   </div>
-                                </Link>
+                                </div>
                               ))}
                             </div>
                           </div>

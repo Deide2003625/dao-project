@@ -24,7 +24,7 @@ async function ensureTables(connection: any) {
       autorite VARCHAR(255),
       chef_id BIGINT UNSIGNED,
       team_id VARCHAR(100),
-      statut ENUM('aRisque', 'enCours', 'terminee') DEFAULT 'enCours',
+      statut ENUM('aRisque', 'enCours') DEFAULT 'enCours',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
@@ -32,7 +32,7 @@ async function ensureTables(connection: any) {
   // Ajouter la colonne statut si elle n'existe pas
   try {
     await connection.execute(`
-      ALTER TABLE daos ADD COLUMN statut ENUM('aRisque', 'enCours', 'terminee') DEFAULT 'enCours'
+      ALTER TABLE daos ADD COLUMN statut ENUM('aRisque', 'enCours') DEFAULT 'enCours'
     `);
   } catch (err) {
     // Colonne existe déjà, ignorer l'erreur
@@ -80,14 +80,17 @@ async function getNextDaoNumero(connection: any) {
   return generatedNumero;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const connection = await db();
 
     // crée les tables si besoin
     await ensureTables(connection);
 
-    const [rows]: any = await connection.execute(`
+    const { searchParams } = new URL(req.url);
+    const chefId = searchParams.get("chefId");
+
+    let query = `
       SELECT 
         d.id,
         d.numero,
@@ -95,11 +98,22 @@ export async function GET() {
         d.autorite,
         d.date_depot,
         d.statut,
+        d.chef_id,
         u.username as chef_projet
       FROM daos d
       LEFT JOIN users u ON d.chef_id = u.id
-      ORDER BY d.created_at DESC
-    `);
+    `;
+
+    const params: any[] = [];
+
+    if (chefId) {
+      query += " WHERE d.chef_id = ?";
+      params.push(Number(chefId));
+    }
+
+    query += " ORDER BY d.created_at DESC";
+
+    const [rows]: any = await connection.execute(query, params);
 
     // Calculer le statut pour chaque DAO basé sur la date de dépôt
     const daosWithStatus = rows.map((dao: any) => {
@@ -177,20 +191,12 @@ export async function POST(req: NextRequest) {
       idToRole[Number(r.id)] = String(r.role_id);
     });
 
-    // Chef must have chef role (role_id 1 = Admin, 2 = DG, or 3 = ChefProjet)
-    if (chefEquipe) {
-      const chefRole = String(idToRole[Number(chefEquipe)]);
-      if (chefRole !== "1" && chefRole !== "2" && chefRole !== "3") {
-        return NextResponse.json(
-          { success: false, message: "Le chef d'équipe sélectionné doit avoir un rôle Admin, DG ou ChefProjet" },
-          { status: 400 },
-        );
-      }
-    }
+    // Vérification du rôle ChefProjet supprimée pour permettre à n'importe quel utilisateur d'être chef d'équipe
 
     // Members must have member role (role_id 4 = MembreEquipe)
     for (const m of membres || []) {
-      if (String(idToRole[Number(m)]) !== "4") {
+      const userRole = String(idToRole[Number(m)]);
+      if (userRole !== "4") {
         return NextResponse.json(
           { success: false, message: `L'utilisateur ${m} n'a pas le rôle MembreEquipe` },
           { status: 400 },
@@ -223,7 +229,7 @@ export async function POST(req: NextRequest) {
         description,
         reference,
         autorite,
-        'enCours', // <-- corrigé ici
+        'EN_COURS',
         Number(chefEquipe),
         teamId,
       ],
@@ -238,6 +244,46 @@ export async function POST(req: NextRequest) {
         [teamId, Number(m)],
       );
     }
+
+    // Créer automatiquement la première tâche assignée au chef de projet
+    // Vérifier et mettre à jour la structure de la table tasks
+    try {
+      await connection.execute(`
+        ALTER TABLE tasks 
+        ADD COLUMN IF NOT EXISTS titre VARCHAR(255) NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS description TEXT,
+        ADD COLUMN IF NOT EXISTS statut ENUM('a_faire', 'en_cours', 'termine') DEFAULT 'a_faire',
+        ADD COLUMN IF NOT EXISTS date_creation DATE,
+        ADD COLUMN IF NOT EXISTS date_echeance DATE,
+        ADD COLUMN IF NOT EXISTS priorite ENUM('basse', 'moyenne', 'haute') DEFAULT 'moyenne',
+        ADD COLUMN IF NOT EXISTS assigned_to BIGINT UNSIGNED,
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      `);
+    } catch (err) {
+      // Ignorer les erreurs de colonne existante
+      console.log("Mise à jour table tasks (colonnes可能 déjà existent):", err);
+    }
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        dao_id INT NOT NULL,
+        titre VARCHAR(255) NOT NULL,
+        description TEXT,
+        statut ENUM('a_faire', 'en_cours', 'termine') DEFAULT 'a_faire',
+        date_creation DATE,
+        date_echeance DATE,
+        priorite ENUM('basse', 'moyenne', 'haute') DEFAULT 'moyenne',
+        assigned_to BIGINT UNSIGNED,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_tasks_dao (dao_id),
+        INDEX idx_tasks_assigned (assigned_to),
+        CONSTRAINT fk_tasks_dao FOREIGN KEY (dao_id) REFERENCES daos(id) ON DELETE CASCADE,
+        CONSTRAINT fk_tasks_user FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
 
     return NextResponse.json({
       success: true,

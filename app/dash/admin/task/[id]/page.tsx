@@ -151,7 +151,7 @@ export default function ChefProjetTasksPage() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b p-4">
         <div className="flex items-center gap-3">
-          <Link href="/dash/admin/MyDao">
+          <Link href="/dash/ChefProjet/MyDao">
             <ArrowLeft />
           </Link>
           <div>

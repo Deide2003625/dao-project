@@ -20,6 +20,55 @@ export default function AllDaoPage() {
   const [daos, setDaos] = useState<Dao[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "enCours" | "aRisque">("all");
+
+  const computeStatus = (dao: Dao): { label: string; className: string } => {
+    const today = new Date();
+    const rawStatut = String(dao.statut || "").toUpperCase();
+
+    // 1) Si terminé (équivalent à 100% d'avancement) => vert
+    if (rawStatut === "TERMINEE" || rawStatut === "TERMINE") {
+      return {
+        label: "Terminée",
+        className: "bg-green-100 text-green-800",
+      };
+    }
+
+    // 2) Sinon, on applique la règle sur la date de dépôt
+    if (!dao.date_depot) {
+      return {
+        label: "En cours",
+        className: "bg-yellow-100 text-yellow-800",
+      };
+    }
+
+    const dateDepot = new Date(dao.date_depot);
+    const diffMs = dateDepot.getTime() - today.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    // Si Date dépôt - Date aujourd'hui ≥ 5 jours => En cours (jaune)
+    if (diffDays >= 5 || diffDays === 4) {
+      return {
+        label: "EN COURS",
+        className: "bg-yellow-100 text-yellow-800",
+      };
+    }
+
+    // Si Date dépôt - Date aujourd'hui ≤ 3 jours (ou passée) => À risque (rouge)
+    if (diffDays <= 3) {
+      return {
+        label: "À risque",
+        className: "bg-red-100 text-red-800",
+      };
+    }
+
+    // Fallback
+    return {
+      label: "En cours",
+      className: "bg-yellow-100 text-yellow-800",
+    };
+  };
 
   useEffect(() => {
     loadDaos();
@@ -50,6 +99,26 @@ export default function AllDaoPage() {
       setLoading(false);
     }
   }
+
+  const filteredDaos = daos.filter((dao: Dao) => {
+    const term = searchTerm.toLowerCase();
+    const numero = dao.numero?.toLowerCase() || "";
+    const reference = dao.reference?.toLowerCase() || "";
+    const autorite = dao.autorite?.toLowerCase() || "";
+
+    const matchesSearch = !term
+      ? true
+      : numero.includes(term) || reference.includes(term) || autorite.includes(term);
+
+    const rawStatut = String(dao.statut || "");
+    const normalizedStatus =
+      rawStatut === "aRisque" || rawStatut === "enCours" ? rawStatut : undefined;
+
+    const matchesStatus =
+      statusFilter === "all" || normalizedStatus === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
 
   if (loading) {
     return (
@@ -96,9 +165,23 @@ export default function AllDaoPage() {
           <input
             placeholder="Rechercher (n°, objet, équipe...)"
             className="px-3 py-2 border rounded w-72 text-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <button className="px-3 py-2 bg-blue-600 text-white rounded text-sm">
-            Filtrer
+          <button
+            className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
+            type="button"
+            onClick={() =>
+              setStatusFilter((prev) =>
+                prev === "all" ? "enCours" : prev === "enCours" ? "aRisque" : "all",
+              )
+            }
+          >
+            {statusFilter === "all"
+              ? "Tous les statuts"
+              : statusFilter === "enCours"
+                ? "En cours seulement"
+                : "À risque seulement"}
           </button>
         </div>
       </header>
@@ -111,17 +194,17 @@ export default function AllDaoPage() {
               Cliquer sur une carte pour ouvrir le détail
             </span>
             <span className="text-sm text-gray-500">
-              {daos.length} DAO{daos.length > 1 ? 's' : ''} trouvé{daos.length > 1 ? 's' : ''}
+              {filteredDaos.length} DAO{filteredDaos.length > 1 ? 's' : ''} trouvé{filteredDaos.length > 1 ? 's' : ''}
             </span>
           </div>
 
-          {daos.length === 0 ? (
+          {filteredDaos.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500">Aucun DAO trouvé.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {daos.map((dao) => (
+              {filteredDaos.map((dao) => (
                 <article
                   key={dao.id}
                   onClick={() => router.push(`/dash/admin/task/${dao.id}`)}
@@ -134,19 +217,16 @@ export default function AllDaoPage() {
                         {dao.reference} - {dao.autorite}
                       </p>
                     </div>
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        dao.statut === "EN_COURS"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : dao.statut === "TERMINE"
-                          ? "bg-green-100 text-green-800"
-                          : dao.statut === "ANNULE"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {dao.statut || "EN_COURS"}
-                    </span>
+                    {(() => {
+                      const s = computeStatus(dao);
+                      return (
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${s.className}`}
+                        >
+                          {s.label}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <div className="mt-4 space-y-2">
