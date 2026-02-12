@@ -223,7 +223,7 @@ export default function Page() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'validé':
-        return <span className="badge badge-success">Validé</span>;
+        return <span className="badge badge-success">Terminé</span>;
       case 'en cours':
         return <span className="badge badge-warning">En cours</span>;
       case 'rejeté':
@@ -370,7 +370,6 @@ export default function Page() {
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-4">
                 <p className="card-title mb-0">Liste des DAO</p>
-                <small className="text-muted">Cliquez sur "Sélectionner" pour voir le détail des tâches</small>
               </div>
               <div className="table-responsive">
                 <table className="table table-hover">

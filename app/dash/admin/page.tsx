@@ -184,8 +184,8 @@ export default function Page() {
           <div className="d-flex justify-content-between flex-wrap">
             <div className="d-flex align-items-end flex-wrap">
               <div className="mr-md-3 mr-xl-5">
-                <h2>Welcome back ADMIN,</h2>
-                <p className="mb-md-0">Voici les statistiques de vos DAO.</p>
+                <h2>Bienvenue Admin,</h2>
+                <p className="mb-md-0">Voici les statistiques des DAO.</p>
               </div>
             </div>
           </div>
@@ -300,6 +300,7 @@ export default function Page() {
                       <th>Chef Projet</th>
                       <th>Statut</th>
                       <th>Actions</th>
+                      <th>Groupement</th>
                     </tr>
                   </thead>
                   <tbody>
