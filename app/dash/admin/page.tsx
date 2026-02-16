@@ -10,6 +10,8 @@ interface Dao {
   date_depot?: string;
   chef_projet?: string | null;
   statut?: string | null; // optionnel si ajouter plus tard dans la DB
+  groupement?: string | null; // type de groupement
+  nom_partenaire?: string | null; // nom du partenaire si groupement
 }
 
 export default function Page() {
@@ -69,11 +71,11 @@ export default function Page() {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/dao", { cache: "no-store" });
+      const res = await fetch("/api/daos", { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        console.error("API /api/dao error:", json);
+        console.error("API /api/daos error:", json);
         setDaos([]);
         setError(json?.message || "Erreur lors du chargement des DAO");
         return;
@@ -298,19 +300,19 @@ export default function Page() {
                       <th>Référence</th>
                       <th>Autorité contractante</th>
                       <th>Chef Projet</th>
+                      <th>Groupement</th>
                       <th>Statut</th>
                       <th>Actions</th>
-                      <th>Groupement</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={5}>Chargement...</td>
+                        <td colSpan={7}>Chargement...</td>
                       </tr>
                     ) : daos.length === 0 ? (
                       <tr>
-                        <td colSpan={5}>Aucun DAO pour le moment.</td>
+                        <td colSpan={7}>Aucun DAO pour le moment.</td>
                       </tr>
                     ) : (
                       daos.map((dao) => (
@@ -320,6 +322,19 @@ export default function Page() {
                           <td>{dao.reference}</td>
                           <td>{dao.autorite}</td>
                           <td>{dao.chef_projet ?? "-"}</td>
+                          <td>
+                            {dao.groupement === "oui" ? (
+                              dao.nom_partenaire ? (
+                                <span style={{ whiteSpace: "pre-wrap" }}>
+                                  {dao.nom_partenaire.replace(/,/g, ",\n")}
+                                </span>
+                              ) : (
+                                <span>-</span>
+                              )
+                            ) : (
+                              <span>-</span>
+                            )}
+                          </td>
                           <td>
                             {(() => {
                               const s = computeStatus(dao);

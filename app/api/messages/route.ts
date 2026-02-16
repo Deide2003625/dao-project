@@ -28,11 +28,11 @@ export async function GET(request: NextRequest) {
         u.url_photo as sender_photo
       FROM messages m
       JOIN users u ON m.sender_id = u.id
-      WHERE m.receiver_id = ?
+      WHERE ((m.receiver_id = ? AND m.subject = 'Message privé') OR (m.receiver_id IS NULL AND m.subject = 'Nouveau commentaire')) AND m.sender_id != ?
       ORDER BY m.created_at DESC
       LIMIT 10
       `,
-      [userId]
+      [userId, userId]
     );
 
     // Format the messages

@@ -109,6 +109,8 @@ function getNotificationIcon(type: string): string {
       return "mdi-account-box";
     case "system":
       return "mdi-cog";
+    case "comment":
+      return "mdi-comment-text";
     default:
       return "mdi-bell";
   }
@@ -128,6 +130,8 @@ function getNotificationBgColor(type: string): string {
       return "bg-primary";
     case "system":
       return "bg-secondary";
+    case "comment":
+      return "bg-primary";
     default:
       return "bg-primary";
   }

@@ -1,52 +1,108 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
+interface Dao {
+  id: number;
+  numero: string;
+  reference: string;
+  autorite: string;
+  date_depot?: string;
+  chef_projet?: string | null;
+  statut?: string | null;
+  groupement?: string | null;
+  nom_partenaire?: string | null;
+}
 
 export default function DashboardChefEquipe() {
   const router = useRouter();
+  const [daos, setDaos] = useState<Dao[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>("");
 
-  const daos = [
-    {
-      id: "dao-001",
-      number: "DAO-001",
-      objet: "Rénovation école primaire — Lot 1",
-      status: "En cours",
-      statusClass: "bg-yellow-100 text-yellow-800",
-      date: "12/11/2025",
-      progress: 60,
-      team: 4,
-    },
-    {
-      id: "dao-002",
-      number: "DAO-002",
-      objet: "Fourniture matériel informatique",
-      status: "À risque",
-      statusClass: "bg-red-100 text-red-800",
-      date: "04/11/2025",
-      progress: 30,
-      team: 3,
-    },
-    {
-      id: "dao-003",
-      number: "DAO-003",
-      objet: "Fourniture matériel informatique",
-      status: "À risque",
-      statusClass: "bg-red-100 text-red-800",
-      date: "04/11/2025",
-      progress: 30,
-      team: 3,
-    },
-    {
-      id: "dao-004",
-      number: "DAO-004",
-      objet: "Fourniture matériel informatique",
-      status: "À risque",
-      statusClass: "bg-red-100 text-red-800",
-      date: "04/11/2025",
-      progress: 30,
-      team: 3,
-    },
-  ];
+  // Calculer les statistiques
+  const stats = {
+    total: daos.length,
+    enCours: daos.filter(d => {
+      const status = String(d.statut || "").toLowerCase();
+      return status === "encours" || status === "en cours";
+    }).length,
+    aRisque: daos.filter(d => {
+      const status = String(d.statut || "").toLowerCase();
+      return status === "arisque" || status === "à risque";
+    }).length,
+    terminees: daos.filter(d => {
+      const status = String(d.statut || "").toLowerCase();
+      return status === "termine" || status === "terminée";
+    }).length,
+  };
+
+  useEffect(() => {
+    loadDaos();
+  }, []);
+
+  async function loadDaos() {
+    try {
+      setLoading(true);
+      setError("");
+
+      // Récupérer l'utilisateur connecté depuis localStorage
+      const storedUser = localStorage.getItem("user");
+      if (!storedUser) {
+        setError("Utilisateur non connecté");
+        return;
+      }
+
+      const user = JSON.parse(storedUser);
+      
+      const res = await fetch(`/api/dao?chefId=${user.id}`, { cache: "no-store" });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        console.error("API /api/dao error:", json);
+        setDaos([]);
+        setError(json?.message || "Erreur lors du chargement des DAO");
+        return;
+      }
+
+      const rows = Array.isArray(json?.data) ? (json.data as Dao[]) : [];
+      setDaos(rows);
+    } catch (err) {
+      console.error("Error fetching DAOs:", err);
+      setDaos([]);
+      setError("Erreur réseau lors du chargement des DAO");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const computeStatus = (dao: Dao): { label: string; className: string } => {
+    const today = new Date();
+    const rawStatut = String(dao.statut || "").toLowerCase();
+
+    // Si terminé => vert
+    if (rawStatut === "termine" || rawStatut === "terminée") {
+      return {
+        label: "Terminée",
+        className: "badge bg-success text-white",
+      };
+    }
+
+    // Si à risque => rouge
+    if (rawStatut === "arisque" || rawStatut === "à risque") {
+      return {
+        label: "À risque",
+        className: "badge bg-danger text-white",
+      };
+    }
+
+    // Sinon, en cours => jaune
+    return {
+      label: "En cours",
+      className: "badge bg-warning text-dark",
+    };
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
@@ -88,8 +144,9 @@ export default function DashboardChefEquipe() {
                         }}
                       >
                         <i className="mdi mdi-calendar icon-lg mr-3 text-secondary"></i>
-                        <div className="d-flex flex-column">
+                        <div className="d-flex flex-column justify-content-around">
                           <small className="text-muted">Total assignés</small>
+                          <h4 className="mb-0">{stats.total}</h4>
                         </div>
                       </div>
 
@@ -102,8 +159,9 @@ export default function DashboardChefEquipe() {
                         }}
                       >
                         <i className="mdi mdi-timer-sand icon-lg mr-3 text-warning"></i>
-                        <div className="d-flex flex-column">
+                        <div className="d-flex flex-column justify-content-around">
                           <small className="text-muted">En cours</small>
+                          <h4 className="mb-0">{stats.enCours}</h4>
                         </div>
                       </div>
 
@@ -116,8 +174,9 @@ export default function DashboardChefEquipe() {
                         }}
                       >
                         <i className="mdi mdi-alert icon-lg mr-3 text-danger"></i>
-                        <div className="d-flex flex-column">
+                        <div className="d-flex flex-column justify-content-around">
                           <small className="text-muted">À risque</small>
+                          <h4 className="mb-0">{stats.aRisque}</h4>
                         </div>
                       </div>
                     </div>
@@ -150,8 +209,16 @@ export default function DashboardChefEquipe() {
           <div className="col-12 stretch-card">
             <div className="card">
               <div className="card-body">
-                <p className="card-title">Tous mes DAO</p>
-                <div className="table-responsive">
+                <div className="d-flex align-items-center justify-content-between">
+                  <p className="card-title mb-0">Tous mes DAO</p>
+                  <button className="btn btn-sm btn-outline-primary" onClick={loadDaos} disabled={loading}>
+                    Rafraîchir
+                  </button>
+                </div>
+
+                {error ? <div className="alert alert-danger mt-3 mb-0">{error}</div> : null}
+
+                <div className="table-responsive mt-3">
                   <table
                     id="recent-purchases-listing"
                     className="table table-hover"
@@ -162,27 +229,39 @@ export default function DashboardChefEquipe() {
                         <th>Référence</th>
                         <th>Autorité contractante</th>
                         <th>Date de clôture</th>
+                        <th>Statut</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr>
-                        <td>Jeremy Ortega</td>
-                        <td>Levelled up</td>
-                        <td>Catalinaborough</td>
-                        <td>12/11/2025</td>
-                      </tr>
-                      <tr>
-                        <td>Alvin Fisher</td>
-                        <td>Ui design completed</td>
-                        <td>East Mayra</td>
-                        <td>04/11/2025</td>
-                      </tr>
-                      <tr>
-                        <td>John Doe</td>
-                        <td>Project completed</td>
-                        <td>New York</td>
-                        <td>01/12/2025</td>
-                      </tr>
+                      {loading ? (
+                        <tr>
+                          <td colSpan={5} className="text-center">Chargement...</td>
+                        </tr>
+                      ) : daos.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="text-center">Aucun DAO assigné.</td>
+                        </tr>
+                      ) : (
+                        daos.map((dao) => (
+                          <tr key={dao.id}>
+                            <td>{dao.numero}</td>
+                            <td>{dao.reference}</td>
+                            <td>{dao.autorite}</td>
+                            <td>
+                              {dao.date_depot 
+                                ? new Date(dao.date_depot).toLocaleDateString('fr-FR')
+                                : '-'
+                              }
+                            </td>
+                            <td>
+                              {(() => {
+                                const s = computeStatus(dao);
+                                return <span className={s.className}>{s.label}</span>;
+                              })()}
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>

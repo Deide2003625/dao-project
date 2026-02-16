@@ -99,6 +99,8 @@ export async function GET(req: NextRequest) {
         d.date_depot,
         d.statut,
         d.chef_id,
+        d.groupement,
+        d.nom_partenaire,
         u.username as chef_projet
       FROM daos d
       LEFT JOIN users u ON d.chef_id = u.id
@@ -153,6 +155,8 @@ export async function POST(req: NextRequest) {
       autorite,
       chefEquipe,
       membres,
+      groupement,
+      nomPartenaire,
     } = body;
 
     // numero n'est plus requis côté client (car généré côté serveur)
@@ -167,6 +171,18 @@ export async function POST(req: NextRequest) {
 
     // crée les tables si besoin
     await ensureTables(connection);
+
+    // Ajouter les colonnes groupement et nom_partenaire si elles n'existent pas
+    try {
+      await connection.execute(`
+        ALTER TABLE daos 
+        ADD COLUMN IF NOT EXISTS groupement VARCHAR(20) NULL,
+        ADD COLUMN IF NOT EXISTS nom_partenaire VARCHAR(255) NULL
+      `);
+    } catch (err) {
+      // Ignorer les erreurs de colonne existante
+      console.log("Mise à jour table daos (colonnes groupement/nom_partenaire可能 déjà existent):", err);
+    }
 
     // Vérifier que le chef et les membres existent et ont les bons rôles
     const userIds: number[] = [];
@@ -219,8 +235,8 @@ export async function POST(req: NextRequest) {
     // Insérer DAO
     const [insertRes]: any = await connection.execute(
       `
-      INSERT INTO daos (numero, date_depot, objet, description, reference, autorite, statut, chef_id, team_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO daos (numero, date_depot, objet, description, reference, autorite, statut, chef_id, team_id, groupement, nom_partenaire)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       [
         generatedNumero,
@@ -232,6 +248,8 @@ export async function POST(req: NextRequest) {
         'EN_COURS',
         Number(chefEquipe),
         teamId,
+        groupement || null,
+        groupement === "oui" ? nomPartenaire : null,
       ],
     );
 

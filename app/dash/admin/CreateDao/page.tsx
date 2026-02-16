@@ -25,6 +25,10 @@ export default function NewDaoPage() {
   const [membresFlipUp, setMembresFlipUp] = useState(false);
   const [groupement, setGroupement] = useState<string>("");
   const [nomPartenaire, setNomPartenaire] = useState("");
+  const [groupementOptions] = useState([
+    { value: "oui", label: "Oui", description: "DAO avec groupement d'entreprises" },
+    { value: "non", label: "Non", description: "DAO sans groupement" }
+  ]);
 
   useEffect(() => {
     // Génération basique d'un numéro séquentiel conservé en localStorage
@@ -163,8 +167,12 @@ export default function NewDaoPage() {
     if (!chefEquipe) return "Le chef d'équipe doit être assigné.";
     if (membres.length === 0)
       return "Au moins un membre d'équipe doit être sélectionné.";
-    if (groupement === "oui" && !nomPartenaire.trim())
+    
+    // Validation dynamique du groupement
+    if (groupement === "oui" && !nomPartenaire.trim()) {
       return "Le nom de l'entreprise partenaire est requis lorsque le groupement est sélectionné.";
+    }
+    
     return null;
   };
 
@@ -261,86 +269,57 @@ export default function NewDaoPage() {
             </div>
 
             <div className="mb-3">
-  <label className="form-label">Groupement</label>
+              <label className="form-label">Type de groupement</label>
+              
+              <div className="border p-3 bg-white rounded-lg">
+                {/* Options de groupement dynamiques */}
+                {groupementOptions.map((option) => (
+                  <div key={option.value} className="mb-2 last:mb-0">
+                    <label
+                      className="form-check d-flex align-items-start cursor-pointer p-2 rounded hover:bg-gray-50"
+                      style={{
+                        gap: "12px",
+                        fontSize: "0.95rem",
+                      }}
+                    >
+                      <input
+                        className="form-check-input mt-1"
+                        type="radio"
+                        name="groupement"
+                        value={option.value}
+                        checked={groupement === option.value}
+                        onChange={() => {
+                          setGroupement(option.value);
+                          // Réinitialiser le nom du partenaire si l'option "non" est sélectionnée
+                          if (option.value === "non") {
+                            setNomPartenaire("");
+                          }
+                        }}
+                        style={{
+                          width: 18,
+                          height: 18,
+                          minWidth: 18,
+                          minHeight: 18,
+                          margin: 0,
+                        }}
+                      />
+                      <div className="flex-1">
+                        <div className="form-check-label fw-medium">
+                          {option.label}
+                        </div>
+                        <div className="text-muted small">
+                          {option.description}
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-  <div
-    className="border p-2 bg-white"
-    style={{
-      borderRadius: "6px",
-    }}
-  >
-    {/* Option OUI */}
-    <label
-      className="form-check d-flex align-items-center"
-      style={{
-        cursor: "pointer",
-        padding: "6px 8px",
-        gap: "8px",
-        fontSize: "0.95rem",
-      }}
-    >
-      <input
-        className="form-check-input"
-        type="checkbox"
-        checked={groupement === "oui"}
-        onChange={() => {
-          if (groupement === "oui") {
-            setGroupement("");
-            setNomPartenaire("");
-          } else {
-            setGroupement("oui");
-          }
-        }}
-        style={{
-          width: 18,
-          height: 18,
-          minWidth: 18,
-          minHeight: 18,
-          margin: 0,
-          appearance: "checkbox",
-        }}
-      />
-      <span className="form-check-label">Oui</span>
-    </label>
-
-    {/* Option NON */}
-    <label
-      className="form-check d-flex align-items-center"
-      style={{
-        cursor: "pointer",
-        padding: "6px 8px",
-        gap: "8px",
-        fontSize: "0.95rem",
-      }}
-    >
-      <input
-        className="form-check-input"
-        type="checkbox"
-        checked={groupement === "non"}
-        onChange={() => {
-          if (groupement === "non") {
-            setGroupement("");
-          } else {
-            setGroupement("non");
-            setNomPartenaire("");
-          }
-        }}
-        style={{
-          width: 18,
-          height: 18,
-          minWidth: 18,
-          minHeight: 18,
-          margin: 0,
-          appearance: "checkbox",
-        }}
-      />
-      <span className="form-check-label">Non</span>
-    </label>
-  </div>
-</div>
-
+            {/* Champ dynamique pour le nom du partenaire */}
             {groupement === "oui" && (
-              <div className="mb-3">
+              <div className="mb-3 animate-fadeIn">
                 <label className="form-label">Nom de l'entreprise partenaire *</label>
                 <input
                   className="form-control"

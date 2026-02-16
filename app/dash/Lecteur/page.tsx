@@ -1,320 +1,514 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Chart from "chart.js/auto";
 
-// Les 15 tâches DAO
-const daoTasks = [
-  { id: 1, name: "Résumé sommaire DAO et Création du drive" },
-  { id: 2, name: "Demande de caution et garanties" },
-  { id: 3, name: "Identification et renseignement des profils dans le drive" },
-  { id: 4, name: "Identification et renseignement des ABE dans le drive" },
-  { id: 5, name: "Légalisation des ABE, diplômes, certificats, attestations et pièces administratives requis" },
-  { id: 6, name: "Indication directive d'élaboration de l'offre financier" },
-  { id: 7, name: "Elaboration de la méthodologie" },
-  { id: 8, name: "Planification prévisionnelle" },
-  { id: 9, name: "Identification des références précises des équipements et matériels" },
-  { id: 10, name: "Demande de cotation" },
-  { id: 11, name: "Elaboration du squelette des offres" },
-  { id: 12, name: "Rédaction du contenu des OF et OT" },
-  { id: 13, name: "Contrôle et validation des offres" },
-  { id: 14, name: "Impression et présentation des offres (Valider l'étiquette)" },
-  { id: 15, name: "Dépôt des offres et clôture" }
-];
+interface DAO {
+  id: number;
+  reference?: string;
+  objet?: string;
+  autorite?: string;
+  date_depot?: string;
+  statut?: string;
+  created_at?: string;
+  numero?: string;
+  description?: string;
+  chef_id?: number;
+  team_id?: string;
+  groupement?: string;
+  nom_partenaire?: string;
+}
 
-// Données des DAO avec progression des tâches
-const daoData = [
-  {
-    id: 1,
-    name: "DAO-2025-001",
-    reference: "Fourniture équipements",
-    authority: "Ministère Éducation",
-    closingDate: "10/01/2026",
-    status: "en cours",
-    tasksProgress: [100, 80, 60, 40, 30, 25, 20, 15, 10, 5, 0, 0, 0, 0, 0] // Exemple de progression rapide
-  },
-  {
-    id: 2,
-    name: "DAO-2025-002",
-    reference: "Construction bâtiment",
-    authority: "Ville de Paris",
-    closingDate: "15/02/2026",
-    status: "validé",
-    tasksProgress: [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100] // Toutes terminées
-  },
-  {
-    id: 3,
-    name: "DAO-2025-003",
-    reference: "Logiciel gestion",
-    authority: "Hôpital Central",
-    closingDate: "20/03/2026",
-    status: "rejeté",
-    tasksProgress: [100, 100, 100, 100, 80, 60, 40, 20, 10, 5, 0, 0, 0, 0, 0] // Progression moyenne, bloqué
-  }
-];
+interface Task {
+  id: number;
+  dao_id: number;
+  id_task: number;
+  titre?: string;
+  description?: string;
+  statut?: string;
+  progress?: number;
+  date_creation?: string;
+  date_echeance?: string;
+  priorite?: string;
+  assigned_to?: number;
+}
 
-export default function Page() {
-  const chartRef = useRef<HTMLCanvasElement>(null);
-  const chartInstance = useRef<Chart | null>(null);
-  const [selectedDao, setSelectedDao] = useState(daoData[0]);
-  const [speedFilter, setSpeedFilter] = useState("all"); // "all", "fast", "slow", "notStarted"
+interface User {
+  id: number;
+  username: string;
+  name: string;
+  email: string;
+  url_photo: string;
+  role_id: number;
+  roleName: string;
+  roleLabel: string;
+}
 
+export default function LecteurDashboard() {
+  const [daos, setDaos] = useState<DAO[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDao, setSelectedDao] = useState<DAO | null>(null);
+  const [chartsReady, setChartsReady] = useState(false);
+
+  // Fetch data from APIs
   useEffect(() => {
-    if (chartRef.current) {
-      // Détruire l'ancien graphique s'il existe
-      if (chartInstance.current) {
-        chartInstance.current.destroy();
-      }
-
-      const ctx = chartRef.current.getContext("2d");
-      if (ctx) {
-        // Filtrer les tâches selon la vitesse
-        const filteredTasks = filterTasksBySpeed(selectedDao.tasksProgress);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
         
-        chartInstance.current = new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: filteredTasks.map(task => `T${task.id}`),
-            datasets: [
-              {
+        // Fetch DAOs
+        const daosResponse = await fetch('/api/daos');
+        if (daosResponse.ok) {
+          const daosData = await daosResponse.json();
+          setDaos(daosData.success ? daosData.data : []);
+        }
+
+        // Fetch Tasks
+        const tasksResponse = await fetch('/api/tasks');
+        if (tasksResponse.ok) {
+          const tasksData = await tasksResponse.json();
+          setTasks(tasksData.success ? tasksData.data : []);
+        }
+
+        // Fetch Users
+        const usersResponse = await fetch('/api/users');
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          setUsers(usersData.success ? usersData.data : []);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Set first DAO as selected when data is loaded
+  useEffect(() => {
+    if (daos.length > 0 && !selectedDao) {
+      setSelectedDao(daos[0]);
+    }
+  }, [daos, selectedDao]);
+
+  // Calculate statistics
+  const stats = useMemo(() => {
+    return {
+      totalDaos: daos.length,
+      completedDaos: daos.filter(d => {
+        const statut = String(d.statut || "").toUpperCase();
+        return statut === "TERMINEE" || statut === "TERMINE";
+      }).length,
+      inProgressDaos: daos.filter(d => {
+        const statut = String(d.statut || "").toUpperCase();
+        if (statut === "TERMINEE" || statut === "TERMINE") {
+          return false;
+        }
+        if (!d.date_depot) {
+          return true;
+        }
+        const dateDepot = new Date(d.date_depot);
+        const today = new Date();
+        const diffMs = dateDepot.getTime() - today.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        return diffDays >= 4; // Changé de 5 à 4 pour inclure le cas 4 jours
+      }).length,
+      atRiskDaos: daos.filter(d => {
+        const statut = String(d.statut || "").toUpperCase();
+        if (statut === "TERMINEE" || statut === "TERMINE") {
+          return false;
+        }
+        if (!d.date_depot) {
+          return false;
+        }
+        const dateDepot = new Date(d.date_depot);
+        const today = new Date();
+        const diffMs = dateDepot.getTime() - today.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        return diffDays <= 3;
+      }).length,
+      totalTasks: tasks.length,
+      completedTasks: tasks.filter(t => t.progress === 100).length,
+      totalUsers: users.length,
+    };
+  }, [daos, tasks, users]);
+
+  // Get tasks for selected DAO
+  const selectedDaoTasks = useMemo(() => {
+    if (!selectedDao) return [];
+    return tasks.filter(task => task.dao_id === selectedDao.id);
+  }, [selectedDao, tasks]);
+
+  // Calculate DAO status
+  const getDAOStatus = (dao: DAO) => {
+    const statut = String(dao.statut || "").toUpperCase();
+    
+    if (statut === "TERMINEE" || statut === "TERMINE") {
+      return { label: "Terminée", className: "px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800" };
+    }
+    
+    if (!dao.date_depot) {
+      return { label: "En cours", className: "px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800" };
+    }
+    
+    const dateDepot = new Date(dao.date_depot);
+    const today = new Date();
+    const diffMs = dateDepot.getTime() - today.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays >= 4) { // Changé de 5 à 4 pour cohérence
+      return { label: "En cours", className: "px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800" };
+    }
+    
+    if (diffDays <= 3) {
+      return { label: "À risque", className: "px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800" };
+    }
+    
+    // Ce cas ne devrait plus arriver avec la correction, mais on le garde pour sécurité
+    return { label: "En cours", className: "px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800" };
+  };
+
+  // Initialize charts - Only create once, then update data
+  useEffect(() => {
+    // Wait for data to be loaded and selected DAO to be set
+    if (!selectedDao || selectedDaoTasks.length === 0) return;
+
+    // Create charts only once
+    const timer = setTimeout(() => {
+      const progressCtx = document.getElementById('progressChart') as HTMLCanvasElement;
+      const statusCtx = document.getElementById('statusChart') as HTMLCanvasElement;
+      
+      if (progressCtx && statusCtx) {
+        // Check if charts already exist
+        const existingProgressChart = Chart.getChart('progressChart');
+        const existingStatusChart = Chart.getChart('statusChart');
+        
+        if (!existingProgressChart) {
+          // Create progress chart
+          new Chart(progressCtx, {
+            type: 'bar',
+            data: {
+              labels: selectedDaoTasks.sort((a, b) => a.id_task - b.id_task).map(t => t.id_task.toString()),
+              datasets: [{
                 label: 'Progression (%)',
-                data: filteredTasks.map(task => task.progress),
-                backgroundColor: filteredTasks.map(task => getProgressColor(task.progress)),
-                borderColor: filteredTasks.map(task => getBorderColor(task.progress)),
-                borderWidth: 1,
-                borderRadius: 4
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            indexAxis: 'y', // Graphique horizontal pour mieux voir les 15 tâches
-            scales: {
-              x: {
-                beginAtZero: true,
-                max: 100,
-                grid: {
-                  color: 'rgba(0,0,0,0.05)'
-                },
-                title: {
-                  display: true,
-                  text: 'Progression (%)'
-                }
-              },
-              y: {
-                grid: {
-                  display: false
-                },
-                ticks: {
-                  callback: function(value, index) {
-                    // Afficher les noms des tâches tronqués
-                    const taskName = filteredTasks[index]?.name || '';
-                    return taskName.length > 30 ? taskName.substring(0, 30) + '...' : taskName;
-                  }
-                }
-              }
+                data: selectedDaoTasks.sort((a, b) => a.id_task - b.id_task).map(t => t.progress || 0),
+                backgroundColor: selectedDaoTasks.sort((a, b) => a.id_task - b.id_task).map(t => {
+                  const progress = t.progress || 0;
+                  if (progress === 100) return 'rgba(34, 197, 94, 0.8)';
+                  if (progress >= 75) return 'rgba(59, 130, 246, 0.8)';
+                  if (progress >= 50) return 'rgba(251, 146, 60, 0.8)';
+                  if (progress >= 25) return 'rgba(250, 204, 21, 0.8)';
+                  return 'rgba(239, 68, 68, 0.8)';
+                }),
+                borderWidth: 1
+              }]
             },
-            plugins: {
-              legend: {
-                position: 'top',
-                labels: {
-                  boxWidth: 12,
-                  padding: 20
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  max: 100
                 }
               },
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    const taskIndex = context.dataIndex;
-                    const task = filteredTasks[taskIndex];
-                    const progress = context.parsed.x;
-                    return [
-                      `Tâche ${task.id + 1}: ${task.name}`,
-                      `Progression: ${progress}%`,
-                      `Statut: ${getProgressStatus(progress)}`
-                    ];
-                  }
-                }
-              },
-              title: {
-                display: true,
-                text: `Progression des 15 tâches - ${selectedDao.name}`,
-                font: {
-                  size: 16
-                }
+              animation: {
+                duration: 0 // Disable animation for faster updates
               }
             }
-          }
-        });
+          });
+        } else {
+          // Update existing progress chart data
+          const sortedTasks = selectedDaoTasks.sort((a, b) => a.id_task - b.id_task);
+          existingProgressChart.data.labels = sortedTasks.map(t => t.id_task.toString());
+          existingProgressChart.data.datasets[0].data = sortedTasks.map(t => t.progress || 0);
+          existingProgressChart.data.datasets[0].backgroundColor = sortedTasks.map(t => {
+            const progress = t.progress || 0;
+            if (progress === 100) return 'rgba(34, 197, 94, 0.8)';
+            if (progress >= 75) return 'rgba(59, 130, 246, 0.8)';
+            if (progress >= 50) return 'rgba(251, 146, 60, 0.8)';
+            if (progress >= 25) return 'rgba(250, 204, 21, 0.8)';
+            return 'rgba(239, 68, 68, 0.8)';
+          });
+          existingProgressChart.update('none'); // Update without animation
+        }
+        
+        if (!existingStatusChart) {
+          // Create status chart
+          const statusCounts = {
+            completed: selectedDaoTasks.filter(t => (t.progress || 0) === 100).length,
+            inProgress: selectedDaoTasks.filter(t => (t.progress || 0) > 0 && (t.progress || 0) < 100).length,
+            notStarted: selectedDaoTasks.filter(t => (t.progress || 0) === 0).length,
+          };
+
+          new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+              labels: ['Terminées', 'En cours', 'Non démarrées'],
+              datasets: [{
+                data: [statusCounts.completed, statusCounts.inProgress, statusCounts.notStarted],
+                backgroundColor: [
+                  'rgba(34, 197, 94, 0.8)',
+                  'rgba(251, 146, 60, 0.8)',
+                  'rgba(239, 68, 68, 0.8)'
+                ]
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: {
+                duration: 0 // Disable animation for faster updates
+              }
+            }
+          });
+        } else {
+          // Update existing status chart data
+          const statusCounts = {
+            completed: selectedDaoTasks.filter(t => (t.progress || 0) === 100).length,
+            inProgress: selectedDaoTasks.filter(t => (t.progress || 0) > 0 && (t.progress || 0) < 100).length,
+            notStarted: selectedDaoTasks.filter(t => (t.progress || 0) === 0).length,
+          };
+          
+          existingStatusChart.data.datasets[0].data = [
+            statusCounts.completed, 
+            statusCounts.inProgress, 
+            statusCounts.notStarted
+          ];
+          existingStatusChart.update('none'); // Update without animation
+        }
+        
+        setChartsReady(true);
       }
-    }
-  }, [selectedDao, speedFilter]);
+    }, 100); // Increased delay to ensure DOM is ready
 
-  // Filtrer les tâches selon la vitesse de progression
-  const filterTasksBySpeed = (progressArray: number[]) => {
-    return daoTasks.map((task, index) => ({
-      ...task,
-      progress: progressArray[index] || 0,
-      speed: getTaskSpeed(progressArray[index] || 0)
-    })).filter(task => {
-      if (speedFilter === "all") return true;
-      if (speedFilter === "fast") return task.speed === "fast";
-      if (speedFilter === "slow") return task.speed === "slow";
-      if (speedFilter === "notStarted") return task.speed === "notStarted";
-      return true;
-    });
-  };
+    return () => clearTimeout(timer);
+  }, [selectedDao, selectedDaoTasks]);
 
-  // Déterminer la vitesse d'une tâche
-  const getTaskSpeed = (progress: number) => {
-    if (progress === 0) return "notStarted";
-    if (progress === 100) return "fast";
-    if (progress >= 70) return "fast";
-    if (progress >= 30) return "slow";
-    return "verySlow";
-  };
+  // Cleanup charts on unmount
+  useEffect(() => {
+    return () => {
+      const progressChart = Chart.getChart('progressChart');
+      if (progressChart) {
+        progressChart.destroy();
+      }
+      
+      const statusChart = Chart.getChart('statusChart');
+      if (statusChart) {
+        statusChart.destroy();
+      }
+    };
+  }, []);
 
-  // Couleur selon la progression
-  const getProgressColor = (progress: number) => {
-    if (progress === 100) return '#28a745'; // Vert - Terminé
-    if (progress >= 70) return '#20c997'; // Vert clair - Bien avancé
-    if (progress >= 40) return '#ffc107'; // Jaune - En cours
-    if (progress >= 10) return '#fd7e14'; // Orange - Débuté
-    return '#dc3545'; // Rouge - Non commencé
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement du dashboard Lecteur...</p>
+          <p className="text-sm text-gray-500 mt-2">Récupération des DAOs et tâches</p>
+        </div>
+      </div>
+    );
+  }
 
-  const getBorderColor = (progress: number) => {
-    if (progress === 100) return '#218838';
-    if (progress >= 70) return '#1ba87e';
-    if (progress >= 40) return '#e0a800';
-    if (progress >= 10) return '#e06c14';
-    return '#c82333';
-  };
-
-  const getProgressStatus = (progress: number) => {
-    if (progress === 100) return "Terminé";
-    if (progress >= 70) return "Bien avancé";
-    if (progress >= 40) return "En bonne voie";
-    if (progress >= 10) return "Débuté";
-    return "Non commencé";
-  };
-
-  // Calculer la vitesse moyenne du DAO
-  const calculateAverageSpeed = (progressArray: number[]) => {
-    const startedTasks = progressArray.filter(p => p > 0);
-    if (startedTasks.length === 0) return 0;
-    return startedTasks.reduce((a, b) => a + b, 0) / startedTasks.length;
-  };
-
-  // Pourcentage de tâches terminées
-  const getCompletedPercentage = (progressArray: number[]) => {
-    const completed = progressArray.filter(p => p === 100).length;
-    return Math.round((completed / progressArray.length) * 100);
-  };
-
-  const handleDaoSelect = (daoId: number) => {
-    const dao = daoData.find(d => d.id === daoId);
-    if (dao) {
-      setSelectedDao(dao);
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'validé':
-        return <span className="badge badge-success">Terminé</span>;
-      case 'en cours':
-        return <span className="badge badge-warning">En cours</span>;
-      case 'rejeté':
-        return <span className="badge badge-danger">A risque</span>;
-      default:
-        return <span className="badge badge-secondary">{status}</span>;
-    }
-  };
+  if (daos.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+            <p className="font-medium">Aucun DAO disponible</p>
+            <p className="text-sm mt-1">Veuillez contacter l'administrateur pour ajouter des DAOs</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <>
-      {/* ================= HEADER ================= */}
-      <div className="row">
-        <div className="col-12 grid-margin">
-          <div className="d-flex justify-content-between flex-wrap">
-            <div className="d-flex align-items-end flex-wrap">
-              <div className="mr-md-3 mr-xl-5">
-                <h2>Bienvenue sur votre tableau de bord Lecteur</h2>
-              </div>
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Dashboard Lecteur</h1>
+        <p className="text-gray-600 mt-2">Vue d'ensemble des DAO et tâches</p>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 bg-blue-100 rounded-full">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Total DAOs</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.totalDaos}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 bg-green-100 rounded-full">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Terminées</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.completedDaos}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 bg-yellow-100 rounded-full">
+              <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">En cours</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.inProgressDaos}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 bg-red-100 rounded-full">
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">À risque</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.atRiskDaos}</p>
             </div>
           </div>
         </div>
       </div>
-      
-      {/* ================= TABLE DAO ================= */}
-      <div className="row">
-        <div className="col-12 stretch-card">
-          <div className="card">
-            <div className="card-body">
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <p className="card-title mb-0">Liste des DAO</p>
+
+      {/* DAO Selection and Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* DAO Selection */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">Sélectionner un DAO</h2>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {daos.map(dao => {
+              const status = getDAOStatus(dao);
+              return (
+                <div
+                  key={dao.id}
+                  className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                    selectedDao?.id === dao.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  onClick={() => setSelectedDao(dao)}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-medium text-gray-800">{dao.reference || `DAO-${dao.id}`}</p>
+                      <p className="text-sm text-gray-600">{dao.objet || 'Sans objet'}</p>
+                    </div>
+                    <span className={status.className}>
+                      {status.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Progress Chart */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">
+            Progression des tâches {selectedDao ? `- ${selectedDao.reference}` : ''}
+          </h2>
+          <div className="h-64">
+            {selectedDaoTasks.length > 0 ? (
+              <canvas id="progressChart"></canvas>
+            ) : loading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-500">Chargement du graphique...</p>
+                </div>
               </div>
-              <div className="table-responsive">
-                <table className="table table-hover">
-                  <thead>
-                    <tr>
-                      <th>Nom</th>
-                      <th>Référence</th>
-                      <th>Autorité contractante</th>
-                      <th>Date de clôture</th>
-                      <th>Status</th>
-                      <th>Tâches terminées</th>
-                      <th>Progression moyenne</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {daoData.map((dao) => (
-                      <tr 
-                        key={dao.id} 
-                        className={selectedDao.id === dao.id ? 'table-primary' : ''}
-                      >
-                        <td>{dao.name}</td>
-                        <td>{dao.reference}</td>
-                        <td>{dao.authority}</td>
-                        <td>{dao.closingDate}</td>
-                        <td>{getStatusBadge(dao.status)}</td>
-                        <td>
-                          <div className="d-flex align-items-center">
-                            <span className="text-success mr-1">
-                              {dao.tasksProgress.filter(p => p === 100).length}
-                            </span>
-                            <span>/15</span>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="d-flex align-items-center">
-                            <div className="progress flex-grow-1 mr-2" style={{ height: "8px" }}>
-                              <div
-                                className="progress-bar bg-primary"
-                                role="progressbar"
-                                style={{ width: `${calculateAverageSpeed(dao.tasksProgress)}%` }}
-                              ></div>
-                            </div>
-                            <span>{Math.round(calculateAverageSpeed(dao.tasksProgress))}%</span>
-                          </div>
-                        </td>
-                        <td>
-                          <button className="btn btn-sm btn-outline-info ml-2">
-                            <a href="/dash/Lecteur/allDao">Détails</a>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-sm text-gray-500">Aucune tâche pour ce DAO</p>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
-    </>
+
+      {/* Status Chart and Task List */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Status Distribution */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">Distribution des statuts</h2>
+          <div className="h-64">
+            {selectedDaoTasks.length > 0 ? (
+              <canvas id="statusChart"></canvas>
+            ) : loading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-500">Chargement du graphique...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-sm text-gray-500">Aucune tâche pour ce DAO</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Task List */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">
+            Liste des tâches {selectedDao ? `- ${selectedDao.reference}` : ''}
+          </h2>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {selectedDaoTasks.length > 0 ? (
+              selectedDaoTasks.map(task => (
+                <div key={task.id} className="p-3 border border-gray-200 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="font-medium text-gray-800">{task.titre || `Tâche ${task.id}`}</p>
+                    <span className="text-sm text-gray-600">{task.progress || 0}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${task.progress || 0}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))
+            ) : loading ? (
+              <div className="flex items-center justify-center h-48">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-500">Chargement des tâches...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-48">
+                <p className="text-sm text-gray-500">Aucune tâche pour ce DAO</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

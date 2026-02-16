@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { CheckCircle, FileText, Search, ChevronDown, Minus, Plus, Send, X, AtSign } from "lucide-react";
+import { CheckCircle, FileText, Search, ChevronDown, Minus, Plus, Send, X, AtSign, Trash2 } from "lucide-react";
 
 /* =======================
    TYPES
@@ -13,8 +13,6 @@ interface Task {
   description?: string;
   progress: number;
   assigned_to: number;
-  created_at: string;
-  updated_at?: string;
   dao_reference?: string;
   dao_objet?: string;
 }
@@ -63,6 +61,9 @@ export default function MembreEquipeDashboard() {
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
       setCurrentUser(parsedUser);
+      console.log('Utilisateur actuel chargé:', parsedUser);
+    } else {
+      console.error('Aucun utilisateur trouvé dans localStorage');
     }
   }, []);
 
@@ -122,11 +123,14 @@ export default function MembreEquipeDashboard() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
+        console.log('Chargement des utilisateurs pour les mentions...');
         const response = await fetch('/api/users');
         if (response.ok) {
           const result = await response.json();
+          console.log('Utilisateurs reçus:', result);
           if (result.success) {
             setUsers(result.data || []);
+            console.log('Utilisateurs chargés:', result.data?.length || 0);
           }
         }
       } catch (error) {
@@ -210,14 +214,23 @@ export default function MembreEquipeDashboard() {
 
     // Détecter si on tape @ pour les mentions
     const lastAtIndex = value.lastIndexOf('@');
+    console.log('Détection @:', { lastAtIndex, value, users: users.length });
+    
     if (lastAtIndex !== -1) {
       const textAfterAt = value.substring(lastAtIndex + 1);
+      console.log('Texte après @:', textAfterAt);
+      
       // Vérifier qu'il n'y a pas d'espace après le @
       if (!textAfterAt.includes(' ')) {
         setMentionSearch(textAfterAt.toLowerCase());
         setShowMentionSuggestions(true);
+        console.log('Suggestions activées, recherche:', textAfterAt.toLowerCase());
+        
+        // Forcer l'affichage pour tester
+        console.log('TEST: showMentionSuggestions = true');
       } else {
         setShowMentionSuggestions(false);
+        console.log('Suggestions désactivées (espace détecté)');
       }
     } else {
       setShowMentionSuggestions(false);
@@ -235,7 +248,15 @@ export default function MembreEquipeDashboard() {
 
   // Submit comment
   const submitComment = async (taskId: number) => {
-    if (!commentText.trim() || !currentUser) return;
+    console.log('submitComment appelé avec:', { taskId, commentText, currentUser });
+    
+    if (!commentText.trim() || !currentUser) {
+      console.error('Commentaire vide ou utilisateur non connecté:', { 
+        commentText: !!commentText.trim(), 
+        currentUser: !!currentUser 
+      });
+      return;
+    }
 
     try {
       // Vérifier si c'est une mention directe au début du message
@@ -253,25 +274,31 @@ export default function MembreEquipeDashboard() {
         }
       }
 
+      const commentData = {
+        user_id: currentUser.id,
+        content: commentText,
+        mentioned_user_id: mentionedUserId || null,
+        is_public: isPublic
+      };
+      
+      console.log('Envoi du commentaire:', commentData);
+
       const response = await fetch(`/api/tasks/${taskId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          user_id: currentUser.id,
-          content: commentText,
-          mentioned_user_id: mentionedUserId || null,
-          is_public: isPublic
-        }),
+        body: JSON.stringify(commentData),
       });
+
+      console.log('Réponse du serveur:', response.status, response.statusText);
 
       if (response.ok) {
         const result = await response.json();
+        console.log('Commentaire envoyé avec succès:', result);
         if (result.success) {
           await fetchComments(taskId);
           setCommentText("");
-          setCommentingTask(null);
           setShowMentionSuggestions(false);
           
           // Ici, vous pouvez ajouter la logique de notification
@@ -281,9 +308,51 @@ export default function MembreEquipeDashboard() {
             console.log("Notification pour tous les utilisateurs");
           }
         }
+      } else {
+        const errorText = await response.text();
+        console.error('Erreur lors de l\'envoi du commentaire:', errorText);
       }
     } catch (error) {
       console.error('Erreur lors de l\'envoi du commentaire:', error);
+    }
+  };
+
+  // Delete comment
+  const deleteComment = async (commentId: number, taskId: number) => {
+    console.log('Tentative de suppression du commentaire:', { commentId, taskId, currentUserId: currentUser?.id });
+    
+    if (!currentUser) {
+      console.error('Utilisateur non connecté');
+      return;
+    }
+
+    try {
+      const deleteUrl = `/api/tasks/${taskId}/comments/${commentId}`;
+      console.log('URL de suppression:', deleteUrl);
+      
+      // Pour le test, on envoie pas de body
+      const response = await fetch(deleteUrl, {
+        method: 'DELETE',
+      });
+
+      console.log('Réponse du serveur:', response.status, response.statusText);
+      console.log('Headers de la réponse:', Object.fromEntries(response.headers.entries()));
+
+      if (response.ok) {
+        console.log('Commentaire supprimé avec succès');
+        await fetchComments(taskId);
+      } else {
+        const responseText = await response.text();
+        console.log('Réponse du serveur (status non-ok):', response.status, responseText);
+        
+        // Si le status n'est pas ok mais la réponse est vide, on considère que ça a marché
+        if (!responseText || responseText.trim() === '') {
+          console.log('Réponse vide mais suppression probablement réussie');
+          await fetchComments(taskId);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors de la suppression du commentaire:', error);
     }
   };
 
@@ -312,6 +381,13 @@ export default function MembreEquipeDashboard() {
     u.name.toLowerCase().includes(mentionSearch.toLowerCase()) && 
     u.id !== currentUser?.id
   );
+  
+  console.log('Utilisateurs filtrés:', { 
+    totalUsers: users.length, 
+    mentionSearch, 
+    filteredCount: filteredUsers.length, 
+    filteredUsers 
+  });
 
   const updateProgress = async (taskId: number, value: number) => {
     const newValue = Math.min(100, Math.max(0, value));
@@ -556,15 +632,34 @@ export default function MembreEquipeDashboard() {
                                         </span>
                                       )}
                                     </div>
-                                    <span className="text-xs text-gray-500">
-                                      {new Date(comment.created_at).toLocaleString('fr-FR', {
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                        year: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      })}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-gray-500">
+                                        {new Date(comment.created_at).toLocaleString('fr-FR', {
+                                          day: '2-digit',
+                                          month: '2-digit',
+                                          year: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        })}
+                                      </span>
+                                      {comment.user_id === currentUser?.id && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            console.log('Bouton supprimer cliqué pour:', { 
+                                              commentId: comment.id, 
+                                              taskId: task.id, 
+                                              commentUserId: comment.user_id, 
+                                              currentUserId: currentUser?.id 
+                                            });
+                                            deleteComment(comment.id, task.id);
+                                          }}
+                                          className="text-red-500 hover:text-red-700 text-xs"
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                   <p className="text-sm text-gray-700">
                                     {comment.content}
@@ -605,7 +700,11 @@ export default function MembreEquipeDashboard() {
                             />
 
                             {/* SUGGESTIONS DE MENTIONS */}
-                            {showMentionSuggestions && filteredUsers.length > 0 && (
+                            {(() => {
+                              console.log('Affichage suggestions:', { showMentionSuggestions, filteredUsersLength: filteredUsers.length, filteredUsers });
+                              // TEST: Afficher même si filteredUsers est vide
+                              return showMentionSuggestions; // && filteredUsers.length > 0;
+                            })() && (
                               <div 
                                 className="absolute bottom-full mb-1 w-full bg-white border rounded-lg shadow-lg max-h-40 overflow-y-auto z-10"
                                 style={mentionPosition || {}}
@@ -613,20 +712,26 @@ export default function MembreEquipeDashboard() {
                                 <div className="p-2 text-xs text-gray-500 border-b">
                                   Mentionner un utilisateur (message privé)
                                 </div>
-                                {filteredUsers.map((user) => (
-                                  <button
-                                    key={user.id}
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      insertMention(user);
-                                    }}
-                                    className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2"
-                                  >
-                                    <AtSign size={14} className="text-blue-600" />
-                                    <span className="text-sm">{user.name}</span>
-                                  </button>
-                                ))}
+                                {filteredUsers.length > 0 ? (
+                                  filteredUsers.map((user) => (
+                                    <button
+                                      key={user.id}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        insertMention(user);
+                                      }}
+                                      className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2"
+                                    >
+                                      <AtSign size={14} className="text-blue-600" />
+                                      <span className="text-sm">{user.name}</span>
+                                    </button>
+                                  ))
+                                ) : (
+                                  <div className="p-4 text-center text-gray-500">
+                                    Aucun utilisateur trouvé
+                                  </div>
+                                )}
                               </div>
                             )}
 

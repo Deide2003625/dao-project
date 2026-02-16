@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
     const connection = await db();
     const [rows]: any = await connection.execute(
-      "SELECT id, dao_id, id_task, assigned_to FROM tasks WHERE dao_id = ?",
+      "SELECT id, dao_id, id_task, titre, description, assigned_to FROM tasks WHERE dao_id = ?",
       [Number(daoId)],
     );
 
@@ -46,10 +46,18 @@ export async function POST(req: NextRequest) {
 
     const connection = await db();
 
+    // Récupérer le nom de la tâche depuis la table task
+    const [taskRows]: any = await connection.execute(
+      "SELECT nom FROM task WHERE id = ?",
+      [Number(id_task)],
+    );
+
+    const taskName = taskRows.length > 0 ? taskRows[0].nom : `Tâche ${id_task}`;
+
     await connection.execute(
-      `INSERT INTO tasks (dao_id, id_task, description, assigned_to, progress, created_at)
-       VALUES (?, ?, ?, ?, ?, NOW())`,
-      [Number(dao_id), Number(id_task), description ?? null, Number(assigned_to), 0],
+      `INSERT INTO tasks (dao_id, id_task, titre, description, assigned_to, progress, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+      [Number(dao_id), Number(id_task), taskName, description ?? null, Number(assigned_to), 0],
     );
 
     return NextResponse.json({ success: true });

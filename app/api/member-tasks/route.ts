@@ -56,18 +56,22 @@ export async function GET(request: Request) {
       const query = `
         SELECT 
           t.id,
-          t.dao_id,
           t.id_task,
+          t.dao_id,
+          t.titre,
           t.description,
+          t.statut,
           t.progress,
+          t.date_creation,
+          t.date_echeance,
+          t.priorite,
           t.assigned_to,
-          t.created_at,
           d.reference as dao_reference,
           d.objet as dao_objet
         FROM tasks t
         LEFT JOIN daos d ON t.dao_id = d.id
         WHERE t.assigned_to = ?
-        ORDER BY t.created_at DESC
+        ORDER BY t.date_creation DESC
       `;
       
       console.log("Exécution de la requête:", query);

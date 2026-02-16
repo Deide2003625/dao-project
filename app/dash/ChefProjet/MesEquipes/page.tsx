@@ -17,6 +17,20 @@ interface ApiTeamDao {
   members: { id: number; name: string }[];
 }
 
+interface Task {
+  id: number;
+  id_task: string;
+  titre: string;
+  description: string;
+  statut: string;
+  progress: number;
+  dao_id: number;
+  assigned_to: number;
+  date_creation: string;
+  date_echeance: string;
+  priorite: string;
+}
+
 interface TeamData {
   id: number;
   name: string;
@@ -24,8 +38,9 @@ interface TeamData {
   memberCount: number;
   daoCount: number;
   status: string;
-  members: { id: number; name: string; role: string; status: string }[];
+  members: { id: number; name: string; role: string; status: string; tasks: Task[] }[];
   daos: { id: number; name: string; progress: number }[];
+  tasks: Task[];
 }
 
 export default function ChefProjetDashboard() {
@@ -33,6 +48,16 @@ export default function ChefProjetDashboard() {
   const [selectedTeam, setSelectedTeam] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [teamsData, setTeamsData] = useState<TeamData[]>([]);
+
+  // Fonction pour calculer la progression basée sur le statut
+  const getProgressFromStatus = (statut: string) => {
+    switch (statut) {
+      case 'termine': return 100;
+      case 'en_cours': return 50;
+      case 'a_faire': return 0;
+      default: return 0;
+    }
+  };
 
   useEffect(() => {
     try {
@@ -46,6 +71,20 @@ export default function ChefProjetDashboard() {
       if (!chefId) {
         return;
       }
+
+      // Fonction pour charger les tâches d'un membre
+      const loadMemberTasks = async (memberId: number) => {
+        try {
+          const res = await fetch(`/api/member-tasks?userId=${memberId}`);
+          if (res.ok) {
+            const json = await res.json();
+            return json.data || [];
+          }
+        } catch (error) {
+          console.error(`Erreur chargement tâches membre ${memberId}:`, error);
+        }
+        return [];
+      };
 
       (async () => {
         try {
@@ -64,6 +103,7 @@ export default function ChefProjetDashboard() {
               name: m.name,
               role: "Membre d'équipe",
               status: "available",
+              tasks: [], // Sera chargé plus tard
             }));
 
             return {
@@ -75,6 +115,7 @@ export default function ChefProjetDashboard() {
               daoCount: 1,
               status: "active",
               members,
+              tasks: [], // Initialisation vide, les tâches sont dans les membres
               daos: [
                 {
                   id: item.daoId,
@@ -85,7 +126,27 @@ export default function ChefProjetDashboard() {
             };
           });
 
-          setTeamsData(mapped);
+          // Charger les tâches pour chaque membre
+          const membersWithTasks = await Promise.all(
+            mapped.map(async (team) => {
+              const membersWithTasksData = await Promise.all(
+                team.members.map(async (member) => {
+                  const tasks = await loadMemberTasks(member.id);
+                  return {
+                    ...member,
+                    tasks: tasks,
+                  };
+                })
+              );
+
+              return {
+                ...team,
+                members: membersWithTasksData,
+              };
+            })
+          );
+
+          setTeamsData(membersWithTasks);
         } catch (e) {
           console.error("Erreur réseau chargement équipes chef", e);
         }
@@ -246,81 +307,101 @@ export default function ChefProjetDashboard() {
                     {/* DÉTAILS DE L'ÉQUIPE (DÉPLIÉ) */}
                     {selectedTeam === team.id && (
                       <div className="mt-4 pt-4 border-t animate-fadeIn">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {/* MEMBRES */}
-                          <div>
-                            <h4 className="font-medium mb-3">
-                              Membres de l'équipe
-                            </h4>
-                            <div className="space-y-3">
-                              {team.members.map((member) => (
-                                <div
-                                  key={member.id}
-                                  className="flex items-center justify-between p-2 hover:bg-gray-100 rounded"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <div
-                                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                        member.status === "available"
-                                          ? "bg-green-100"
-                                          : member.status === "busy"
-                                            ? "bg-yellow-100"
-                                            : "bg-gray-100"
-                                      }`}
-                                    >
-                                      <User
-                                        size={16}
-                                        className={
+                        {/* TÂCHES ASSIGNÉES */}
+                        <div>
+                          <h4 className="font-medium mb-3">
+                            Tâches Assignées
+                          </h4>
+                          <div className="space-y-4">
+                            {team.members.map((member) => {
+                              // Filtrer les tâches pour ce DAO spécifique
+                              const memberTasksForDao = member.tasks?.filter((task: Task) => task.dao_id === team.id) || [];
+                              
+                              if (memberTasksForDao.length === 0) {
+                                return null; // Ne pas afficher les membres sans tâches sur ce DAO
+                              }
+                              
+                              return (
+                                <div key={member.id} className="border rounded-lg bg-gray-50">
+                                  {/* En-tête avec nom du membre */}
+                                  <div className="bg-white px-4 py-3 border-b rounded-t-lg">
+                                    <div className="flex items-center gap-3">
+                                      <div
+                                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
                                           member.status === "available"
-                                            ? "text-green-600"
+                                            ? "bg-green-100"
                                             : member.status === "busy"
-                                              ? "text-yellow-600"
-                                              : "text-gray-400"
-                                        }
-                                      />
+                                              ? "bg-yellow-100"
+                                              : "bg-gray-100"
+                                        }`}
+                                      >
+                                        <User
+                                          size={16}
+                                          className={
+                                            member.status === "available"
+                                              ? "text-green-600"
+                                              : member.status === "busy"
+                                                ? "text-yellow-600"
+                                                : "text-gray-400"
+                                          }
+                                        />
+                                      </div>
+                                      <div>
+                                        <p className="font-semibold text-sm">
+                                          {member.name}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {member.role}
+                                        </p>
+                                      </div>
                                     </div>
-                                    <div>
-                                      <p className="font-medium text-sm">
-                                        {member.name}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                        {member.role}
-                                      </p>
-                                    </div>
+                                  </div>
+                                  
+                                  {/* Liste des tâches du membre */}
+                                  <div className="p-4 space-y-3">
+                                    {memberTasksForDao.map((task: Task) => {
+                                      // Utiliser la progression sauvegardée, fallback sur le statut si non défini
+                                      const progress = task.progress !== undefined ? task.progress : getProgressFromStatus(task.statut);
+                                      return (
+                                        <div key={task.id} className="bg-white p-3 rounded border">
+                                          <div className="flex justify-between items-center mb-2">
+                                            <span className="text-sm font-medium text-blue-600 truncate">
+                                              {task.id_task} - {task.titre || task.description || `Tâche ${task.id}`}
+                                            </span>
+                                            <span className="text-sm font-semibold text-blue-600">
+                                              {progress}%
+                                            </span>
+                                          </div>
+                                          <div className="w-full bg-gray-200 h-2 rounded">
+                                            <div
+                                              className={`h-2 rounded ${
+                                                task.statut === 'termine' ? 'bg-green-600' :
+                                                task.statut === 'en_cours' ? 'bg-yellow-600' : 'bg-blue-600'
+                                              }`}
+                                              style={{ width: `${progress}%` }}
+                                            />
+                                          </div>
+                                          <div className="mt-2 flex justify-between items-center">
+                                            <span className="text-xs text-gray-500">
+                                              Statut: {task.statut}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* DAOS */}
-                          <div>
-                            <h4 className="font-medium mb-3">
-                              Tâches Assignées
-                            </h4>
-                            <div className="space-y-3">
-                              {team.daos.map((dao) => (
-                                <div
-                                  key={dao.id}
-                                  className="block p-3 border rounded-lg bg-white"
-                                >
-                                  <div className="flex justify-between items-center mb-2">
-                                    <span className="font-medium text-sm text-blue-600">
-                                      {dao.name}
-                                    </span>
-                                    <span className="text-sm font-semibold text-blue-600">
-                                      {dao.progress}%
-                                    </span>
-                                  </div>
-                                  <div className="w-full bg-gray-200 h-2 rounded">
-                                    <div
-                                      className="h-2 bg-blue-600 rounded"
-                                      style={{ width: `${dao.progress}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                              );
+                            })}
+                            
+                            {/* Message si aucune tâche assignée sur ce DAO */}
+                            {team.members.every((member) => 
+                              (member.tasks?.filter((task: Task) => task.dao_id === team.id) || []).length === 0
+                            ) && (
+                              <div className="text-sm text-gray-500 italic text-center py-8">
+                                Aucune tâche assignée sur ce DAO
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

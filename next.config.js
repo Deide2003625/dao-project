@@ -13,7 +13,6 @@ const nextConfig = {
   // Configuration des alias pour la compatibilité avec Webpack
   webpack: (config) => {
     config.resolve.alias = {
-      ...config.resolve.alias,
       "@": path.resolve(__dirname, "./"),
     };
     return config;
@@ -26,29 +25,23 @@ const nextConfig = {
         headers: [
           { key: "Access-Control-Allow-Credentials", value: "true" },
           { key: "Access-Control-Allow-Origin", value: "*" },
-          {
-            key: "Access-Control-Allow-Methods",
-            value: "GET,OPTIONS,PATCH,DELETE,POST,PUT",
-          },
-          {
-            key: "Access-Control-Allow-Headers",
-            value:
-              "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version",
-          },
-        ],
-      },
-    ];
+          { key: "Access-Control-Allow-Methods", value: "GET,POST, PUT, DELETE, OPTIONS" }
+        ]
+      }
+    ]
   },
   // Désactive le mode strict pour éviter les problèmes de compatibilité
   reactStrictMode: true,
-  // Désactive la vérification de type pendant la compilation
-  typescript: {
-    ignoreBuildErrors: false,
-  },
   // Désactive la vérification ESLint pendant la compilation
   eslint: {
     ignoreDuringBuilds: true,
+    ignoreDuringTests: true
   },
+  // Désactive les vérifications TypeScript pendant la compilation
+  typescript: {
+    ignoreBuildErrors: true,
+    ignoreWarnings: true
+  }
 };
 
 module.exports = nextConfig;

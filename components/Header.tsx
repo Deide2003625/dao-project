@@ -160,6 +160,17 @@ export default function Header() {
     }
   }, [user?.id]);
 
+  // Rafraîchir les notifications périodiquement
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const interval = setInterval(() => {
+      fetchNotifications();
+    }, 30000); // Rafraîchir toutes les 30 secondes
+
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
   // Fermer le menu quand on clique en dehors
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -268,21 +279,15 @@ export default function Header() {
               ) : (
                 messages.slice(0, 3).map((message) => (
                   <a key={message.id} className="dropdown-item">
-                    <div className="item-thumbnail">
-                      <Image
-                        src={message.sender.photo}
-                        width={40}
-                        height={40}
-                        className="profile-pic"
-                        alt="profile"
-                      />
-                    </div>
                     <div className="item-content flex-grow">
                       <h6 className="ellipsis font-weight-normal">
                         {message.sender.name}
+                        {message.subject === 'Message privé' && (
+                          <span className="badge badge-warning ml-2">Privé</span>
+                        )}
                       </h6>
                       <p className="font-weight-light small-text text-muted mb-0">
-                        {message.subject}
+                        {message.content.length > 1000 ? message.content.substring(0, 50) + '...' : message.content}
                       </p>
                     </div>
                   </a>
