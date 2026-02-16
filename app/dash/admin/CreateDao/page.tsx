@@ -43,7 +43,7 @@ export default function NewDaoPage() {
     // Charger utilisateurs (endpoint existant attendu : /api/users)
     (async () => {
       try {
-        const res = await fetch("/api/users");
+        const res = await fetch("http://localhost:3000/api/users");
         if (!res.ok) {
           console.error("Erreur lors de la récupération des utilisateurs:", await res.text());
           return;
@@ -52,7 +52,7 @@ export default function NewDaoPage() {
         console.log("Données brutes de l'API:", JSON.stringify(data, null, 2));
         
         // Vérifier la structure des données
-        const usersData = Array.isArray(data) ? data : (data.users || []);
+        const usersData = Array.isArray(data) ? data : (data.data || []);
         console.log("Liste des utilisateurs (après extraction):", JSON.stringify(usersData, null, 2));
         
         // Afficher les clés du premier utilisateur (si disponible)
@@ -81,11 +81,11 @@ export default function NewDaoPage() {
           }
         };
 
-        // Pour les membres d'équipe (role_id = '4' ou 4)
+        // Pour les membres d'équipe (role_id = 4)
         const membersList = usersData
           .filter((u: any) => {
-            const roleId = String(u.role_id || u.role);
-            return roleId === '4';
+            const roleId = Number(u.role_id || u.role);
+            return roleId === 4;
           })
           .map((u: any) => ({
             id: u.id,
@@ -96,11 +96,11 @@ export default function NewDaoPage() {
         console.log("Membres d'équipe:", membersList);
         setUsers(membersList);
 
-        // Pour les chefs d'équipe (rôles '2' ou 2, '3' ou 3)
+        // Pour les chefs d'équipe (rôles 2 ou 3)
         const teamLeadersList = usersData
           .filter((u: any) => {
-            const roleId = String(u.role_id || u.role);
-            return roleId === '2' || roleId === '3';
+            const roleId = Number(u.role_id || u.role);
+            return roleId === 2 || roleId === 3;
           })
           .map((u: any) => ({
             id: u.id,
