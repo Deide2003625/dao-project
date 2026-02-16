@@ -71,11 +71,11 @@ export default function Page() {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/daos", { cache: "no-store" });
+      const res = await fetch("/api/dao", { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        console.error("API /api/daos error:", json);
+        console.error("API /api/dao error:", json);
         setDaos([]);
         setError(json?.message || "Erreur lors du chargement des DAO");
         return;
