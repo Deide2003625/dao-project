@@ -40,7 +40,7 @@ jobs:
           npm audit --json > audit.json
           npx audit-html -f audit.json -o audit-report.html
       - name: Upload npm audit report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: npm-audit-report
           path: audit-report.html
@@ -56,7 +56,7 @@ jobs:
         run: |
           npx semgrep-json-to-html semgrep-results.json semgrep-report.html || echo "skip if tool missing"
       - name: Upload Semgrep report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: semgrep-report
           path: semgrep-report.html
@@ -73,7 +73,7 @@ jobs:
         run: |
           npx gitleaks-json-to-html gitleaks.json gitleaks-report.html || echo "skip if tool missing"
       - name: Upload Gitleaks report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: gitleaks-report
           path: gitleaks-report.html
