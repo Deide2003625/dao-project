@@ -32,20 +32,36 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
 
-      - name: Build and get digest
-        run: |
-          docker build -t myapp .
-          echo "DIGEST=$(docker inspect myapp --format='{{.Id}}')" >> $GITHUB_ENV
+  nuclei-scan:
+    runs-on: ubuntu-24.04
+    steps:
+      # Épingler les actions par hash SHA pour la sécurité supply chain
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Scan image
+      - name: Install Nuclei
         run: |
-          grype myapp@${{ env.DIGEST }} \
-            --fail-on critical \
-            -o json > grype-report.json
+          # Épingler la version pour reproductibilité
+          go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.6.0
+          nuclei -update-templates
 
-      - name: Upload report
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Run Nuclei
+        run: |
+          nuclei -l targets.txt \
+            -severity critical,high \
+            -sarif-export nuclei.sarif \
+            -jsonl -o nuclei-results.jsonl
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169 # v3.28.0
+        with:
+          sarif_file: nuclei.sarif
+
+      - name: Upload Results
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: nuclei-results
+          path: nuclei-results.jsonlactions/upload-artifact@v4
         with:
           name: grype-report
           path: grype-report.json
