@@ -43,21 +43,15 @@ jobs:
         run: npm install
 
       # 5️⃣ npm audit + HTML report
-      - name: Install audit-html
-        run: npm install -g audit-html
       - name: Run npm audit
         run: |
           if [ -f package.json ]; then
             npm audit --json > audit.json
-            audit-html -f audit.json -o audit-report.html
+            npx audit-html -f audit.json -o audit-report.html
           else
             echo "No package.json found, skipping npm audit"
           fi
-      - name: Upload npm audit report
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-audit-report
-          path: audit-report.html
+
 
       # 6️⃣ Semgrep SAST
       - name: Run Semgrep
