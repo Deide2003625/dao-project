@@ -2,9 +2,9 @@ name: SAST Scan (CodeQL)
 
 on:
   push:
-    branches: ["main"]
+    branches: ["feature/ModifAll"]
   pull_request:
-    branches: ["main"]
+    branches: ["feature/ModifAll"]
   schedule:
     - cron: '0 3 * * 1' # chaque lundi à 03h
 
