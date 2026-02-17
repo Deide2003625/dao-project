@@ -43,6 +43,9 @@ jobs:
 
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
