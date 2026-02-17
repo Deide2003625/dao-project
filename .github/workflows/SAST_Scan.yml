@@ -31,3 +31,21 @@ jobs:
           scanners: 'vuln'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
+
+      - name: Build and get digest
+        run: |
+          docker build -t myapp .
+          echo "DIGEST=$(docker inspect myapp --format='{{.Id}}')" >> $GITHUB_ENV
+
+      - name: Scan image
+        run: |
+          grype myapp@${{ env.DIGEST }} \
+            --fail-on critical \
+            -o json > grype-report.json
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grype-report
+          path: grype-report.json
