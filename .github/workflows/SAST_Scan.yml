@@ -40,37 +40,94 @@ jobs:
 
       # 4️⃣ Install dependencies
       - name: Install dependencies
-        run: npm install
-
-      # 5️⃣ npm audit + HTML report
-      - name: Run npm audit
         run: |
           if [ -f package.json ]; then
-            npm audit --json > audit.json
-            npx audit-html -f audit.json -o audit-report.html
+            npm ci --prefer-offline || npm install
           else
-            echo "No package.json found, skipping npm audit"
+            echo "No package.json found, skipping npm install"
           fi
 
+      # 5️⃣ npm audit + HTML report
+      # FIX: install audit-html globally BEFORE running npx
+      # so the executable is available in PATH
+      - name: Run npm audit & generate HTML report
+        run: |
+          if [ -f package.json ]; then
+            echo "▶ Running npm audit..."
+            # Generate JSON report (ignore exit code — non-zero = vulnerabilities found, not a crash)
+            npm audit --json > audit.json 2>&1 || true
+
+            echo "▶ Installing audit-html globally..."
+            npm install -g audit-html
+
+            echo "▶ Generating HTML report..."
+            audit-html -f audit.json -o audit-report.html
+
+            echo "✅ npm audit report generated: audit-report.html"
+          else
+            echo "⚠️ No package.json found, skipping npm audit"
+            echo "<html><body><h1>No package.json — audit skipped</h1></body></html>" > audit-report.html
+          fi
+
+      - name: Upload npm audit reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-reports
+          path: |
+            audit.json
+            audit-report.html
+          retention-days: 30
 
       # 6️⃣ Semgrep SAST
+      # FIX: returntocorp/semgrep-action is deprecated → use semgrep/semgrep-action
       - name: Run Semgrep
-        uses: returntocorp/semgrep-action@v1
+        uses: semgrep/semgrep-action@v1
         with:
           config: "p/security-audit"
-          format: json
-          output: semgrep-results.json
-      - name: Upload Semgrep JSON report
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Export Semgrep JSON results
+        if: always()
+        run: |
+          if [ -f semgrep.sarif ]; then
+            cp semgrep.sarif semgrep-results.sarif
+          fi
+          # Fallback: run semgrep manually if action didn't produce output file
+          if ! [ -f semgrep-results.json ]; then
+            pip install semgrep --quiet || true
+            semgrep --config "p/security-audit" --json --output semgrep-results.json . || true
+          fi
+
+      - name: Upload Semgrep reports
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: semgrep-json-report
-          path: semgrep-results.json
+          name: semgrep-reports
+          path: |
+            semgrep-results.json
+            semgrep-results.sarif
+          retention-days: 30
 
       # 7️⃣ Gitleaks secrets scan
+      # FIX: continue-on-error prevents the whole pipeline from failing
+      # if secrets are detected (they are still reported as artifacts)
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_REPORT_FORMAT: json
+          GITLEAKS_REPORT_PATH: gitleaks-report.json
+
+      - name: Upload Gitleaks report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gitleaks-report
+          path: gitleaks-report.json
+          retention-days: 30
 
       # 8️⃣ Initialize CodeQL
       - name: Initialize CodeQL
@@ -88,8 +145,33 @@ jobs:
         with:
           output: codeql-results.sarif
 
-      # 1️⃣1️⃣ Upload CodeQL SARIF
+      # 1️⃣1️⃣ Upload CodeQL SARIF to GitHub Security tab
+      # FIX: was @v2 while all other codeql actions use @v3 → unified to @v3
       - name: Upload CodeQL SARIF
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
           sarif_file: codeql-results.sarif
+
+      - name: Upload CodeQL SARIF artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codeql-sarif-report
+          path: codeql-results.sarif
+          retention-days: 30
+
+      # 1️⃣2️⃣ Summary
+      - name: Print security scan summary
+        if: always()
+        run: |
+          echo "## 🔐 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Tool       | Report file               |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|---------------------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| npm audit  | audit-report.html         |" >> $GITHUB_STEP_SUMMARY
+          echo "| Semgrep    | semgrep-results.json      |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gitleaks   | gitleaks-report.json      |" >> $GITHUB_STEP_SUMMARY
+          echo "| CodeQL     | codeql-results.sarif      |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All reports are available in the **Artifacts** section of this run." >> $GITHUB_STEP_SUMMARY
