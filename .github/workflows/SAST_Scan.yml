@@ -30,72 +30,72 @@ jobs:
         with:
           node-version: 20
 
-      # 3️⃣ Install dependencies
+      # 3️⃣ Verify Node & npm
+      - name: Verify Node & npm
+        run: |
+          node -v
+          npm -v
+          pwd
+          ls -la
+
+      # 4️⃣ Install dependencies
       - name: Install dependencies
         run: npm install
 
-      # 4️⃣ npm audit + HTML report
+      # 5️⃣ npm audit + HTML report
+      - name: Install audit-html
+        run: npm install -g audit-html
       - name: Run npm audit
         run: |
-          npm audit --json > audit.json
-          npx audit-html -f audit.json -o audit-report.html
+          if [ -f package.json ]; then
+            npm audit --json > audit.json
+            audit-html -f audit.json -o audit-report.html
+          else
+            echo "No package.json found, skipping npm audit"
+          fi
       - name: Upload npm audit report
         uses: actions/upload-artifact@v4
         with:
           name: npm-audit-report
           path: audit-report.html
 
-      # 5️⃣ Semgrep SAST + HTML report
+      # 6️⃣ Semgrep SAST
       - name: Run Semgrep
         uses: returntocorp/semgrep-action@v1
         with:
           config: "p/security-audit"
           format: json
           output: semgrep-results.json
-      - name: Convert Semgrep JSON to HTML
-        run: |
-          npx semgrep-json-to-html semgrep-results.json semgrep-report.html || echo "skip if tool missing"
-      - name: Upload Semgrep report
+      - name: Upload Semgrep JSON report
         uses: actions/upload-artifact@v4
         with:
-          name: semgrep-report
-          path: semgrep-report.html
+          name: semgrep-json-report
+          path: semgrep-results.json
 
-      # 6️⃣ Gitleaks secrets scan + HTML
+      # 7️⃣ Gitleaks secrets scan
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          format: json
-          output: gitleaks.json
-      - name: Convert Gitleaks JSON to HTML
-        run: |
-          npx gitleaks-json-to-html gitleaks.json gitleaks-report.html || echo "skip if tool missing"
-      - name: Upload Gitleaks report
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-report
-          path: gitleaks-report.html
 
-      # 7️⃣ Initialize CodeQL
+      # 8️⃣ Initialize CodeQL
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: javascript
 
-      # 8️⃣ Autobuild for CodeQL
+      # 9️⃣ Autobuild for CodeQL
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
 
-      # 9️⃣ CodeQL Analysis
+      # 🔟 CodeQL Analysis
       - name: Run CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
           output: codeql-results.sarif
 
-      # 10️⃣ Upload CodeQL SARIF & HTML
-      - name: Upload CodeQL report
+      # 1️⃣1️⃣ Upload CodeQL SARIF
+      - name: Upload CodeQL SARIF
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: codeql-results.sarif
