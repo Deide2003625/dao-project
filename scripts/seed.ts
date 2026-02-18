@@ -191,6 +191,7 @@ async function seedDatabase() {
         console.log("Données de test ajoutées à la table purchases.");
       }
     }
+  } catch (error) {
     console.error("Erreur lors du peuplement de la base de données :", error);
   } finally {
     await connection.end();

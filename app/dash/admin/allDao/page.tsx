@@ -207,7 +207,7 @@ export default function AllDaoPage() {
               {filteredDaos.map((dao) => (
                 <article
                   key={dao.id}
-                  onClick={() => router.push(`/dash/admin/details`)}
+                  onClick={() => router.push(`/dash/admin/details/${dao.id}`)}
                   className="bg-white p-4 rounded shadow cursor-pointer hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start justify-between">

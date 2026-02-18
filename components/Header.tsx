@@ -68,18 +68,30 @@ export default function Header() {
   const fetchMessages = async () => {
     if (!user?.id) return;
 
+    console.log(' Header fetchMessages - Début du chargement');
+    console.log(' User ID:', user.id);
+
     setLoadingMessages(true);
     try {
-      const response = await fetch(`/api/messages?userId=${user.id}`);
+      const response = await fetch(`/api/messages?user_id=${user.id}`);
+      console.log(' Header fetchMessages - Response status:', response.status);
+      
       const data = await response.json();
+      console.log(' Header fetchMessages - Response data:', data);
 
       if (data.success) {
-        setMessages(data.messages);
+        console.log(' Header fetchMessages - Messages chargés:', data.data);
+        setMessages(data.data || []);
+      } else {
+        console.log(' Header fetchMessages - Erreur API:', data.message);
+        setMessages([]);
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des messages:", error);
+      console.error(" Header fetchMessages - Erreur lors du chargement des messages:", error);
+      setMessages([]);
     } finally {
       setLoadingMessages(false);
+      console.log(' Header fetchMessages - Fin du chargement');
     }
   };
 
@@ -89,16 +101,53 @@ export default function Header() {
 
     setLoadingNotifications(true);
     try {
-      const response = await fetch(`/api/notifications?userId=${user.id}`);
+      const response = await fetch(`/api/notifications?user_id=${user.id}`);
       const data = await response.json();
 
       if (data.success) {
-        setNotifications(data.notifications);
+        setNotifications(data.data || []);
       }
     } catch (error) {
       console.error("Erreur lors du chargement des notifications:", error);
     } finally {
       setLoadingNotifications(false);
+    }
+  };
+
+  // Fonction pour masquer un message (ne pas le supprimer de la base)
+  const deleteMessage = async (messageId: number, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    if (!user?.id) return;
+    
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce message ?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/messages/hide', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          message_id: messageId
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log(' Message masqué avec succès pour l\'utilisateur');
+        // Rafraîchir les messages
+        await fetchMessages();
+      } else {
+        console.error(' Erreur lors du masquage du message:', data.message);
+      }
+    } catch (error) {
+      console.error(' Erreur réseau lors du masquage du message:', error);
     }
   };
 
@@ -219,6 +268,8 @@ export default function Header() {
   };
 
   console.log("Rendu du Header - État utilisateur:", user);
+  console.log("Rendu du Header - Messages:", messages);
+  console.log("Rendu du Header - Messages count:", messages?.filter(m => !m.isRead).length || 0);
 
   return (
     <nav className="navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
@@ -251,16 +302,15 @@ export default function Header() {
           {/* Messages Dropdown */}
           <li className="nav-item dropdown mr-1">
             <a
-              className="nav-link count-indicator dropdown-toggle d-flex justify-content-center align-items-center"
+              className="nav-link dropdown-toggle d-flex justify-content-center align-items-center"
               href="#"
               data-bs-toggle="dropdown"
               aria-expanded="false"
             >
-              <i className="mdi mdi-message-text mx-0"></i>
-              <span className="count">{messages.filter(m => !m.isRead).length}</span>
+              <i className="mdi mdi-message-text mx-0" style={{ fontSize: '20px' }}></i>
             </a>
 
-            <div className="dropdown-menu dropdown-menu-right navbar-dropdown">
+            <div className="dropdown-menu dropdown-menu-right navbar-dropdown" style={{ maxHeight: '400px', overflowY: 'auto' }}>
               <p className="mb-0 font-weight-normal float-left dropdown-header">
                 Messages
               </p>
@@ -270,78 +320,42 @@ export default function Header() {
                     Chargement...
                   </p>
                 </div>
-              ) : messages.length === 0 ? (
+              ) : messages?.length === 0 ? (
                 <div className="dropdown-item">
                   <p className="font-weight-light small-text text-muted mb-0">
                     Aucun message
                   </p>
                 </div>
               ) : (
-                messages.slice(0, 3).map((message) => (
-                  <a key={message.id} className="dropdown-item">
-                    <div className="item-content flex-grow">
+                messages?.length > 0 && messages.map((message) => (
+                  <div key={message?.id || Math.random()} className="dropdown-item position-relative">
+                    <button
+                      onClick={(e) => deleteMessage(message?.id, e)}
+                      className="position-absolute top-0 right-0 btn btn-sm btn-link text-danger p-1"
+                      style={{ zIndex: 10 }}
+                      title="Masquer le message"
+                    >
+                      <i className="mdi mdi-close" style={{ fontSize: '14px' }}></i>
+                    </button>
+                    <div className="item-content flex-grow pr-4">
                       <h6 className="ellipsis font-weight-normal">
-                        {message.sender.name}
-                        {message.subject === 'Message privé' && (
+                        {message.user_name || 'Utilisateur'}
+                        {!message.is_public && (
                           <span className="badge badge-warning ml-2">Privé</span>
                         )}
                       </h6>
                       <p className="font-weight-light small-text text-muted mb-0">
-                        {message.content.length > 1000 ? message.content.substring(0, 50) + '...' : message.content}
+                        {message.content?.length > 1000 ? message.content.substring(0, 50) + '...' : message.content || 'Pas de contenu'}
                       </p>
                     </div>
-                  </a>
+                  </div>
                 ))
               )}
             </div>
           </li>
 
           {/* Notifications */}
-          <li className="nav-item dropdown mr-4">
-            <a
-              className="nav-link count-indicator dropdown-toggle d-flex align-items-center justify-content-center notification-dropdown"
-              href="#"
-              data-bs-toggle="dropdown"
-              aria-expanded="false"
-            >
-              <i className="mdi mdi-bell mx-0"></i>
-              <span className="count">{notifications.filter(n => !n.isRead).length}</span>
-            </a>
-            <div className="dropdown-menu dropdown-menu-right navbar-dropdown">
-              <p className="mb-0 font-weight-normal float-left dropdown-header">
-                Notifications
-              </p>
-              {loadingNotifications ? (
-                <div className="dropdown-item">
-                  <p className="font-weight-light small-text text-muted mb-0">
-                    Chargement...
-                  </p>
-                </div>
-              ) : notifications.length === 0 ? (
-                <div className="dropdown-item">
-                  <p className="font-weight-light small-text text-muted mb-0">
-                    Aucune notification
-                  </p>
-                </div>
-              ) : (
-                notifications.slice(0, 3).map((notification) => (
-                  <a key={notification.id} className="dropdown-item">
-                    <div className="item-thumbnail">
-                      <div className={`item-icon ${notification.bgColor}`}>
-                        <i className={`mdi ${notification.icon} mx-0`}></i>
-                      </div>
-                    </div>
-                    <div className="item-content">
-                      <h6 className="font-weight-normal">{notification.title}</h6>
-                      <p className="font-weight-light small-text mb-0 text-muted">
-                        {notification.message}
-                      </p>
-                    </div>
-                  </a>
-                ))
-              )}
-            </div>
-          </li>
+         
 
           {/* Profile Dropdown */}
           <li

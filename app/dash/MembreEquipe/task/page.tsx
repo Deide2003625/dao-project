@@ -145,7 +145,7 @@ export default function MembreEquipeDashboard() {
   const fetchComments = async (taskId: number) => {
     console.log(`Fetching comments for task ${taskId}...`);
     try {
-      const response = await fetch(`/api/tasks/${taskId}/comments`);
+      const response = await fetch(`/api/messages?task_id=${taskId}`);
       console.log('Response status:', response.status);
       
       const responseText = await response.text();
@@ -174,23 +174,38 @@ export default function MembreEquipeDashboard() {
       
       // Si la réponse est OK, essayer de la parser
       try {
-        const result = JSON.parse(responseText);
-        console.log('Parsed response:', result);
-        
-        if (result && result.success) {
+        const data = JSON.parse(responseText);
+        console.log('Parsed data:', data);
+
+        if (data.success && data.data) {
+          // Adapter les données au format attendu
+          const adaptedComments = data.data.map((msg: any) => ({
+            id: msg.id,
+            task_id: msg.task_id,
+            user_id: msg.user_id,
+            content: msg.content,
+            created_at: msg.created_at,
+            user_name: msg.user_name || 'Utilisateur',
+            mentioned_user_id: msg.mentioned_user_id,
+            mentioned_user_name: msg.mentioned_user_name,
+            is_public: msg.is_public,
+            isRead: false // Par défaut, les nouveaux commentaires sont non lus
+          }));
+
+          console.log(`✅ ${adaptedComments.length} commentaires récupérés pour la tâche ${taskId}`);
           setComments(prev => ({
             ...prev,
-            [taskId]: Array.isArray(result.data) ? result.data : []
+            [taskId]: adaptedComments
           }));
         } else {
-          console.error('Réponse API invalide:', result);
+          console.log('❌ Aucun commentaire trouvé ou erreur dans les données');
           setComments(prev => ({
             ...prev,
             [taskId]: []
           }));
         }
       } catch (parseError) {
-        console.error('Erreur lors de l\'analyse de la réponse JSON:', parseError);
+        console.error('❌ Erreur lors de l\'analyse de la réponse JSON:', parseError);
         console.error('Contenu de la réponse:', responseText);
         setComments(prev => ({
           ...prev,
@@ -198,7 +213,7 @@ export default function MembreEquipeDashboard() {
         }));
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des commentaires:', error);
+      console.error('❌ Erreur lors du chargement des commentaires:', error);
       // En cas d'erreur, initialiser avec un tableau vide
       setComments(prev => ({
         ...prev,
@@ -247,73 +262,54 @@ export default function MembreEquipeDashboard() {
   };
 
   // Submit comment
-  const submitComment = async (taskId: number) => {
-    console.log('submitComment appelé avec:', { taskId, commentText, currentUser });
-    
-    if (!commentText.trim() || !currentUser) {
-      console.error('Commentaire vide ou utilisateur non connecté:', { 
-        commentText: !!commentText.trim(), 
-        currentUser: !!currentUser 
-      });
-      return;
+  const addComment = async () => {
+    if (!commentText.trim() || !commentingTask || !currentUser) return;
+
+    // Vérifier si c'est une mention directe au début du message
+    const mentionMatch = commentText.match(/^@(\w+)/);
+    let mentionedUserId = null;
+    let isPublic = true;
+
+    if (mentionMatch) {
+      const mentionedUserName = mentionMatch[1].toLowerCase();
+      const mentionedUser = users.find(u => u.name.toLowerCase() === mentionedUserName);
+      
+      if (mentionedUser) {
+        mentionedUserId = mentionedUser.id;
+        isPublic = false; // C'est une mention privée
+      }
     }
 
     try {
-      // Vérifier si c'est une mention directe au début du message
-      const mentionMatch = commentText.match(/^@(\w+)/);
-      let mentionedUserId = null;
-      let isPublic = true;
-
-      if (mentionMatch) {
-        const mentionedUserName = mentionMatch[1].toLowerCase();
-        const mentionedUser = users.find(u => u.name.toLowerCase() === mentionedUserName);
-        
-        if (mentionedUser) {
-          mentionedUserId = mentionedUser.id;
-          isPublic = false; // C'est une mention privée
-        }
-      }
-
-      const commentData = {
-        user_id: currentUser.id,
-        content: commentText,
-        mentioned_user_id: mentionedUserId || null,
-        is_public: isPublic
-      };
-      
-      console.log('Envoi du commentaire:', commentData);
-
-      const response = await fetch(`/api/tasks/${taskId}/comments`, {
+      const response = await fetch('/api/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(commentData),
+        body: JSON.stringify({
+          task_id: commentingTask,
+          user_id: currentUser.id,
+          content: commentText.trim(),
+          mentioned_user_id: mentionedUserId,
+          mentioned_user_name: mentionedUserId ? users.find(u => u.id === mentionedUserId)?.name : undefined,
+          is_public: isPublic
+        }),
       });
 
-      console.log('Réponse du serveur:', response.status, response.statusText);
+      const data = await response.json();
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Commentaire envoyé avec succès:', result);
-        if (result.success) {
-          await fetchComments(taskId);
-          setCommentText("");
-          setShowMentionSuggestions(false);
-          
-          // Ici, vous pouvez ajouter la logique de notification
-          if (mentionedUserId) {
-            console.log(`Notification envoyée à l'utilisateur ${mentionedUserId}`);
-          } else {
-            console.log("Notification pour tous les utilisateurs");
-          }
-        }
+      if (data.success) {
+        console.log('✅ Commentaire ajouté avec succès:', data.data);
+        
+        // Rafraîchir les commentaires pour cette tâche
+        await fetchComments(commentingTask);
+        setCommentText('');
+        setShowMentionSuggestions(false);
       } else {
-        const errorText = await response.text();
-        console.error('Erreur lors de l\'envoi du commentaire:', errorText);
+        console.error('❌ Erreur lors de l\'ajout du commentaire:', data.message);
       }
     } catch (error) {
-      console.error('Erreur lors de l\'envoi du commentaire:', error);
+      console.error('❌ Erreur réseau lors de l\'ajout du commentaire:', error);
     }
   };
 
@@ -737,7 +733,7 @@ export default function MembreEquipeDashboard() {
 
                             <div className="flex justify-end mt-2">
                               <button
-                                onClick={() => submitComment(task.id)}
+                                onClick={addComment}
                                 disabled={!commentText.trim()}
                                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
                               >

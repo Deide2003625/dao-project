@@ -1,0 +1,17 @@
+console.log('=== ERREUR POSTCSS TAILWIND ===');
+console.log('');
+console.log('❌ Erreur détectée:');
+console.log('Error: It looks like you\'re trying to use `tailwindcss` directly as a PostCSS plugin');
+console.log('');
+console.log('🔍 Cause du problème:');
+console.log('- Tailwind CSS v3+ nécessite @tailwindcss/postcss comme plugin PostCSS');
+console.log('- La configuration actuelle utilise tailwindcss directement');
+console.log('- Le plugin PostCSS a été déplacé dans un package séparé');
+console.log('');
+console.log('🔧 Solution:');
+console.log('1. Installer @tailwindcss/postcss');
+console.log('2. Mettre à jour postcss.config.js');
+console.log('3. Redémarrer le serveur');
+console.log('');
+console.log('📦 Commande d\'installation:');
+console.log('npm install @tailwindcss/postcss');

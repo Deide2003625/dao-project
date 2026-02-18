@@ -190,9 +190,7 @@ export default function AllDaoPage() {
         {/* DAO list */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm text-gray-500">
-              Cliquer sur une carte pour ouvrir le détail
-            </span>
+           
             <span className="text-sm text-gray-500">
               {filteredDaos.length} DAO{filteredDaos.length > 1 ? 's' : ''} trouvé{filteredDaos.length > 1 ? 's' : ''}
             </span>
@@ -258,11 +256,7 @@ export default function AllDaoPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 flex justify-end">
-                    <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                      Voir détails →
-                    </button>
-                  </div>
+                  
                 </article>
               ))}
             </div>

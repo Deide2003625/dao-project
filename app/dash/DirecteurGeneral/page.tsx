@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import {
   FileText,
   Users,
@@ -14,6 +16,8 @@ import {
   BarChart3,
   PieChart,
   Activity,
+  MessageSquare,
+  User,
 } from "lucide-react";
 
 interface DAO {
@@ -47,6 +51,19 @@ interface User {
   url_photo: string | null;
 }
 
+interface Comment {
+  id: number;
+  user: string;
+  role: string;
+  text: string;
+  time: string;
+  task_id: number;
+  user_id?: number;
+  mentioned_user_id?: number;
+  mentioned_user_name?: string;
+  is_public?: boolean;
+}
+
 export default function DirecteurGeneralDashboard() {
   const [daos, setDaos] = useState<DAO[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -54,6 +71,15 @@ export default function DirecteurGeneralDashboard() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDAO, setSelectedDAO] = useState<DAO | null>(null);
+  
+  // États pour les commentaires
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [globalComment, setGlobalComment] = useState("");
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
+  
   const chartRef = useRef<HTMLCanvasElement>(null);
   const pieChartRef = useRef<HTMLCanvasElement>(null);
   const barChartRef = useRef<HTMLCanvasElement>(null);
@@ -112,14 +138,317 @@ export default function DirecteurGeneralDashboard() {
         const usersResult = await usersResponse.json();
         console.log("Résultat Users API:", usersResult);
         setUsers(usersResult.data || []);
-      } else {
-        console.error("Erreur Users:", await usersResponse.text());
       }
+
+      // Charger les commentaires
+      await loadComments();
+      
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
       console.log("=== FIN FETCH DATA ===");
+    }
+  };
+
+  // Charger les commentaires
+  const loadComments = async () => {
+    try {
+      const response = await fetch(`/api/messages?task_id=1`);
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        // Adapter les données de la base au format attendu
+        const adaptedComments = result.data.map((msg: any) => ({
+          id: msg.id,
+          user: msg.user_name || 'Utilisateur',
+          role: 'Utilisateur',
+          text: msg.content,
+          time: new Date(msg.created_at).toLocaleString('fr-FR'),
+          task_id: msg.task_id,
+          user_id: msg.user_id,
+          mentioned_user_id: msg.mentioned_user_id,
+          mentioned_user_name: msg.mentioned_user_name,
+          is_public: msg.is_public
+        }));
+        
+        setComments(adaptedComments);
+      }
+    } catch (error) {
+      // Erreur silencieuse
+    }
+  };
+
+  // Filtrer les commentaires pour la tâche sélectionnée avec logique de visibilité
+  const getFilteredComments = () => {
+    const taskComments = comments.filter(c => c.task_id === 1);
+    return taskComments.filter(comment => {
+      // Exclure les messages de l'utilisateur lui-même
+      if (comment.user_id === currentUser?.id) return false;
+      
+      // Toujours afficher les commentaires publics des autres utilisateurs
+      if (comment.is_public) return true;
+      
+      // Afficher les mentions privées uniquement au destinataire
+      return comment.mentioned_user_id === currentUser?.id;
+    });
+  };
+
+  // Gérer les changements dans le textarea
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setGlobalComment(value);
+
+    // Détecter si l'utilisateur tape @ pour les mentions
+    const lastAtIndex = value.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const textAfterAt = value.substring(lastAtIndex + 1);
+      const spaceIndex = textAfterAt.indexOf(' ');
+      
+      if (spaceIndex === -1) {
+        // L'utilisateur est en train de taper une mention
+        setMentionSearch(textAfterAt);
+        setShowMentionSuggestions(true);
+      } else {
+        setShowMentionSuggestions(false);
+      }
+    } else {
+      setShowMentionSuggestions(false);
+    }
+  };
+
+  // Insérer une mention
+  const insertMention = (user: User) => {
+    const lastAtIndex = globalComment.lastIndexOf('@');
+    const newText = globalComment.substring(0, lastAtIndex) + `@${user.username} `;
+    setGlobalComment(newText);
+    setShowMentionSuggestions(false);
+    commentInputRef.current?.focus();
+  };
+
+  // Ajouter un commentaire global
+  const addGlobalComment = async () => {
+    if (!globalComment.trim()) return;
+
+    let mentionedUserId: number | undefined;
+    let isPublic = true;
+
+    // Vérifier s'il y a une mention @
+    const mentionMatch = globalComment.match(/@(\w+)/);
+    if (mentionMatch) {
+      const mentionedUserName = mentionMatch[1].toLowerCase();
+      const mentionedUser = users.find(u => u.username.toLowerCase() === mentionedUserName);
+      
+      if (mentionedUser) {
+        mentionedUserId = mentionedUser.id;
+        isPublic = false; // Si mention, c'est un message privé
+      }
+    }
+
+    try {
+      // Sauvegarder le commentaire en base de données
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          task_id: 1, // Utiliser une tâche par défaut pour le dashboard
+          user_id: currentUser?.id || 43,
+          content: globalComment.trim(),
+          mentioned_user_id: mentionedUserId,
+          mentioned_user_name: mentionedUserId ? users.find(u => u.id === mentionedUserId)?.username : undefined,
+          is_public: isPublic
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Rafraîchir les commentaires
+        await loadComments();
+        setGlobalComment('');
+        setShowMentionSuggestions(false);
+      }
+    } catch (error) {
+      // Erreur silencieuse
+    }
+    
+    // Ne pas fermer automatiquement le modal - laisser l'utilisateur décider
+  };
+
+  // Ouvrir le modal de commentaire
+  const openCommentModal = () => {
+    setShowCommentModal(true);
+  };
+
+  // Fonction pour télécharger en PDF directement
+  const downloadPDF = async (elementId: string, filename: string) => {
+    try {
+      // Afficher un indicateur de chargement
+      const loadingIndicator = document.createElement('div');
+      loadingIndicator.innerHTML = 'Génération du PDF...';
+      loadingIndicator.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        z-index: 9999;
+        font-size: 16px;
+      `;
+      document.body.appendChild(loadingIndicator);
+
+      // Attendre plus longtemps que les graphiques soient rendus
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Toujours utiliser le body pour éviter les problèmes d'iframe
+      const element = document.body;
+      
+      console.log('Capture du body entier pour éviter les problèmes iframe...');
+
+      // Configuration html2canvas ultra-minimaliste pour éviter TOUTES les erreurs de couleurs
+      const canvas = await html2canvas(element, {
+        scale: 1.5,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0,
+        // Options désactivées pour éviter les problèmes de couleurs
+        foreignObjectRendering: false,
+        removeContainer: true,
+        imageTimeout: 15000,
+        // Forcer l'utilisation des couleurs standards
+        ignoreElements: (element: Element): boolean => {
+          const htmlElement = element as HTMLElement;
+          const tagName = element.tagName?.toLowerCase() || '';
+          
+          if (tagName === 'script' || tagName === 'style' || tagName === 'link' || tagName === 'meta') {
+            return true;
+          }
+          
+          if (element.classList?.contains('loading-indicator') ||
+              element.classList?.contains('modal') ||
+              element.classList?.contains('toast') ||
+              element.classList?.contains('notification')) {
+            return true;
+          }
+          
+          if (element.getAttribute?.('role') === 'dialog' || element.getAttribute?.('role') === 'alert') {
+            return true;
+          }
+          
+          if (htmlElement.style && (htmlElement.style.backgroundImage || htmlElement.style.filter || htmlElement.style.backdropFilter)) {
+            return true;
+          }
+          
+          return false;
+        },
+        // Désactiver le parsing CSS avancé
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight,
+        // Forcer les couleurs de base
+        onclone: (clonedDoc: Document) => {
+          // Forcer toutes les couleurs à des valeurs standards
+          const allElements = clonedDoc.querySelectorAll('*');
+          allElements.forEach((el: Element) => {
+            const htmlEl = el as HTMLElement;
+            const computedStyle = window.getComputedStyle(htmlEl);
+            
+            // Remplacer toutes les couleurs problématiques par des couleurs standards
+            const color = computedStyle.color;
+            const bgColor = computedStyle.backgroundColor;
+            const borderColor = computedStyle.borderColor;
+            
+            // Forcer les couleurs standards
+            if (color && (color.includes('lab(') || color.includes('oklab(') || color.includes('oklch(') || color.includes('lch('))) {
+              htmlEl.style.color = '#000000';
+            }
+            if (bgColor && (bgColor.includes('lab(') || bgColor.includes('oklab(') || bgColor.includes('oklch(') || bgColor.includes('lch('))) {
+              htmlEl.style.backgroundColor = '#ffffff';
+            }
+            if (borderColor && (borderColor.includes('lab(') || borderColor.includes('oklab(') || borderColor.includes('oklch(') || borderColor.includes('lch('))) {
+              htmlEl.style.borderColor = '#dee2e6';
+            }
+          });
+        }
+      });
+
+      console.log('Canvas généré avec succès, dimensions:', canvas.width, 'x', canvas.height);
+
+      // Créer le PDF
+      const imgData = canvas.toDataURL('image/png', 0.8); // Qualité réduite
+      const pdf = new jsPDF({
+        orientation: element.scrollWidth > element.scrollHeight ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      // Calculer les dimensions pour A4
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgY = 10; // Marge en haut
+
+      // Ajouter l'image au PDF
+      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+
+      // Télécharger le PDF
+      pdf.save(filename);
+
+      console.log('PDF généré et téléchargé avec succès:', filename);
+
+      // Supprimer l'indicateur de chargement
+      document.body.removeChild(loadingIndicator);
+
+    } catch (error) {
+      console.error('Erreur lors de la génération du PDF:', error);
+      
+      // Supprimer l'indicateur en cas d'erreur
+      const loadingIndicator = document.querySelector('div[style*="position: fixed"]');
+      if (loadingIndicator && loadingIndicator.parentNode) {
+        loadingIndicator.parentNode.removeChild(loadingIndicator);
+      }
+
+      // Afficher un message d'erreur détaillé à l'utilisateur
+      const errorMessage = document.createElement('div');
+      errorMessage.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 5px;">Erreur PDF</div>
+        <div style="font-size: 12px;">La génération du PDF a échoué. Veuillez réessayer.</div>
+      `;
+      errorMessage.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #ef4444;
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        z-index: 10000;
+        font-size: 14px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        max-width: 300px;
+      `;
+      document.body.appendChild(errorMessage);
+
+      // Auto-supprimer après 5 secondes
+      setTimeout(() => {
+        if (document.body.contains(errorMessage)) {
+          document.body.removeChild(errorMessage);
+        }
+      }, 5000);
     }
   };
 
@@ -237,47 +566,12 @@ export default function DirecteurGeneralDashboard() {
       const ctx = barChartRef.current.getContext("2d");
       if (ctx) {
         const priorityCounts = {
-          "haute": tasks.filter(t => t.priorite === "haute").length,
-          "moyenne": tasks.filter(t => t.priorite === "moyenne").length,
-          "basse": tasks.filter(t => t.priorite === "basse").length,
+          
         };
 
-        console.log("Répartition des priorités tâches:", priorityCounts);
+        
 
-        new Chart(ctx, {
-          type: "bar",
-          data: {
-            labels: Object.keys(priorityCounts),
-            datasets: [
-              {
-                label: "Nombre de tâches",
-                data: Object.values(priorityCounts),
-                backgroundColor: [
-                  "rgba(239, 68, 68, 0.8)",
-                  "rgba(245, 158, 11, 0.8)",
-                  "rgba(34, 197, 94, 0.8)",
-                ],
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: {
-                display: false,
-              },
-              title: {
-                display: true,
-                text: "Répartition des priorités",
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-              },
-            },
-          },
-        });
+       
       }
     }
   };
@@ -434,10 +728,14 @@ export default function DirecteurGeneralDashboard() {
               <h1 className="text-2xl font-bold text-gray-900">Dashboard Directeur Général</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <Users className="w-4 h-4" />
-                <span>{currentUser?.username || "Directeur Général"}</span>
-              </div>
+              {/* Icône de commentaire */}
+              <button
+                onClick={openCommentModal}
+                className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                title="Ajouter un commentaire"
+              >
+                <MessageSquare size={20} />
+              </button>
             </div>
           </div>
         </div>
@@ -445,7 +743,7 @@ export default function DirecteurGeneralDashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <StatCard
             title="Total DAO"
             value={stats.totalDaos}
@@ -464,42 +762,51 @@ export default function DirecteurGeneralDashboard() {
             icon={<Activity className="w-6 h-6 text-green-600" />}
             color="green"
           />
-          <StatCard
-            title="Utilisateurs"
-            value={stats.totalUsers}
-            icon={<Users className="w-6 h-6 text-purple-600" />}
-            color="purple"
-          />
+          
         </div>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold mb-4">Progression des DAO</h3>
-            <canvas ref={chartRef}></canvas>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold mb-4">Répartition des statuts</h3>
-            <canvas ref={pieChartRef}></canvas>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm mb-8">
-          <h3 className="text-lg font-semibold mb-4">Répartition des priorités</h3>
-          <canvas ref={barChartRef}></canvas>
-        </div>
+       <div className="w-full mb-8">
+  <div id="progression-chart" className="bg-white p-6 rounded-lg shadow-sm w-full">
+    <div className="flex justify-between items-center mb-4">
+      <h3 className="text-lg font-semibold">
+        Progression des DAO
+      </h3>
+      <button
+        onClick={() => downloadPDF('progression-chart', 'progression-dao.pdf')}
+        className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+        title="Télécharger en PDF"
+      >
+        <FileText size={16} />
+      </button>
+    </div>
+    <div className="w-full h-[500px]">
+      <canvas ref={chartRef} className="w-full h-full"></canvas>
+    </div>
+  </div>
+</div>
+        
 
         {/* DAOs List */}
-        <div className="bg-white rounded-lg shadow-sm">
+        <div id="daos-list" className="bg-white rounded-lg shadow-sm">
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">Liste des DAO</h3>
-              <button 
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                onClick={() => window.location.reload()}
-              >
-                Rafraîchir
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={() => setSelectedDAO(null)}
+                >
+                  Voir tout
+                </button>
+                <button
+                  onClick={() => downloadPDF('daos-list', 'liste-dao.pdf')}
+                  className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                  title="Télécharger en PDF"
+                >
+                  <FileText size={16} />
+                </button>
+              </div>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -649,6 +956,75 @@ export default function DirecteurGeneralDashboard() {
           </div>
         </div>
       </main>
+
+      {/* Modal de commentaire */}
+      {showCommentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Commentaires globaux</h2>
+              <button
+                onClick={() => setShowCommentModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Formulaire d'ajout de commentaire */}
+            <div className="border-t pt-4">
+              <div className="flex gap-3">
+                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                  <User size={16} className="text-gray-600" />
+                </div>
+                <div className="flex-1">
+                  <textarea
+                    ref={commentInputRef}
+                    value={globalComment}
+                    onChange={handleCommentChange}
+                    placeholder="Ajouter un commentaire global..."
+                    className="w-full p-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={3}
+                  />
+                  
+                  {/* Suggestions de mentions */}
+                  {showMentionSuggestions && (
+                    <div className="mt-2 p-2 bg-white border rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                      {users
+                        .filter(u => u.username.toLowerCase().includes(mentionSearch.toLowerCase()))
+                        .map((user) => (
+                          <div
+                            key={user.id}
+                            onClick={() => insertMention(user)}
+                            className="flex items-center gap-2 p-2 hover:bg-gray-100 cursor-pointer rounded"
+                          >
+                            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-blue-600 text-xs font-bold">
+                                {user.username.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <span className="text-sm">{user.username}</span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex justify-end mt-3">
+                <button
+                  onClick={addGlobalComment}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Envoyer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

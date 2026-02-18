@@ -9,8 +9,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let daoId: string = '';
+  
   try {
-    const daoId = await params.id;
+    const resolvedParams = await params;
+    daoId = resolvedParams.id;
     
     if (!daoId) {
       return NextResponse.json(
@@ -23,24 +26,23 @@ export async function GET(
     
     const [daos] = await connection.execute(`
       SELECT 
-        id,
-        reference,
-        numero,
-        objet,
-        description,
-        statut,
-        date_depot,
-        chef_id,
-        team_id,
-        groupement,
-        nom_partenaire,
-        created_at,
-        updated_at
-      FROM daos 
-      WHERE id = ?
+        d.id,
+        d.reference,
+        d.numero,
+        d.objet,
+        d.description,
+        d.statut,
+        d.date_depot,
+        d.chef_id,
+        d.team_id,
+        d.groupement,
+        d.nom_partenaire,
+        d.created_at,
+        u.username as chef_projet
+      FROM daos d
+      LEFT JOIN users u ON d.chef_id = u.id
+      WHERE d.id = ?
     `, [daoId]);
-
-    await connection.end();
 
     if ((daos as any[]).length === 0) {
       return NextResponse.json(
@@ -55,9 +57,22 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error("Erreur lors de la récupération du DAO:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : 'No stack available';
+    
+    console.error("Erreur détaillée lors de la récupération du DAO:", {
+      message: errorMessage,
+      stack: errorStack,
+      daoId,
+      errorType: error?.constructor?.name || 'Unknown'
+    });
+    
     return NextResponse.json(
-      { error: "Erreur serveur" },
+      { 
+        error: "Erreur serveur",
+        details: errorMessage,
+        daoId
+      },
       { status: 500 }
     );
   }
@@ -69,7 +84,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const daoId = await params.id;
+    const resolvedParams = await params;
+    const daoId = resolvedParams.id;
     const body = await request.json();
     
     if (!daoId) {
@@ -162,10 +178,11 @@ export async function PUT(
 // DELETE - Supprimer un DAO
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const daoId = params.id;
+    const resolvedParams = await params;
+    const daoId = resolvedParams.id;
     
     if (!daoId) {
       return NextResponse.json(

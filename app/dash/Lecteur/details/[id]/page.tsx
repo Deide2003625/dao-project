@@ -67,7 +67,7 @@ export default function DaoDetailDynamic() {
         setError(null);
 
         // Récupérer le DAO spécifique
-        const daoResponse = await fetch(`http://localhost:3000/api/daos/${daoId}`);
+        const daoResponse = await fetch(`/api/daos/${daoId}`);
         if (!daoResponse.ok) {
           throw new Error('DAO non trouvé');
         }
@@ -75,14 +75,14 @@ export default function DaoDetailDynamic() {
         setDao(daoData.data);
 
         // Récupérer les tâches du DAO
-        const tasksResponse = await fetch(`http://localhost:3000/api/tasks?daoId=${daoId}`);
+        const tasksResponse = await fetch(`/api/tasks?daoId=${daoId}`);
         if (tasksResponse.ok) {
           const tasksData = await tasksResponse.json();
           setTasks(tasksData.data || []);
         }
 
         // Récupérer les commentaires des tâches
-        const commentsResponse = await fetch(`http://localhost:3000/api/tasks/${daoId}/comments`);
+        const commentsResponse = await fetch(`/api/tasks/${daoId}/comments`);
         if (commentsResponse.ok) {
           const commentsData = await commentsResponse.json();
           setComments(commentsData.data || []);
@@ -111,7 +111,7 @@ export default function DaoDetailDynamic() {
   // Mise à jour de la progression d'une tâche
   const updateProgress = async (taskId: number, value: number) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/tasks/${taskId}`, {
+      const response = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -138,7 +138,7 @@ export default function DaoDetailDynamic() {
     if (!selectedTaskId || !newComment.trim()) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/api/tasks/${selectedTaskId}/comments`, {
+      const response = await fetch(`/api/tasks/${selectedTaskId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

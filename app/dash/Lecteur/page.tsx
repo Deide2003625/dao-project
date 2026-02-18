@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import Chart from "chart.js/auto";
+import { MessageSquare, FileText, User } from "lucide-react";
 
 interface DAO {
   id: number;
@@ -44,6 +45,19 @@ interface User {
   roleLabel: string;
 }
 
+interface Comment {
+  id: number;
+  user: string;
+  role: string;
+  text: string;
+  time: string;
+  task_id: number;
+  user_id?: number;
+  mentioned_user_id?: number;
+  mentioned_user_name?: string;
+  is_public?: boolean;
+}
+
 export default function LecteurDashboard() {
   const [daos, setDaos] = useState<DAO[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -51,8 +65,30 @@ export default function LecteurDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedDao, setSelectedDao] = useState<DAO | null>(null);
   const [chartsReady, setChartsReady] = useState(false);
+  
+  // États pour les commentaires
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [globalComment, setGlobalComment] = useState("");
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Fetch data from APIs
+  useEffect(() => {
+    // Charger l'utilisateur connecté depuis localStorage
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        setCurrentUser(parsedUser);
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -78,6 +114,9 @@ export default function LecteurDashboard() {
           const usersData = await usersResponse.json();
           setUsers(usersData.success ? usersData.data : []);
         }
+
+        // Charger les commentaires
+        await loadComments();
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -86,7 +125,143 @@ export default function LecteurDashboard() {
     };
 
     fetchData();
-  }, []);
+  }, [currentUser]);
+
+  // Charger les commentaires
+  const loadComments = async () => {
+    try {
+      const response = await fetch(`/api/messages?task_id=1`);
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        // Adapter les données de la base au format attendu
+        const adaptedComments = result.data.map((msg: any) => ({
+          id: msg.id,
+          user: msg.user_name || 'Utilisateur',
+          role: 'Utilisateur',
+          text: msg.content,
+          time: new Date(msg.created_at).toLocaleString('fr-FR'),
+          task_id: msg.task_id,
+          user_id: msg.user_id,
+          mentioned_user_id: msg.mentioned_user_id,
+          mentioned_user_name: msg.mentioned_user_name,
+          is_public: msg.is_public
+        }));
+        
+        setComments(adaptedComments);
+      }
+    } catch (error) {
+      // Erreur silencieuse
+    }
+  };
+
+  // Filtrer les commentaires pour la tâche sélectionnée avec logique de visibilité
+  const getFilteredComments = () => {
+    const taskComments = comments.filter(c => c.task_id === 1);
+    return taskComments.filter(comment => {
+      // Exclure les messages de l'utilisateur lui-même
+      if (comment.user_id === currentUser?.id) return false;
+      
+      // Toujours afficher les commentaires publics des autres utilisateurs
+      if (comment.is_public) return true;
+      
+      // Afficher les mentions privées uniquement au destinataire
+      return comment.mentioned_user_id === currentUser?.id;
+    });
+  };
+
+  // Gérer les changements dans le textarea
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setGlobalComment(value);
+
+    // Détecter si l'utilisateur tape @ pour les mentions
+    const lastAtIndex = value.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const textAfterAt = value.substring(lastAtIndex + 1);
+      const spaceIndex = textAfterAt.indexOf(' ');
+      
+      if (spaceIndex === -1) {
+        // L'utilisateur est en train de taper une mention
+        setMentionSearch(textAfterAt);
+        setShowMentionSuggestions(true);
+      } else {
+        setShowMentionSuggestions(false);
+      }
+    } else {
+      setShowMentionSuggestions(false);
+    }
+  };
+
+  // Insérer une mention
+  const insertMention = (user: User) => {
+    const lastAtIndex = globalComment.lastIndexOf('@');
+    const newText = globalComment.substring(0, lastAtIndex) + `@${user.username} `;
+    setGlobalComment(newText);
+    setShowMentionSuggestions(false);
+    commentInputRef.current?.focus();
+  };
+
+  // Ajouter un commentaire global
+  const addGlobalComment = async () => {
+    if (!globalComment.trim()) return;
+
+    let mentionedUserId: number | undefined;
+    let isPublic = true;
+
+    // Vérifier s'il y a une mention @
+    const mentionMatch = globalComment.match(/@(\w+)/);
+    if (mentionMatch) {
+      const mentionedUserName = mentionMatch[1].toLowerCase();
+      const mentionedUser = users.find(u => u.username.toLowerCase() === mentionedUserName);
+      
+      if (mentionedUser) {
+        mentionedUserId = mentionedUser.id;
+        isPublic = false; // Si mention, c'est un message privé
+      }
+    }
+
+    try {
+      // Sauvegarder le commentaire en base de données
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          task_id: 1, // Utiliser une tâche par défaut pour le dashboard
+          user_id: currentUser?.id || 43,
+          content: globalComment.trim(),
+          mentioned_user_id: mentionedUserId,
+          mentioned_user_name: mentionedUserId ? users.find(u => u.id === mentionedUserId)?.username : undefined,
+          is_public: isPublic
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Rafraîchir les commentaires
+        await loadComments();
+        setGlobalComment('');
+        setShowMentionSuggestions(false);
+      }
+    } catch (error) {
+      // Erreur silencieuse
+    }
+    
+    // Ne pas fermer automatiquement le modal - laisser l'utilisateur décider
+  };
+
+  // Ouvrir le modal de commentaire
+  const openCommentModal = () => {
+    setShowCommentModal(true);
+  };
+
+  // Fonction pour imprimer en PDF
+  const printPage = () => {
+    window.print();
+  };
 
   // Set first DAO as selected when data is loaded
   useEffect(() => {
@@ -331,9 +506,20 @@ export default function LecteurDashboard() {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Dashboard Lecteur</h1>
-        <p className="text-gray-600 mt-2">Vue d'ensemble des DAO et tâches</p>
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800">Dashboard Lecteur</h1>
+          <p className="text-gray-600 mt-2">Vue d'ensemble des DAO et tâches</p>
+        </div>
+        
+        {/* Icône de commentaire */}
+        <button
+          onClick={openCommentModal}
+          className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+          title="Ajouter un commentaire"
+        >
+          <MessageSquare size={20} />
+        </button>
       </div>
 
       {/* Statistics Cards */}
@@ -399,7 +585,7 @@ export default function LecteurDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* DAO Selection */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Sélectionner un DAO</h2>
+          <h4 className="text-lg font-semibold text-gray-800 mb-4">Sélectionner un DAO</h4>
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {daos.map(dao => {
               const status = getDAOStatus(dao);
@@ -428,9 +614,9 @@ export default function LecteurDashboard() {
 
         {/* Progress Chart */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">
-            Progression des tâches {selectedDao ? `- ${selectedDao.reference}` : ''}
-          </h2>
+          <h6 className="text-lg font-semibold text-gray-800 mb-4">
+            Progression des tâches <br /> <br /> {selectedDao ? `- ${selectedDao.reference}` : ''}
+          </h6>
           <div className="h-64">
             {selectedDaoTasks.length > 0 ? (
               <canvas id="progressChart"></canvas>
@@ -454,7 +640,7 @@ export default function LecteurDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Status Distribution */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Distribution des statuts</h2>
+          <h4 className="text-lg font-semibold text-gray-800 mb-4">Distribution des statuts</h4>
           <div className="h-64">
             {selectedDaoTasks.length > 0 ? (
               <canvas id="statusChart"></canvas>
@@ -475,9 +661,9 @@ export default function LecteurDashboard() {
 
         {/* Task List */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">
+          <h6 className="text-lg font-semibold text-gray-800 mb-4">
             Liste des tâches {selectedDao ? `- ${selectedDao.reference}` : ''}
-          </h2>
+          </h6>
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {selectedDaoTasks.length > 0 ? (
               selectedDaoTasks.map(task => (
@@ -509,6 +695,75 @@ export default function LecteurDashboard() {
           </div>
         </div>
       </div>
+      
+      {/* Modal de commentaire */}
+      {showCommentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Commentaires globaux</h2>
+              <button
+                onClick={() => setShowCommentModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Formulaire d'ajout de commentaire */}
+            <div className="border-t pt-4">
+              <div className="flex gap-3">
+                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                  <User size={16} className="text-gray-600" />
+                </div>
+                <div className="flex-1">
+                  <textarea
+                    ref={commentInputRef}
+                    value={globalComment}
+                    onChange={handleCommentChange}
+                    placeholder="Ajouter un commentaire global..."
+                    className="w-full p-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={3}
+                  />
+                  
+                  {/* Suggestions de mentions */}
+                  {showMentionSuggestions && (
+                    <div className="mt-2 p-2 bg-white border rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                      {users
+                        .filter(u => u.username.toLowerCase().includes(mentionSearch.toLowerCase()))
+                        .map((user) => (
+                          <div
+                            key={user.id}
+                            onClick={() => insertMention(user)}
+                            className="flex items-center gap-2 p-2 hover:bg-gray-100 cursor-pointer rounded"
+                          >
+                            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-blue-600 text-xs font-bold">
+                                {user.username.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <span className="text-sm">{user.username}</span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex justify-end mt-3">
+                <button
+                  onClick={addGlobalComment}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Envoyer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

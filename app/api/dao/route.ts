@@ -119,19 +119,22 @@ export async function GET(req: NextRequest) {
 
     // Calculer le statut pour chaque DAO basé sur la date de dépôt
     const daosWithStatus = rows.map((dao: any) => {
-      if (dao.date_depot) {
-        const dateDepot = new Date(dao.date_depot);
+      // Créer une copie pour ne pas modifier l'original
+      const updatedDao = { ...dao };
+      
+      if (updatedDao.date_depot) {
+        const dateDepot = new Date(updatedDao.date_depot);
         const today = new Date();
         const diffTime = today.getTime() - dateDepot.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
         // Si déposé il y a 3 jours ou plus, statut = aRisque
         // Sinon, statut = enCours
-        dao.statut = diffDays >= 3 ? 'aRisque' : 'enCours';
+        updatedDao.statut = diffDays >= 3 ? 'aRisque' : 'enCours';
       } else {
-        dao.statut = 'enCours'; // Par défaut si pas de date
+        updatedDao.statut = 'enCours'; // Par défaut si pas de date
       }
-      return dao;
+      return updatedDao;
     });
 
     return NextResponse.json({ success: true, data: daosWithStatus });

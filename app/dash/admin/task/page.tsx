@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle, FileText, Search, ChevronDown, Minus, Plus } from "lucide-react";
+import { CheckCircle, Search, ChevronDown, Minus, Plus, CheckSquare } from "lucide-react";
 
 /* =======================
    TYPES
@@ -214,12 +214,12 @@ export default function MembreEquipeDashboard() {
 
                         <div className="flex gap-4 text-sm text-gray-600 mt-2">
                           <span className="flex items-center gap-1">
-                            <FileText size={14} /> DAO-{task.dao_id}
+                            <CheckSquare size={14} /> DAO-{task.dao_id}
                             {task.dao_reference && ` (${task.dao_reference})`}
                           </span>
                           {task.dao_objet && (
                             <span className="flex items-center gap-1">
-                              <FileText size={14} /> {task.dao_objet}
+                              <CheckSquare size={14} /> {task.dao_objet}
                             </span>
                           )}
                         </div>

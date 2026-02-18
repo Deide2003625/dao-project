@@ -241,7 +241,7 @@ export default function ChefProjetTasksPage() {
                     <th className="px-3 py-2 text-left border-b">Tache</th>
                     <th className="px-3 py-2 text-left border-b">Assigner à</th>
                     <th className="px-3 py-2 text-left border-b">Assigné</th>
-                    <th className="px-3 py-2 text-left border-b">Supprimer</th>
+                    
                   </tr>
                 </thead>
                 <tbody>
@@ -282,19 +282,9 @@ export default function ChefProjetTasksPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 align-top text-gray-600">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setTasks((prev) =>
-                              prev.filter((t) => t.id !== task.id),
-                            )
-                          }
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <Trash size={14} />
-                        </button>
-                      </td>
+                     
+                        
+                      
                     </tr>
                   ))}
                 </tbody>

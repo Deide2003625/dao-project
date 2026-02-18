@@ -43,7 +43,7 @@ export default function NewDaoPage() {
     // Charger utilisateurs (endpoint existant attendu : /api/users)
     (async () => {
       try {
-        const res = await fetch("http://localhost:3000/api/users");
+        const res = await fetch("/api/users");
         if (!res.ok) {
           console.error("Erreur lors de la récupération des utilisateurs:", await res.text());
           return;
@@ -64,7 +64,7 @@ export default function NewDaoPage() {
           const roles = [...new Set(usersData.map((u: any) => ({
             role_id: u.role_id,
             roleName: u.roleName,
-            role: u.role
+            role: u.role                                                  
           })))];
           console.log("Rôles trouvés dans les données:", JSON.stringify(roles, null, 2));
         }

@@ -194,7 +194,15 @@ export default function LoginForm() {
   return (
     <div
       className="auth-form-light text-center p-5"
-      style={{ maxWidth: "400px", margin: "0 auto" }}
+      style={{ 
+        maxWidth: "400px", 
+        margin: "0 auto",
+        backgroundColor: "transparent",
+        borderRadius: "12px",
+        border: "1px solid rgba(255, 255, 255, 0.3)",
+        boxShadow: "0 8px 32px rgba(255, 255, 255, 0.1)",
+        backdropFilter: "blur(20px)"
+      }}
     >
       <div className="brand-logo mb-4">
         <Image
@@ -205,16 +213,16 @@ export default function LoginForm() {
           className="mx-auto"
         />
       </div>
-      <h4 className="mb-3">Bienvenue sur DAO Project</h4>
-      <h6 className="font-weight-light mb-4">
+      <h4 className="mb-3" style={{ color: "#ffffff", textShadow: "0 2px 4px rgba(0,0,0,0.5)" }}>Bienvenue sur DAO Project</h4>
+      <h6 className="font-weight-light mb-4" style={{ color: "#ffffff", textShadow: "0 2px 4px rgba(0,0,0,0.5)" }}>
         Connectez-vous pour accéder à votre espace
       </h6>
       <form className="pt-2" onSubmit={handleSubmit(onSubmit)}>
         <div className="form-group mb-4">
           <div className="input-group">
             <div className="input-group-prepend bg-transparent">
-              <span className="input-group-text bg-transparent border-right-0">
-                <i className="mdi mdi-email-outline text-primary"></i>
+              <span className="input-group-text bg-transparent border-right-0" style={{ backgroundColor: "rgba(255, 255, 255, 0.1)", border: "1px solid rgba(255, 255, 255, 0.3)" }}>
+                <i className="mdi mdi-email-outline" style={{ color: "#ffffff" }}></i>
               </span>
             </div>
             <input
@@ -222,7 +230,12 @@ export default function LoginForm() {
               className={`form-control form-control-lg border-left-0 ${emailExists ? "border-primary" : ""}`}
               placeholder="Votre adresse email"
               {...register("email")}
-              style={{ height: "48px" }}
+              style={{ 
+                height: "48px",
+                backgroundColor: "rgba(255, 255, 255, 0.1)",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
+                color: "#ffffff"
+              }}
             />
           </div>
           {errors.email && (
@@ -236,8 +249,8 @@ export default function LoginForm() {
           <div className="form-group mb-4">
             <div className="input-group">
               <div className="input-group-prepend bg-transparent">
-                <span className="input-group-text bg-transparent border-right-0">
-                  <i className="mdi mdi-lock-outline text-primary"></i>
+                <span className="input-group-text bg-transparent border-right-0" style={{ backgroundColor: "rgba(255, 255, 255, 0.1)", border: "1px solid rgba(255, 255, 255, 0.3)" }}>
+                  <i className="mdi mdi-lock-outline" style={{ color: "#ffffff" }}></i>
                 </span>
               </div>
               <input
@@ -245,7 +258,12 @@ export default function LoginForm() {
                 className={`form-control form-control-lg border-left-0 ${errors.password ? "is-invalid" : ""}`}
                 placeholder="Votre mot de passe"
                 {...register("password")}
-                style={{ height: "48px" }}
+                style={{ 
+                  height: "48px",
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                  color: "#ffffff"
+                }}
               />
             </div>
             {errors.password && (
@@ -260,8 +278,8 @@ export default function LoginForm() {
           <div className="form-group mb-4">
             <div className="input-group">
               <div className="input-group-prepend bg-transparent">
-                <span className="input-group-text bg-transparent border-right-0">
-                  <i className="mdi mdi-lock-check-outline text-primary"></i>
+                <span className="input-group-text bg-transparent border-right-0" style={{ backgroundColor: "rgba(255, 255, 255, 0.1)", border: "1px solid rgba(255, 255, 255, 0.3)" }}>
+                  <i className="mdi mdi-lock-check-outline" style={{ color: "#ffffff" }}></i>
                 </span>
               </div>
               <input
@@ -269,7 +287,12 @@ export default function LoginForm() {
                 className={`form-control form-control-lg border-left-0 ${errors.password_confirmation ? "is-invalid" : ""}`}
                 placeholder="Confirmez votre mot de passe"
                 {...register("password_confirmation")}
-                style={{ height: "48px" }}
+                style={{ 
+                  height: "48px",
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                  color: "#ffffff"
+                }}
               />
             </div>
             {errors.password_confirmation && (

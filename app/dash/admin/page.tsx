@@ -8,6 +8,7 @@ interface Dao {
   reference: string;
   autorite: string;
   date_depot?: string;
+  chef_id?: number | null;
   chef_projet?: string | null;
   statut?: string | null; // optionnel si ajouter plus tard dans la DB
   groupement?: string | null; // type de groupement
@@ -18,6 +19,60 @@ export default function Page() {
   const [daos, setDaos] = useState<Dao[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  const [user, setUser] = useState<{ id: number; role_id: number } | null>(null);
+
+  // Récupérer l'utilisateur connecté
+  useEffect(() => {
+    async function fetchUser() {
+      try {
+        const res = await fetch("/api/me", {
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user) {
+            setUser({
+              id: data.user.id,
+              role_id: data.user.role_id || 0,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Erreur lors de la récupération de l'utilisateur:", error);
+      }
+    }
+
+    fetchUser();
+  }, []);
+
+  // Vérifier les dates de dépôt et envoyer des emails
+  useEffect(() => {
+    if (!user) return;
+
+    async function checkDepositsAndSendEmails() {
+      try {
+        const res = await fetch(`/api/notifications?userId=${user!.id}&checkDeposits=true`, {
+          cache: "no-store",
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          console.log("Notifications de dépôt vérifiées:", data);
+          // Les emails sont envoyés automatiquement par l'API
+        }
+      } catch (error) {
+        console.error("Erreur lors de la vérification des dépôts:", error);
+      }
+    }
+
+    checkDepositsAndSendEmails();
+    
+    // Vérifier toutes les 5 minutes
+    const interval = setInterval(checkDepositsAndSendEmails, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const computeStatus = (dao: Dao): { label: string; className: string } => {
     const today = new Date();
@@ -71,11 +126,11 @@ export default function Page() {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/daos", { cache: "no-store" });
+      const res = await fetch("/api/dao", { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        console.error("API /api/daos error:", json);
+        console.error("API /api/dao error:", json);
         setDaos([]);
         setError(json?.message || "Erreur lors du chargement des DAO");
         return;
@@ -321,7 +376,7 @@ export default function Page() {
                           <td>{dao.numero}</td>
                           <td>{dao.reference}</td>
                           <td>{dao.autorite}</td>
-                          <td>{dao.chef_projet ?? "-"}</td>
+                          <td>{dao.chef_projet || 'N/A'}</td>
                           <td>
                             {dao.groupement === "oui" ? (
                               dao.nom_partenaire ? (
