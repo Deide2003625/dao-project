@@ -31,3 +31,14 @@ jobs:
           scanners: 'vuln'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: javascript # Remplacez par le langage de votre projet
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
