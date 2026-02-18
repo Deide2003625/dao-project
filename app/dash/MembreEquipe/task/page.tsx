@@ -474,7 +474,7 @@ export default function MembreEquipeDashboard() {
                   >
                     <div className="flex justify-between items-start gap-4">
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold">Tâche #{task.id}</h3>
+                        <h6 className="text-lg font-semibold">Tâche #{task.id}</h6>
 
                         <div className="flex gap-4 text-sm text-gray-600 mt-2">
                           <span className="flex items-center gap-1">
