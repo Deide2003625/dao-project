@@ -155,17 +155,14 @@ export default function ChefProjetTasksPage() {
             <ArrowLeft />
           </Link>
           <div>
-            <h1 className="font-bold text-sm">DAO #{daoId}</h1>
-            <p className="text-xs text-gray-500">
-              Gestion des 15 taches standard et assignation aux membres de l'equipe
-            </p>
+            <h3 className="font-bold text-sm">DAO #{daoId}</h3>
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
         <section className="bg-white rounded shadow p-4">
-          <h2 className="font-semibold mb-3 text-sm">Créer une tache (table task)</h2>
+          <h4 className="font-semibold mb-3 text-sm">Créer une tache (table task)</h4>
 
           <form
             className="flex flex-col sm:flex-row gap-3 items-start"
@@ -230,17 +227,17 @@ export default function ChefProjetTasksPage() {
         </section>
 
         <section className="bg-white rounded shadow p-4">
-          <h2 className="font-semibold mb-3 text-sm">Taches du DAO</h2>
+          <h5 className="font-semibold mb-3 text-sm">Taches du DAO</h5>
 
           {tasks.length > 0 && (
             <div className="overflow-x-auto">
               <table className="min-w-full text-xs border">
                 <thead className="bg-gray-100">
                   <tr>
-                    <th className="px-3 py-2 text-left border-b">#</th>
+                    <th className="px-3 py-2 text-left border-b">N°</th>
                     <th className="px-3 py-2 text-left border-b">Tache</th>
                     <th className="px-3 py-2 text-left border-b">Assigner à</th>
-                    <th className="px-3 py-2 text-left border-b">Assigné</th>
+                    <th className="px-3 py-2 text-left border-b">Membres assignés</th>
                     
                   </tr>
                 </thead>

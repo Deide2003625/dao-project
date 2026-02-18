@@ -190,10 +190,9 @@ export default function ChefProjetDashboard() {
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">
-                Dashboard Chef de Projet
-              </h1>
-              <p className="text-gray-600">Gestion des équipes</p>
+              <h3 className="text-2xl font-bold text-gray-800">
+                Gestion des équipes
+              </h3>
             </div>
           </div>
         </div>
@@ -205,19 +204,19 @@ export default function ChefProjetDashboard() {
           <StatCard
             title="Équipes Totales"
             value={stats.totalTeams}
-            icon={<Users className="text-blue-600" />}
+            icon={<Users className="text-blue-700" />}
             color="blue"
           />
           <StatCard
             title="Membres Totaux"
             value={stats.totalMembers}
-            icon={<Users className="text-purple-600" />}
+            icon={<Users className="text-purple-700" />}
             color="purple"
           />
           <StatCard
             title="DAOs Assignés"
             value={stats.totalDaos}
-            icon={<Users className="text-orange-600" />}
+            icon={<Users className="text-orange-700" />}
             color="orange"
           />
         </div>
@@ -255,7 +254,7 @@ export default function ChefProjetDashboard() {
             {/* LISTE DES ÉQUIPES */}
             <div className="bg-white rounded-lg shadow">
               <div className="p-4 border-b">
-                <h2 className="text-lg font-semibold">Équipes</h2>
+                <h4 className="text-lg font-semibold">Équipes</h4>
               </div>
               <div className="divide-y">
                 {filteredTeams.map((team) => (
@@ -284,7 +283,7 @@ export default function ChefProjetDashboard() {
                           />
                         </div>
                         <div>
-                          <h3 className="font-semibold">{team.name}</h3>
+                          <h4 className="font-semibold">{team.name}</h4>
                           <p className="text-sm text-gray-500">
                             Chef d'équipe: {team.leader}
                           </p>
