@@ -290,7 +290,7 @@ export default function DaoDetailsPage() {
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <h3 className="font-medium text-sm mb-1">{task.name}</h3>
+                    <h2 className="font-medium text-sm mb-1">{task.name}</h2>
                     <div className="flex items-center gap-2 text-xs text-gray-600">
                       <User className="w-3 h-3" />
                       <span>{task.assigned_to || 'Non assigné'}</span>
