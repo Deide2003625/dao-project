@@ -697,8 +697,8 @@ export default function LecteurDashboard() {
       
       {/* Modal de commentaire */}
       {showCommentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center mb-4">
               <h5 className="text-xl font-bold">Commentaires</h5>
               <button
@@ -712,7 +712,7 @@ export default function LecteurDashboard() {
             </div>
 
             {/* Formulaire d'ajout de commentaire */}
-            <div className="border-t pt-4">
+            <div className="bg-gray-50 rounded-xl p-4 mt-4">
               <div className="flex gap-3">
                 <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
                   <User size={16} className="text-gray-600" />
