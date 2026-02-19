@@ -153,12 +153,12 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
         }));
         
         setComments(adaptedComments);
-        console.log(`✅ ${adaptedComments.length} commentaires chargés depuis la base`);
+        console.log(` ${adaptedComments.length} commentaires chargés depuis la base`);
       } else {
-        console.log('❌ Erreur lors du chargement des commentaires:', result.message);
+        console.log(' Erreur lors du chargement des commentaires:', result.message);
       }
     } catch (error) {
-      console.error('❌ Erreur réseau lors du chargement des commentaires:', error);
+      console.error(' Erreur réseau lors du chargement des commentaires:', error);
     }
   };
 
@@ -198,11 +198,11 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
             id: userData.id,
             name: userData.username || userData.email?.split('@')[0] || 'Utilisateur'
           });
-          console.log('✅ Utilisateur chargé depuis localStorage:', userData);
+          console.log(' Utilisateur chargé depuis localStorage:', userData);
         } else {
           // Fallback si pas d'utilisateur dans localStorage
           setCurrentUser({ id: 43, name: "lio" });
-          console.log('⚠️ Aucun utilisateur dans localStorage, utilisation du fallback lio');
+          console.log(' Aucun utilisateur dans localStorage, utilisation du fallback lio');
         }
       } catch (err) {
         console.error("Error fetching DAO:", err);
@@ -302,14 +302,14 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
       const result = await response.json();
 
       if (result.success) {
-        console.log('✅ Commentaire sauvegardé en base de données:', result.data);
+        console.log(' Commentaire sauvegardé en base de données:', result.data);
         
         // Rafraîchir les commentaires
         await loadComments(tasks.length > 0 ? tasks[0].id : 1);
         setGlobalComment('');
         setShowMentionSuggestions(false);
       } else {
-        console.error('❌ Erreur lors de la sauvegarde:', result.message);
+        console.error(' Erreur lors de la sauvegarde:', result.message);
       }
     } catch (error) {
       console.error('Erreur lors de la sauvegarde:', error);

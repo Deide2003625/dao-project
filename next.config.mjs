@@ -7,8 +7,7 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "2mb",
     },
-    // Désactive Turbopack pour utiliser Webpack
-    turbo: false,
+    
   },
   // Configuration des alias pour la compatibilité avec Webpack
   webpack: (config) => {
@@ -33,15 +32,9 @@ const nextConfig = {
   // Désactive le mode strict pour éviter les problèmes de compatibilité
   reactStrictMode: true,
   // Désactive la vérification ESLint pendant la compilation
-  eslint: {
-    ignoreDuringBuilds: true,
-    ignoreDuringTests: true
-  },
+ 
   // Désactive les vérifications TypeScript pendant la compilation
-  typescript: {
-    ignoreBuildErrors: true,
-    ignoreWarnings: true
-  }
+ 
 };
 
 module.exports = nextConfig;
