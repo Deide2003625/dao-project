@@ -275,7 +275,7 @@ export default function Page() {
                         <td>{purchase.status_report}</td>
                         <td>{purchase.office}</td>
                         <td>${purchase.price.toLocaleString()}</td>
-                        <td>{new Date(purchase.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                        <td>{new Date(purchase.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                         <td>${purchase.gross_amount.toLocaleString()}</td>
                       </tr>
                     ))}

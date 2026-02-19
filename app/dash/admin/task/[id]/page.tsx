@@ -149,16 +149,20 @@ export default function ChefProjetTasksPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b p-4">
-        <div className="flex items-center gap-3">
-          <Link href="/dash/ChefProjet/MyDao">
-            <ArrowLeft />
-          </Link>
-          <div>
-            <h1 className="font-bold text-sm">DAO #{daoId}</h1>
-            <p className="text-xs text-gray-500">
-              Gestion des 15 taches standard et assignation aux membres de l'equipe
-            </p>
+      <header className="bg-gray-50 p-6 no-print">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center gap-4">
+              <Link href="/dash/ChefProjet/MyDao" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <ArrowLeft className="w-5 h-5 text-gray-700" />
+              </Link>
+              <div>
+                <h1 className="font-bold text-xl text-gray-900">DAO #{daoId}</h1>
+                <p className="text-sm text-gray-600 mt-1">
+                  Gestion des 15 taches standard et assignation aux membres de l'equipe
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </header>
