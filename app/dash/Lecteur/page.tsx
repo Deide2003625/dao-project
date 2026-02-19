@@ -508,8 +508,7 @@ export default function LecteurDashboard() {
     <div className="p-6">
       <div className="mb-6 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Dashboard Lecteur</h1>
-          <p className="text-gray-600 mt-2">Vue d'ensemble des DAO et tâches</p>
+          <h4 className="text-3xl font-bold text-gray-800">Dashboard Lecteur</h4>
         </div>
         
         {/* Icône de commentaire */}
@@ -585,7 +584,7 @@ export default function LecteurDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* DAO Selection */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h4 className="text-lg font-semibold text-gray-800 mb-4">Sélectionner un DAO</h4>
+          <h6 className="text-lg font-semibold text-gray-800 mb-4">Sélectionner un DAO</h6>
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {daos.map(dao => {
               const status = getDAOStatus(dao);
@@ -640,7 +639,7 @@ export default function LecteurDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Status Distribution */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h4 className="text-lg font-semibold text-gray-800 mb-4">Distribution des statuts</h4>
+          <h6 className="text-lg font-semibold text-gray-800 mb-4">Distribution des statuts</h6>
           <div className="h-64">
             {selectedDaoTasks.length > 0 ? (
               <canvas id="statusChart"></canvas>
@@ -701,7 +700,7 @@ export default function LecteurDashboard() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Commentaires globaux</h2>
+              <h5 className="text-xl font-bold">Commentaires</h5>
               <button
                 onClick={() => setShowCommentModal(false)}
                 className="text-gray-500 hover:text-gray-700"
@@ -723,7 +722,7 @@ export default function LecteurDashboard() {
                     ref={commentInputRef}
                     value={globalComment}
                     onChange={handleCommentChange}
-                    placeholder="Ajouter un commentaire global..."
+                    placeholder="Ajouter un commentaire ..."
                     className="w-full p-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={3}
                   />

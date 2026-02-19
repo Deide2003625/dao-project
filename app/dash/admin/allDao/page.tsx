@@ -159,7 +159,7 @@ export default function AllDaoPage() {
     <div className="min-h-screen bg-gray-50 text-gray-800">
       {/* Header */}
       <header className="flex items-center justify-between bg-white p-4 border-b">
-        <h1 className="text-xl font-bold">Tous les DAO</h1>
+        <h3 className="text-xl font-bold">Tous les DAO</h3>
 
         <div className="flex items-center gap-3">
           <input
@@ -212,7 +212,7 @@ export default function AllDaoPage() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h3 className="font-semibold text-lg">N° {dao.numero}</h3>
+                      <h4 className="font-semibold text-lg">N° {dao.numero}</h4>
                       <p className="text-sm text-gray-600 line-clamp-2 mt-1">
                         {dao.reference} - {dao.autorite}
                       </p>

@@ -439,7 +439,7 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div className="min-w-0">
-              <h1 className="font-bold text-xl truncate">{dao.numero}</h1>
+              <h4 className="font-bold text-xl truncate">{dao.numero}</h4>
               <p className="text-sm text-gray-500 truncate">{dao.objet || dao.reference}</p>
             </div>
           </div>
@@ -491,12 +491,12 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
         {/* PROGRESSION GLOBALE */}
         <section className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
+            <h4 className="text-lg font-semibold flex items-center gap-2">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                 <span className="text-blue-600 font-bold text-sm">{globalProgress}%</span>
               </div>
               Progression globale du DAO
-            </h2>
+            </h4>
            
              
           </div>
@@ -523,7 +523,7 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
         {/* LISTE DES TÂCHES */}
         <section className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Progression des tâches</h2>
+            <h4 className="text-lg font-semibold">Progression des tâches</h4>
           
           </div>
           
@@ -540,7 +540,7 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <h3 className="font-medium text-sm mb-1">{task.name}</h3>
+                    <h5 className="font-medium text-sm mb-1">{task.name}</h5>
                     <div className="flex items-center gap-2 text-xs text-gray-600">
                       <User className="w-3 h-3" />
                       <span>{task.assigned_to || 'Non assigné'}</span>

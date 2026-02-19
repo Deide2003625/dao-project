@@ -179,7 +179,7 @@ export default function MyDaoPage() {
     <div className="min-h-screen bg-gray-50 text-gray-800">
       {/* Header */}
       <header className="flex items-center justify-between bg-white p-4 border-b">
-        <h1 className="text-xl font-bold">Mes DAO</h1>
+        <h3 className="text-xl font-bold">Mes DAO</h3>
 
         <div className="flex items-center gap-3">
           <input

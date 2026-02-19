@@ -490,7 +490,7 @@ export default function MembreEquipeDashboard() {
 
             <div className="flex items-center">
 
-              <h1 className="text-2xl font-bold text-gray-900">Dashboard Membre d'Équipe</h1>
+              <h3 className="text-2xl font-bold text-gray-900">Dashboard Membre d'Équipe</h3>
 
             </div>
 
@@ -534,7 +534,7 @@ export default function MembreEquipeDashboard() {
 
           <StatCard
 
-            title="Complétées"
+            title="Termínées"
 
             value={stats.completed}
 
@@ -638,7 +638,7 @@ export default function MembreEquipeDashboard() {
 
                       <div className="flex items-center gap-3 mb-2">
 
-                        <h3 className="text-lg font-semibold text-gray-900">{task.titre}</h3>
+                        <h6 className="text-lg font-semibold text-gray-900">{task.titre}</h6>
 
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(getStatusFromProgress(task.progress))}`}>
 

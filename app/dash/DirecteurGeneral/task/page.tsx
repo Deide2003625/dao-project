@@ -230,7 +230,7 @@ export default function DirecteurGeneralTaskPage() {
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div className="min-w-0">
-              <h1 className="font-bold text-xl truncate">{dao.numero}</h1>
+              <h3 className="font-bold text-xl truncate">{dao.numero}</h3>
               <p className="text-sm text-gray-500 truncate">{dao.objet || dao.reference}</p>
             </div>
           </div>
@@ -239,7 +239,7 @@ export default function DirecteurGeneralTaskPage() {
             <div className="text-right">
               <p className="text-sm text-gray-600 flex items-center gap-1">
                 <UserCheck className="w-4 h-4" />
-                Chef de projet
+                Chef projet
               </p>
               <p className="font-medium">{dao.chef_projet || 'N/A'}</p>
             </div>
@@ -275,12 +275,12 @@ export default function DirecteurGeneralTaskPage() {
           {/* PROGRESSION GLOBALE */}
           <section className="bg-white rounded-lg shadow-sm border p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
+              <h5 className="text-lg font-semibold flex items-center gap-2">
                 <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                   <span className="text-blue-600 font-bold text-sm">{globalProgress}%</span>
                 </div>
                 Progression globale du DAO
-              </h2>
+              </h5>
               <span className="text-sm text-gray-500">
                 {tasks.filter(t => t.progress === 100).length} / {tasks.length} tâches terminées
               </span>
@@ -320,7 +320,7 @@ export default function DirecteurGeneralTaskPage() {
 
           {/* LISTE DES TÂCHES */}
           <section className="bg-white rounded-lg shadow-sm border p-6">
-            <h2 className="text-lg font-semibold mb-4">Progression des tâches</h2>
+            <h5 className="text-lg font-semibold mb-4">Progression des tâches</h5>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {tasks.map((task) => (
@@ -335,7 +335,7 @@ export default function DirecteurGeneralTaskPage() {
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
-                      <h3 className="font-medium text-sm mb-1">{task.name}</h3>
+                      <h6 className="font-medium text-sm mb-1">{task.name}</h6>
                       <div className="text-xs text-gray-600">
                         <span>{task.assigned_to || 'Non assigné'}</span>
                       </div>

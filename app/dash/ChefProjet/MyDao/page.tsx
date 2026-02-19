@@ -86,7 +86,7 @@ export default function DashboardChefEquipe() {
     <div className="min-h-screen bg-gray-50 text-gray-800">
       {/* Header */}
       <header className="flex items-center justify-between bg-white p-4 border-b">
-        <h1 className="text-xl font-bold">Mes DAO</h1>
+        <h3 className="text-xl font-bold">Mes DAO</h3>
 
         <div className="flex items-center gap-3">
           <input
@@ -146,7 +146,7 @@ export default function DashboardChefEquipe() {
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="font-semibold text-lg">N° {dao.numero}</h3>
+                      <h4 className="font-semibold text-lg">N° {dao.numero}</h4>
                       <p className="mt-1 text-sm text-gray-600 line-clamp-2">
                         {dao.objet || dao.reference}
                       </p>
