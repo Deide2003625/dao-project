@@ -19,11 +19,11 @@ export async function POST(request: NextRequest) {
 
     // Connexion à la base de données
     const connection = await mysql.createConnection({
-      host: 'localhost',
-      user: 'root',
-      password: '',
-      database: 'dao',
-      port: 3306
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME || 'dao',
+      port: parseInt(process.env.DB_PORT || '3306')
     });
 
     // Insérer le message dans la table messages
@@ -71,11 +71,11 @@ export async function GET(request: NextRequest) {
 
     // Connexion à la base de données
     const connection = await mysql.createConnection({
-      host: 'localhost',
-      user: 'root',
-      password: '',
-      database: 'dao',
-      port: 3306
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME || 'dao',
+      port: parseInt(process.env.DB_PORT || '3306')
     });
 
     // Créer la table hidden_messages si elle n'existe pas

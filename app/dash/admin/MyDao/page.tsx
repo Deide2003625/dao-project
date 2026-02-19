@@ -256,7 +256,11 @@ export default function MyDaoPage() {
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Date dépôt</span>
                       <span className="font-medium">
-                        {dao.date_depot || "N/A"}
+                      {new Date(dao.date_depot!).toLocaleDateString('fr-FR', {
+                            day: '2-digit',
+                            month: '2-digit', 
+                            year: 'numeric'
+                          })}
                       </span>
                     </div>
 
