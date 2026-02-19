@@ -85,31 +85,37 @@ export default function DashboardChefEquipe() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
       {/* Header */}
-      <header className="flex items-center justify-between bg-white p-4 border-b">
-        <h3 className="text-xl font-bold">Mes DAO</h3>
+      <header className="bg-gray-50 p-6 no-print">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="text-xl font-bold text-gray-900">Mes DAO</h3>
 
-        <div className="flex items-center gap-3">
-          <input
-            placeholder="Rechercher (n°, objet, équipe...)"
-            className="px-3 py-2 border rounded w-72 text-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <button
-            className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
-            type="button"
-            onClick={() =>
-              setStatusFilter((prev) =>
-                prev === "all" ? "enCours" : prev === "enCours" ? "aRisque" : "all",
-              )
-            }
-          >
-            {statusFilter === "all"
-              ? "Tous les statuts"
-              : statusFilter === "enCours"
-                ? "En cours seulement"
-                : "À risque seulement"}
-          </button>
+              <div className="flex items-center gap-3">
+                <input
+                  placeholder="Rechercher (n°, objet, équipe...)"
+                  className="px-3 py-2 border rounded w-72 text-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <button
+                  className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
+                  type="button"
+                  onClick={() =>
+                    setStatusFilter((prev) =>
+                      prev === "all" ? "enCours" : prev === "enCours" ? "aRisque" : "all",
+                    )
+                  }
+                >
+                  {statusFilter === "all"
+                    ? "Tous les statuts"
+                    : statusFilter === "enCours"
+                      ? "En cours seulement"
+                      : "À risque seulement"}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 

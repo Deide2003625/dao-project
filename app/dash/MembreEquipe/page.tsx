@@ -482,25 +482,29 @@ export default function MembreEquipeDashboard() {
 
       {/* Header */}
 
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-gray-50 p-6 no-print">
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
 
-          <div className="flex justify-between items-center h-16">
+          <div className="bg-white rounded-xl shadow-lg p-6">
 
-            <div className="flex items-center">
+            <div className="flex justify-between items-center">
 
-              <h3 className="text-2xl font-bold text-gray-900">Dashboard Membre d'Équipe</h3>
+              <div className="flex items-center">
 
-            </div>
+                <h3 className="text-2xl font-bold text-gray-900">Dashboard Membre d'Équipe</h3>
 
-            <div className="flex items-center space-x-4">
+              </div>
 
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <div className="flex items-center space-x-4">
 
-                <User className="w-4 h-4" />
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
 
-                <span>{currentUser?.username || "Membre d'équipe"}</span>
+                  <User className="w-4 h-4" />
+
+                  <span>{currentUser?.username || "Membre d'équipe"}</span>
+
+                </div>
 
               </div>
 
@@ -673,10 +677,6 @@ export default function MembreEquipeDashboard() {
                       <div className="flex items-center gap-4 text-sm text-gray-500">
 
                         <span className="flex items-center gap-1">
-
-                          <Calendar className="w-4 h-4" />
-
-                          Créée le {new Date(task.created_at).toLocaleDateString()}
 
                         </span>
 

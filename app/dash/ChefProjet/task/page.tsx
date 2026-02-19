@@ -85,21 +85,25 @@ export default function DaoDetailStatic() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* HEADER */}
-      <header className="bg-white border-b p-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link href="/dash/ChefProjet/MyDao">
-              <ArrowLeft />
-            </Link>
-            <div className="min-w-0">
-              <h1 className="font-bold truncate">{dao.numero}</h1>
-              <p className="text-sm text-gray-500 truncate">{dao.objet}</p>
+      <header className="bg-gray-50 p-6 no-print">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <Link href="/dash/ChefProjet/MyDao" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                  <ArrowLeft className="w-5 h-5 text-gray-700" />
+                </Link>
+                <div className="min-w-0">
+                  <h1 className="font-bold text-xl text-gray-900 truncate">{dao.numero}</h1>
+                  <p className="text-sm text-gray-600 truncate mt-1">{dao.objet}</p>
+                </div>
+              </div>
+
+              <button className="px-4 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 text-sm">
+                Supprimer
+              </button>
             </div>
           </div>
-
-          <button className="px-4 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 text-sm">
-            Supprimer
-          </button>
         </div>
       </header>
 

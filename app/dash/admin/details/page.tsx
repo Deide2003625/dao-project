@@ -197,45 +197,49 @@ export default function DaoDetailsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* HEADER */}
-      <header className="bg-white border-b p-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link href="/dash/admin/allDao">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div className="min-w-0">
-              <h1 className="font-bold text-xl truncate">{dao.numero}</h1>
-              <p className="text-sm text-gray-500 truncate">{dao.objet || dao.reference}</p>
-            </div>
-          </div>
+      <header className="bg-gray-50 p-6 no-print">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <Link href="/dash/admin/allDao" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                  <ArrowLeft className="w-5 h-5 text-gray-700" />
+                </Link>
+                <div className="min-w-0">
+                  <h1 className="font-bold text-2xl text-gray-900 truncate">{dao.numero}</h1>
+                  <p className="text-sm text-gray-600 truncate mt-1">{dao.objet || dao.reference}</p>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <p className="text-sm text-gray-600 flex items-center gap-1">
-                <UserCheck className="w-4 h-4" />
-                Chef de projet
-              </p>
-              <p className="font-medium">{dao.chef_projet || 'N/A'}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-600">Statut</p>
-              <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full ${
-                dao.statut === 'aRisque' 
-                  ? 'bg-red-100 text-red-800' 
-                  : 'bg-green-100 text-green-800'
-              }`}>
-                {dao.statut === 'aRisque' ? (
-                  <>
-                    <AlertCircle className="w-3 h-3" />
-                    À risque
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-3 h-3" />
-                    En cours
-                  </>
-                )}
-              </span>
+              <div className="flex items-center gap-8">
+                <div className="text-center">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                    <UserCheck className="w-4 h-4" />
+                    Chef de projet
+                  </div>
+                  <p className="font-semibold text-lg text-gray-900">{dao.chef_projet || 'N/A'}</p>
+                </div>
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 mb-1">Statut</div>
+                  <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full ${
+                    dao.statut === 'aRisque' 
+                      ? 'bg-red-100 text-red-800' 
+                      : 'bg-green-100 text-green-800'
+                  }`}>
+                    {dao.statut === 'aRisque' ? (
+                      <>
+                        <AlertCircle className="w-3 h-3" />
+                        À risque
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-3 h-3" />
+                        En cours
+                      </>
+                    )}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -268,7 +272,11 @@ export default function DaoDetailsPage() {
           </div>
           
           <div className="flex justify-between text-xs text-gray-600">
-            <span>Début : {new Date(dao.date_depot || Date.now()).toLocaleDateString('fr-FR')}</span>
+            <span>Date de dépôt : {new Date(dao.date_depot || Date.now()).toLocaleDateString('fr-FR', {
+                              day: '2-digit',
+                              month: '2-digit', 
+                              year: 'numeric'
+                            })}</span>
             <span>Progression : {globalProgress}%</span>
           </div>
         </section>

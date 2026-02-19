@@ -186,13 +186,15 @@ export default function ChefProjetDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* HEADER */}
-      <header className="bg-white border-b p-4">
+      <header className="bg-gray-50 p-6 no-print">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-2xl font-bold text-gray-800">
-                Gestion des équipes
-              </h3>
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">
+                  Gestion des équipes
+                </h3>
+              </div>
             </div>
           </div>
         </div>

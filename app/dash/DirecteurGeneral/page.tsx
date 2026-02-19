@@ -721,21 +721,23 @@ export default function DirecteurGeneralDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h3 className="text-2xl font-bold text-gray-900">Dashboard Directeur Général</h3>
-            </div>
-            <div className="flex items-center space-x-4">
-              {/* Icône de commentaire */}
-              <button
-                onClick={openCommentModal}
-                className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                title="Ajouter un commentaire"
-              >
-                <MessageSquare size={20} />
-              </button>
+      <header className="bg-gray-50 p-6 no-print">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center">
+                <h3 className="text-2xl font-bold text-gray-900">Dashboard Directeur Général</h3>
+              </div>
+              <div className="flex items-center space-x-4">
+                {/* Icône de commentaire */}
+                <button
+                  onClick={openCommentModal}
+                  className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                  title="Ajouter un commentaire"
+                >
+                  <MessageSquare size={20} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -916,7 +918,11 @@ export default function DirecteurGeneralDashboard() {
                           {dao.autorite || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {dao.date_depot ? new Date(dao.date_depot).toLocaleDateString() : 'N/A'}
+                          {dao.date_depot ? new Date(dao.date_depot).toLocaleDateString('fr-FR', {
+                            day: '2-digit',
+                            month: '2-digit', 
+                            year: 'numeric'
+                          }) : 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={status.className}>
