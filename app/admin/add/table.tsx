@@ -189,10 +189,8 @@ export default function UsersTable() {
 
       // Fermer la modale après 3 secondes
       const timer = setTimeout(() => {
-        setIsModalOpen(false);
-        // Effacer le message après la fermeture de la modale
-        setTimeout(() => setMessage(""), 1000);
-      }, 3000);
+        
+      },);
 
       // Nettoyer le timer si le composant est démonté
       return () => clearTimeout(timer);
