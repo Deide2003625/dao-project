@@ -282,12 +282,12 @@ export default function DirecteurGeneralDashboard() {
     setShowCommentModal(true);
   };
 
-  // Fonction pour télécharger en PDF directement avec graphiques et infos DAO
-  const downloadComprehensivePDF = async () => {
+  // Fonction pour télécharger en PDF complet adapté au Directeur Général
+  const downloadDGComprehensivePDF = async () => {
     try {
       // Afficher un indicateur de chargement
       const loadingIndicator = document.createElement('div');
-      loadingIndicator.innerHTML = 'Génération du PDF complet...';
+      loadingIndicator.innerHTML = 'Génération du rapport DG complet...';
       loadingIndicator.style.cssText = `
         position: fixed;
         top: 50%;
@@ -317,126 +317,152 @@ export default function DirecteurGeneralDashboard() {
         font-family: Arial, sans-serif;
       `;
 
-      // Ajouter le titre du rapport
+      // En-tête professionnel pour le DG
       pdfContainer.innerHTML = `
-        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #3b82f6; padding-bottom: 15px;">
-          <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Rapport de Suivi des DAO</h1>
-          <p style="color: #6b7280; margin: 5px 0 0 0; font-size: 14px;">Généré le ${new Date().toLocaleDateString('fr-FR')}</p>
+        <div style="text-align: center; margin-bottom: 30px; border-bottom: 3px solid #1e40af; padding-bottom: 15px;">
+          <h1 style="color: #1f2937; margin: 0; font-size: 28px; font-weight: bold;">RAPPORT DE SYNTHÈSE DES DAO</h1>
+          <h2 style="color: #3b82f6; margin: 5px 0 0 0; font-size: 18px;">Direction Générale</h2>
+          <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">Généré le ${new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
-      `;
 
-      // Ajouter les statistiques générales
-      pdfContainer.innerHTML += `
-        <div style="margin-bottom: 30px;">
-          <h2 style="color: #1f2937; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; font-size: 18px;">Statistiques Générales</h2>
-          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px;">
-            <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #3b82f6;">
-              <div style="font-size: 24px; font-weight: bold; color: #3b82f6;">${stats.totalDaos}</div>
-              <div style="font-size: 12px; color: #6b7280;">Total DAO</div>
+        <!-- Section Synthèse Exécutive -->
+        <div style="margin-bottom: 30px; background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 5px solid #3b82f6;">
+          <h3 style="color: #1e40af; margin: 0 0 15px 0; font-size: 16px; font-weight: bold;">SYNTHÈSE EXÉCUTIVE</h3>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+            <div style="text-align: center; background: white; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <div style="font-size: 32px; font-weight: bold; color: #3b82f6;">${stats.totalDaos}</div>
+              <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">DAO Total</div>
             </div>
-            <div style="background: #fef2f2; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #ef4444;">
-              <div style="font-size: 24px; font-weight: bold; color: #ef4444;">${stats.atRiskDaos}</div>
-              <div style="font-size: 12px; color: #6b7280;">À risque</div>
+            <div style="text-align: center; background: white; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <div style="font-size: 32px; font-weight: bold; color: #ef4444;">${stats.atRiskDaos}</div>
+              <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">À Risque</div>
             </div>
-            <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #22c55e;">
-              <div style="font-size: 24px; font-weight: bold; color: #22c55e;">${stats.inProgressDaos}</div>
-              <div style="font-size: 12px; color: #6b7280;">En cours</div>
+            <div style="text-align: center; background: white; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <div style="font-size: 32px; font-weight: bold; color: #22c55e;">${stats.inProgressDaos}</div>
+              <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">En Cours</div>
             </div>
           </div>
         </div>
       `;
 
+      // Section Graphiques et Analyse
+      pdfContainer.innerHTML += `
+        <div style="margin-bottom: 30px;">
+          <h3 style="color: #1e40af; margin: 0 0 15px 0; font-size: 16px; font-weight: bold; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">ANALYSE GRAPHIQUE</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      `;
+
       // Ajouter les graphiques en capturant les canvas
       if (chartRef.current) {
         const chartCanvas = await html2canvas(chartRef.current, {
-          scale: 2,
+          scale: 1.5,
           backgroundColor: '#ffffff',
           logging: false
         });
         pdfContainer.innerHTML += `
-          <div style="margin-bottom: 30px;">
-            <h2 style="color: #1f2937; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; font-size: 18px;">Graphique de Progression des DAO</h2>
-            <img src="${chartCanvas.toDataURL()}" style="width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 8px;" />
+          <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+            <h4 style="color: #374151; margin: 0 0 10px 0; font-size: 14px; text-align: center;">Progression des DAO</h4>
+            <img src="${chartCanvas.toDataURL()}" style="width: 100%; height: auto; border-radius: 4px;" />
           </div>
         `;
       }
 
       if (pieChartRef.current) {
         const pieCanvas = await html2canvas(pieChartRef.current, {
-          scale: 2,
+          scale: 1.5,
           backgroundColor: '#ffffff',
           logging: false
         });
         pdfContainer.innerHTML += `
-          <div style="margin-bottom: 30px;">
-            <h2 style="color: #1f2937; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; font-size: 18px;">Répartition des Statuts DAO</h2>
-            <img src="${pieCanvas.toDataURL()}" style="width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 8px;" />
+          <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+            <h4 style="color: #374151; margin: 0 0 10px 0; font-size: 14px; text-align: center;">Répartition des Statuts</h4>
+            <img src="${pieCanvas.toDataURL()}" style="width: 100%; height: auto; border-radius: 4px;" />
           </div>
         `;
       }
 
-      // Ajouter les informations détaillées par DAO
+      pdfContainer.innerHTML += `
+          </div>
+        </div>
+      `;
+
+      
+      // Section Détails par DAO avec informations complètes
       pdfContainer.innerHTML += `
         <div style="margin-bottom: 30px;">
-          <h2 style="color: #1f2937; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; font-size: 18px;">Informations des DAO</h2>
-          <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px;">
+          <h3 style="color: #1e40af; margin: 0 0 15px 0; font-size: 16px; font-weight: bold; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">DÉTAILS DES DAO</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; background: white;">
             <thead>
-              <tr style="background: #f9fafb;">
-                <th style="border: 1px solid #e5e7eb; padding: 8px; text-align: left; font-weight: 600;">Référence</th>
-                <th style="border: 1px solid #e5e7eb; padding: 8px; text-align: left; font-weight: 600;">Objet</th>
-                <th style="border: 1px solid #e5e7eb; padding: 8px; text-align: left; font-weight: 600;">Autorité</th>
-                <th style="border: 1px solid #e5e7eb; padding: 8px; text-align: left; font-weight: 600;">Date de dépôt</th>
-                <th style="border: 1px solid #e5e7eb; padding: 8px; text-align: left; font-weight: 600;">Statut</th>
-                <th style="border: 1px solid #e5e7eb; padding: 8px; text-align: left; font-weight: 600;">Progression</th>
+              <tr style="background: linear-gradient(135deg, #1e40af, #3b82f6); color: white;">
+                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-weight: 600;">Référence</th>
+                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-weight: 600;">Objet</th>
+                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-weight: 600;">Autorité</th>
+                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-weight: 600;">Date Dépôt</th>
+                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: center; font-weight: 600;">Statut</th>
+                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: center; font-weight: 600;">Progression</th>
+                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: center; font-weight: 600;">Tâches</th>
+                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: center; font-weight: 600;">Risque</th>
               </tr>
             </thead>
             <tbody>
-              ${daos.map((dao) => {
+              ${daos.map((dao, index) => {
                 const daoTasks = tasks.filter(task => task.dao_id === dao.id);
                 const avgProgress = daoTasks.length > 0 
                   ? Math.round(daoTasks.reduce((sum, task) => sum + (task.progress || 0), 0) / daoTasks.length)
                   : 0;
                 
+                const completedTasks = daoTasks.filter(t => t.progress === 100).length;
+                const totalTasks = daoTasks.length;
+                
                 const computeStatus = () => {
                   const statut = String(dao.statut || "").toUpperCase();
                   if (statut === "TERMINEE" || statut === "TERMINE") {
-                    return { label: "Terminée", color: "#22c55e" };
+                    return { label: "Terminée", color: "#22c55e", bgColor: "#f0fdf4" };
                   }
                   if (!dao.date_depot) {
-                    return { label: "En cours", color: "#eab308" };
+                    return { label: "En cours", color: "#eab308", bgColor: "#fefce8" };
                   }
                   const dateDepot = new Date(dao.date_depot);
                   const today = new Date();
                   const diffDays = Math.floor((dateDepot.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                   if (diffDays >= 5) {
-                    return { label: "En cours", color: "#eab308" };
+                    return { label: "En cours", color: "#eab308", bgColor: "#fefce8" };
                   }
                   if (diffDays <= 3) {
-                    return { label: "À risque", color: "#ef4444" };
+                    return { label: "À risque", color: "#ef4444", bgColor: "#fef2f2" };
                   }
-                  return { label: "En cours", color: "#eab308" };
+                  return { label: "En cours", color: "#eab308", bgColor: "#fefce8" };
                 };
 
                 const status = computeStatus();
+                const rowColor = index % 2 === 0 ? '#f9fafb' : 'white';
                 
                 return `
-                  <tr>
-                    <td style="border: 1px solid #e5e7eb; padding: 8px;">${dao.reference}</td>
+                  <tr style="background: ${rowColor};">
+                    <td style="border: 1px solid #e5e7eb; padding: 8px; font-weight: 600;">${dao.reference}</td>
                     <td style="border: 1px solid #e5e7eb; padding: 8px;">${dao.objet}</td>
                     <td style="border: 1px solid #e5e7eb; padding: 8px;">${dao.autorite || 'N/A'}</td>
                     <td style="border: 1px solid #e5e7eb; padding: 8px;">${dao.date_depot ? new Date(dao.date_depot).toLocaleDateString('fr-FR') : 'N/A'}</td>
-                    <td style="border: 1px solid #e5e7eb; padding: 8px;">
-                      <span style="background: ${status.color}20; color: ${status.color}; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">
+                    <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: center;">
+                      <span style="background: ${status.bgColor}; color: ${status.color}; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600;">
                         ${status.label}
                       </span>
                     </td>
-                    <td style="border: 1px solid #e5e7eb; padding: 8px;">
-                      <div style="display: flex; align-items: center; gap: 5px;">
-                        <div style="flex: 1; background: #e5e7eb; height: 6px; border-radius: 3px;">
-                          <div style="background: #3b82f6; height: 6px; border-radius: 3px; width: ${avgProgress}%;"></div>
+                    <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: center;">
+                      <div style="display: flex; align-items: center; justify-content: center; gap: 5px;">
+                        <div style="width: 30px; height: 6px; background: #e5e7eb; border-radius: 3px;">
+                          <div style="background: ${avgProgress > 70 ? '#22c55e' : avgProgress > 40 ? '#eab308' : '#ef4444'}; height: 6px; border-radius: 3px; width: ${avgProgress}%;"></div>
                         </div>
-                        <span style="font-size: 10px; font-weight: 600;">${avgProgress}%</span>
+                        <span style="font-size: 10px; font-weight: 600; color: #374151;">${avgProgress}%</span>
                       </div>
+                    </td>
+                    <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: center;">
+                      <span style="color: #374151; font-weight: 600;">${completedTasks}/${totalTasks}</span>
+                    </td>
+                    <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: center;">
+                      ${status.label === 'À risque' ? '<span style="color: #ef4444; font-weight: bold;">ÉLEVÉ</span>' : 
+                        status.label === 'En cours' ? '<span style="color: #eab308; font-weight: bold;">MODÉRÉ</span>' : 
+                        '<span style="color: #22c55e; font-weight: bold;">FAIBLE</span>'}
                     </td>
                   </tr>
                 `;
@@ -446,17 +472,45 @@ export default function DirecteurGeneralDashboard() {
         </div>
       `;
 
+      // Section Recommandations et Conclusions
+      const riskDaosCount = daos.filter(d => {
+        const statut = String(d.statut || "").toUpperCase();
+        if (statut === "TERMINEE" || statut === "TERMINE") return false;
+        if (!d.date_depot) return false;
+        const diffDays = Math.floor((new Date(d.date_depot).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+        return diffDays <= 3;
+      }).length;
+
+      pdfContainer.innerHTML += `
+        <div style="margin-bottom: 30px; background: #fef3c7; padding: 20px; border-radius: 8px; border-left: 5px solid #f59e0b;">
+          <h3 style="color: #92400e; margin: 0 0 15px 0; font-size: 16px; font-weight: bold;">POINTS D'ATTENTION</h3>
+          <ul style="margin: 0; padding-left: 20px; color: #78350f;">
+            <li style="margin-bottom: 8px;"><strong>${riskDaosCount} DAO</strong> présentent un risque critique nécessitant une attention immédiate</li>
+            <li style="margin-bottom: 8px;">Taux de progression moyen : <strong>${Math.round(daos.reduce((sum, dao) => {
+              const daoTasks = tasks.filter(task => task.dao_id === dao.id);
+              return sum + (daoTasks.length > 0 ? Math.round(daoTasks.reduce((s, t) => s + (t.progress || 0), 0) / daoTasks.length) : 0);
+            }, 0) / daos.length)}%</strong></li>
+            <li style="margin-bottom: 8px;">Recommandation : Organiser une revue hebdomadaire pour les DAO à risque</li>
+            <li style="margin-bottom: 8px;">Action requise : Mobiliser les ressources nécessaires pour les projets en retard</li>
+          </ul>
+        </div>
+
+        <!-- Pied de page -->
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 12px;">
+          <p style="margin: 0;">Rapport généré automatiquement par le système de gestion des DAO</p>
+          <p style="margin: 5px 0 0 0;">Direction Générale - ${new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        </div>
+      `;
+
       document.body.appendChild(pdfContainer);
 
       // Capturer le conteneur complet
       const canvas = await html2canvas(pdfContainer, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
         allowTaint: false,
         backgroundColor: '#ffffff',
-        logging: false,
-        width: pdfContainer.scrollWidth,
-        height: pdfContainer.scrollHeight
+        logging: false
       });
 
       // Créer le PDF
@@ -845,9 +899,9 @@ export default function DirecteurGeneralDashboard() {
         Progression des DAO
       </h3>
       <button
-        onClick={downloadComprehensivePDF}
+        onClick={downloadDGComprehensivePDF}
         className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-        title="Télécharger le rapport PDF complet"
+        title="Télécharger le rapport DG complet"
       >
         <FileText size={16} />
       </button>
@@ -872,9 +926,9 @@ export default function DirecteurGeneralDashboard() {
                   Voir tout
                 </button>
                 <button
-                  onClick={downloadComprehensivePDF}
+                  onClick={downloadDGComprehensivePDF}
                   className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-                  title="Télécharger le rapport PDF complet"
+                  title="Télécharger le rapport DG complet"
                 >
                   <FileText size={16} />
                 </button>
