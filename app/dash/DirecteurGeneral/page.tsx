@@ -305,86 +305,182 @@ export default function DirecteurGeneralDashboard() {
       // Attendre que les graphiques soient complètement rendus
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Créer un conteneur temporaire pour le PDF
+      // Créer un conteneur temporaire pour le PDF optimisé A4
       const pdfContainer = document.createElement('div');
       pdfContainer.style.cssText = `
         position: absolute;
         left: -9999px;
         top: 0;
         width: 210mm;
+        min-height: 297mm;
         background: white;
-        padding: 20px;
-        font-family: Arial, sans-serif;
+        padding: 15mm;
+        font-family: 'Roboto', Arial, sans-serif;
+        box-sizing: border-box;
+        font-size: 12px;
+        line-height: 1.4;
       `;
 
-      // En-tête professionnel pour le DG
+      // En-tête professionnel avec couleurs entreprise optimisé A4
       pdfContainer.innerHTML = `
-        <div style="text-align: center; margin-bottom: 30px; border-bottom: 3px solid #1e40af; padding-bottom: 15px;">
-          <h1 style="color: #1f2937; margin: 0; font-size: 28px; font-weight: bold;">RAPPORT DE SYNTHÈSE DES DAO</h1>
-          <h2 style="color: #3b82f6; margin: 5px 0 0 0; font-size: 18px;">Direction Générale</h2>
-          <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 14px;">Généré le ${new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        <div style="background: linear-gradient(135deg, #4d83ff, #843cf6); color: white; text-align: center; padding: 20px 10px; margin: -15mm -15mm 20mm -15mm;">
+          <h1 style="margin: 0; font-size: 28px; font-weight: bold; letter-spacing: 1px;">Rapport de Synthèse des DAO</h1>
+          <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">Généré le ${new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
 
-        <!-- Section Synthèse Exécutive -->
-        <div style="margin-bottom: 30px; background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 5px solid #3b82f6;">
-          <h3 style="color: #1e40af; margin: 0 0 15px 0; font-size: 16px; font-weight: bold;">SYNTHÈSE EXÉCUTIVE</h3>
+        <!-- Section Synthèse optimisée A4 avec couleurs entreprise -->
+        <div style="margin-bottom: 20mm; background: linear-gradient(135deg, #f8f9fa, #e8eff4); padding: 18px; border-radius: 10px; border-left: 4px solid #4d83ff; box-shadow: 0 3px 5px rgba(0,0,0,0.1);">
+          <h3 style="color: #4d83ff; margin: 0 0 15px 0; font-size: 16px; font-weight: bold;">SYNTHÈSE</h3>
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
-            <div style="text-align: center; background: white; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-              <div style="font-size: 32px; font-weight: bold; color: #3b82f6;">${stats.totalDaos}</div>
-              <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">DAO Total</div>
+            <div style="text-align: center; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); border-top: 3px solid #4d83ff;">
+              <div style="font-size: 32px; font-weight: bold; color: #4d83ff; margin-bottom: 6px;">${stats.totalDaos}</div>
+              <div style="font-size: 12px; color: #6b7280; font-weight: 600;">DAO Total</div>
             </div>
-            <div style="text-align: center; background: white; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-              <div style="font-size: 32px; font-weight: bold; color: #ef4444;">${stats.atRiskDaos}</div>
-              <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">À Risque</div>
+            <div style="text-align: center; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); border-top: 3px solid #dc3545;">
+              <div style="font-size: 32px; font-weight: bold; color: #dc3545; margin-bottom: 6px;">${stats.atRiskDaos}</div>
+              <div style="font-size: 12px; color: #6b7280; font-weight: 600;">À Risque</div>
             </div>
-            <div style="text-align: center; background: white; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-              <div style="font-size: 32px; font-weight: bold; color: #22c55e;">${stats.inProgressDaos}</div>
-              <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">En Cours</div>
+            <div style="text-align: center; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); border-top: 3px solid #71c016;">
+              <div style="font-size: 32px; font-weight: bold; color: #71c016; margin-bottom: 6px;">${stats.inProgressDaos}</div>
+              <div style="font-size: 12px; color: #6b7280; font-weight: 600;">En Cours</div>
             </div>
           </div>
         </div>
       `;
 
-      // Section Graphiques et Analyse
-      pdfContainer.innerHTML += `
-        <div style="margin-bottom: 30px;">
-          <h3 style="color: #1e40af; margin: 0 0 15px 0; font-size: 16px; font-weight: bold; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">ANALYSE GRAPHIQUE</h3>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-      `;
+      // Sections individuelles pour chaque DAO avec un seul graphique
+      pdfContainer.innerHTML += daos.map((dao, daoIndex) => {
+        const daoTasks = tasks.filter(task => task.dao_id === dao.id);
+        const avgProgress = daoTasks.length > 0 
+          ? Math.round(daoTasks.reduce((sum, task) => sum + (task.progress || 0), 0) / daoTasks.length)
+          : 0;
+        
+        const completedTasks = daoTasks.filter(t => t.progress === 100).length;
+        const totalTasks = daoTasks.length;
+        
+        const performance = avgProgress > 70 ? 'HIGH' : avgProgress > 40 ? 'MEDIUM' : 'LOW';
+        const performanceColor = avgProgress > 70 ? '#22c55e' : avgProgress > 40 ? '#eab308' : '#ef4444';
+        
+        // Créer un graphique de progression comme dans le dashboard
+        const chartData = daoTasks.map((task, index) => ({
+          label: `Tâche ${index + 1}`,
+          progress: task.progress || 0
+        }));
+        
+        return `
+          <!-- Section individuelle pour ${dao.reference} optimisée A4 avec couleurs entreprise -->
+          <div style="margin-bottom: 25mm; page-break-inside: avoid;">
+            <div style="background: linear-gradient(135deg, #4d83ff, #843cf6); color: white; padding: 15px 10px; border-radius: 10px 10px 0 0; text-align: center;">
+              <h2 style="margin: 0; font-size: 20px; font-weight: bold;">${dao.reference}</h2>
+              <p style="margin: 6px 0 0 0; font-size: 12px; opacity: 0.9;">${dao.objet}</p>
+            </div>
+            
+            <div style="background: white; border: 1px solid #e8eff4; border-top: none; border-radius: 0 0 10px 10px; padding: 18px;">
+              
+              <!-- KPIs principaux optimisés A4 avec couleurs entreprise -->
+              <div style="margin-bottom: 20mm;">
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+                  <div style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 3px solid #4d83ff;">
+                    <div style="font-size: 24px; font-weight: bold; color: #4d83ff;">${avgProgress}%</div>
+                    <div style="font-size: 10px; color: #6b7280; margin-top: 3px;">Progression</div>
+                  </div>
+                  <div style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 3px solid ${performanceColor};">
+                    <div style="font-size: 24px; font-weight: bold; color: ${performanceColor};">${performance}</div>
+                    <div style="font-size: 10px; color: #6b7280; margin-top: 3px;">Performance</div>
+                  </div>
+                  <div style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 3px solid #71c016;">
+                    <div style="font-size: 24px; font-weight: bold; color: #71c016;">${completedTasks}</div>
+                    <div style="font-size: 10px; color: #6b7280; margin-top: 3px;">Tâches Complétées</div>
+                  </div>
+                  <div style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 3px solid #686868;">
+                    <div style="font-size: 24px; font-weight: bold; color: #686868;">${totalTasks}</div>
+                    <div style="font-size: 10px; color: #6b7280; margin-top: 3px;">Total Tâches</div>
+                  </div>
+                </div>
+              </div>
 
-      // Ajouter les graphiques en capturant les canvas
-      if (chartRef.current) {
-        const chartCanvas = await html2canvas(chartRef.current, {
-          scale: 1.5,
-          backgroundColor: '#ffffff',
-          logging: false
-        });
-        pdfContainer.innerHTML += `
-          <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
-            <h4 style="color: #374151; margin: 0 0 10px 0; font-size: 14px; text-align: center;">Progression des DAO</h4>
-            <img src="${chartCanvas.toDataURL()}" style="width: 100%; height: auto; border-radius: 4px;" />
+              <!-- Graphique unique optimisé A4 avec couleurs entreprise -->
+              <div style="margin-bottom: 20mm;">
+                <h3 style="color: #4d83ff; margin: 0 0 15px 0; font-size: 16px; font-weight: bold; border-bottom: 2px solid #4d83ff; padding-bottom: 6px;">PROGRESSION DES TÂCHES</h3>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e8eff4;">
+                  <!-- Graphique optimisé A4 -->
+                  <div style="height: 220px; position: relative; background: white; border-radius: 4px; padding: 15px;">
+                    <!-- Axe Y -->
+                    <div style="position: absolute; left: 30px; top: 15px; bottom: 30px; width: 1px; background: #e8eff4;"></div>
+                    <!-- Labels Y -->
+                    <div style="position: absolute; left: 3px; top: 15px; font-size: 9px; color: #686868;">100%</div>
+                    <div style="position: absolute; left: 3px; top: 65px; font-size: 9px; color: #686868;">75%</div>
+                    <div style="position: absolute; left: 3px; top: 115px; font-size: 9px; color: #686868;">50%</div>
+                    <div style="position: absolute; left: 3px; top: 165px; font-size: 9px; color: #686868;">25%</div>
+                    <div style="position: absolute; left: 5px; bottom: 25px; font-size: 9px; color: #686868;">0%</div>
+                    
+                    <!-- Axe X -->
+                    <div style="position: absolute; left: 30px; bottom: 30px; right: 15px; height: 1px; background: #e8eff4;"></div>
+                    
+                    <!-- Barres de progression optimisées A4 avec couleurs entreprise -->
+                    <div style="position: absolute; left: 35px; bottom: 30px; right: 20px; top: 15px; display: flex; align-items: flex-end; justify-content: space-around; padding: 0 5px;">
+                      ${chartData.map((data, index) => {
+                        const barHeight = (data.progress / 100) * 160; // 160px est la hauteur disponible
+                        const barColor = data.progress === 100 ? '#71c016' : data.progress >= 50 ? '#4d83ff' : '#7859df';
+                        return `
+                          <div style="display: flex; flex-direction: column; align-items: center; flex: 1; max-width: 45px;">
+                            <div style="width: 20px; height: ${barHeight}px; background: ${barColor}; border-radius: 2px 2px 0 0; margin-bottom: 6px; position: relative;">
+                              ${data.progress > 0 ? `<div style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 8px; font-weight: bold; color: #2a2a2a;">${data.progress}%</div>` : ''}
+                            </div>
+                            <div style="font-size: 7px; color: #686868; text-align: center; max-width: 40px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${data.label}</div>
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+                    
+                    <!-- Ligne de moyenne optimisée A4 -->
+                    <div style="position: absolute; left: 35px; right: 20px; bottom: ${30 + (160 - (avgProgress / 100) * 160)}px; height: 1px; background: #dc3545; border-top: 1px dashed #dc3545;">
+                      <div style="position: absolute; right: -35px; top: -8px; font-size: 8px; color: #dc3545; font-weight: bold;">Moy: ${avgProgress}%</div>
+                    </div>
+                  </div>
+                  
+                  <!-- Légende optimisée A4 avec couleurs entreprise -->
+                  <div style="display: flex; justify-content: center; gap: 15px; margin-top: 12px;">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                      <div style="width: 10px; height: 10px; background: #71c016; border-radius: 2px;"></div>
+                      <span style="font-size: 9px; color: #686868;">Complété</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                      <div style="width: 10px; height: 10px; background: #4d83ff; border-radius: 2px;"></div>
+                      <span style="font-size: 9px; color: #686868;">En cours</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                      <div style="width: 10px; height: 10px; background: #7859df; border-radius: 2px;"></div>
+                      <span style="font-size: 9px; color: #686868;">Démarré</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Détails supplémentaires optimisés A4 -->
+              <div style="background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e8eff4;">
+                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; align-items: center;">
+                  <div>
+                    <div style="font-size: 11px; color: #686868; margin-bottom: 3px;">Autorité</div>
+                    <div style="font-size: 12px; font-weight: 600; color: #2a2a2a;">${dao.autorite || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div style="font-size: 11px; color: #686868; margin-bottom: 3px;">Date Dépôt</div>
+                    <div style="font-size: 12px; font-weight: 600; color: #2a2a2a;">${dao.date_depot ? new Date(dao.date_depot).toLocaleDateString('fr-FR') : 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div style="font-size: 11px; color: #686868; margin-bottom: 3px;">Statut</div>
+                    <span style="background: #dbe6ff; color: #4d83ff; padding: 3px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">
+                      ${dao.statut || 'EN COURS'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
         `;
-      }
-
-      if (pieChartRef.current) {
-        const pieCanvas = await html2canvas(pieChartRef.current, {
-          scale: 1.5,
-          backgroundColor: '#ffffff',
-          logging: false
-        });
-        pdfContainer.innerHTML += `
-          <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
-            <h4 style="color: #374151; margin: 0 0 10px 0; font-size: 14px; text-align: center;">Répartition des Statuts</h4>
-            <img src="${pieCanvas.toDataURL()}" style="width: 100%; height: auto; border-radius: 4px;" />
-          </div>
-        `;
-      }
-
-      pdfContainer.innerHTML += `
-          </div>
-        </div>
-      `;
+      }).join('');
 
       
       // Section Détails par DAO avec informations complètes
@@ -504,33 +600,52 @@ export default function DirecteurGeneralDashboard() {
 
       document.body.appendChild(pdfContainer);
 
-      // Capturer le conteneur complet
+      // Capturer le conteneur complet avec optimisation poids et résolution
       const canvas = await html2canvas(pdfContainer, {
-        scale: 1.5,
+        scale: 2, // Réduit de 1.5 à 2 pour optimiser le poids
         useCORS: true,
         allowTaint: false,
         backgroundColor: '#ffffff',
-        logging: false
+        logging: false,
+        width: pdfContainer.scrollWidth,
+        height: pdfContainer.scrollHeight,
+        windowWidth: pdfContainer.scrollWidth,
+        windowHeight: pdfContainer.scrollHeight
       });
 
-      // Créer le PDF
-      const imgData = canvas.toDataURL('image/png', 0.9);
+      // Créer le PDF avec optimisation
+      const imgData = canvas.toDataURL('image/jpeg', 0.8); // JPEG avec 80% de qualité pour réduire le poids
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: 'a4'
+        format: 'a4',
+        compress: true // Activer la compression PDF
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 10;
+      
+      // Calculer les dimensions pour remplir la page A4 sans marges excessives
+      const imgWidth = pdfWidth - 10; // 5mm de marge de chaque côté
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 5; // 5mm du haut
 
-      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-      pdf.save(`rapport-dao-${new Date().toISOString().split('T')[0]}.pdf`);
+      // Ajouter la première page
+      pdf.addImage(imgData, 'JPEG', 5, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      // Gérer les pages multiples
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + 5;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 5, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      // Sauvegarder avec nom optimisé
+      pdf.save(`dao-report-${new Date().toISOString().split('T')[0]}.pdf`);
 
       // Nettoyer
       document.body.removeChild(pdfContainer);
