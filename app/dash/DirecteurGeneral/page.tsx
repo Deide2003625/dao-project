@@ -1,54 +1,50 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import Chart from "chart.js/auto";
+import { MessageSquare, FileText, User } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import {
-  FileText,
-  Users,
-  TrendingUp,
-  Calendar,
-  CheckCircle,
-  Clock,
-  AlertTriangle,
-  Target,
-  BarChart3,
-  PieChart,
-  Activity,
-  MessageSquare,
-  User,
-} from "lucide-react";
 
 interface DAO {
   id: number;
-  reference: string;
-  objet: string;
+  reference?: string;
+  objet?: string;
   autorite?: string;
   date_depot?: string;
-  statut: string;
+  statut?: string;
   created_at?: string;
-  updated_at?: string;
+  numero?: string;
+  description?: string;
+  chef_id?: number;
+  team_id?: string;
+  groupement?: string;
+  nom_partenaire?: string;
 }
 
 interface Task {
   id: number;
-  titre: string;
-  description: string;
   dao_id: number;
-  statut: string;
-  progress: number;
-  date_creation: string;
-  date_echeance: string;
-  priorite: string;
-  assigned_to: number;
+  id_task: number;
+  titre?: string;
+  description?: string;
+  statut?: string;
+  progress?: number;
+  date_creation?: string;
+  date_echeance?: string;
+  priorite?: string;
+  assigned_to?: number;
 }
 
 interface User {
   id: number;
   username: string;
-  role_id: string;
-  url_photo: string | null;
+  name: string;
+  email: string;
+  url_photo: string;
+  role_id: number;
+  roleName: string;
+  roleLabel: string;
 }
 
 interface Comment {
@@ -64,13 +60,13 @@ interface Comment {
   is_public?: boolean;
 }
 
-export default function DirecteurGeneralDashboard() {
+export default function LecteurDashboard() {
   const [daos, setDaos] = useState<DAO[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedDAO, setSelectedDAO] = useState<DAO | null>(null);
+  const [selectedDao, setSelectedDao] = useState<DAO | null>(null);
+  const [chartsReady, setChartsReady] = useState(false);
   
   // États pour les commentaires
   const [comments, setComments] = useState<Comment[]>([]);
@@ -78,14 +74,12 @@ export default function DirecteurGeneralDashboard() {
   const [globalComment, setGlobalComment] = useState("");
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
   const [mentionSearch, setMentionSearch] = useState("");
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
-  
-  const chartRef = useRef<HTMLCanvasElement>(null);
-  const pieChartRef = useRef<HTMLCanvasElement>(null);
-  const barChartRef = useRef<HTMLCanvasElement>(null);
 
-  // Fetch current user
+  // Fetch data from APIs
   useEffect(() => {
+    // Charger l'utilisateur connecté depuis localStorage
     const userData = localStorage.getItem("user");
     if (userData) {
       try {
@@ -97,59 +91,43 @@ export default function DirecteurGeneralDashboard() {
     }
   }, []);
 
-  // Fetch data
   useEffect(() => {
-    if (currentUser) {
-      fetchData();
-    }
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch DAOs
+        const daosResponse = await fetch('/api/daos');
+        if (daosResponse.ok) {
+          const daosData = await daosResponse.json();
+          setDaos(daosData.success ? daosData.data : []);
+        }
+
+        // Fetch Tasks
+        const tasksResponse = await fetch('/api/tasks');
+        if (tasksResponse.ok) {
+          const tasksData = await tasksResponse.json();
+          setTasks(tasksData.success ? tasksData.data : []);
+        }
+
+        // Fetch Users
+        const usersResponse = await fetch('/api/users');
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          setUsers(usersData.success ? usersData.data : []);
+        }
+
+        // Charger les commentaires
+        await loadComments();
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, [currentUser]);
-
-  const fetchData = async () => {
-    console.log("=== DÉBUT FETCH DATA ===");
-    try {
-      const [daosResponse, tasksResponse, usersResponse] = await Promise.all([
-        fetch("/api/daos"),
-        fetch("/api/tasks"),
-        fetch("/api/users")
-      ]);
-
-      console.log("Réponses API reçues:");
-      console.log("- DAOs status:", daosResponse.status);
-      console.log("- Tasks status:", tasksResponse.status);
-      console.log("- Users status:", usersResponse.status);
-
-      if (daosResponse.ok) {
-        const daosResult = await daosResponse.json();
-        console.log("Résultat DAOs API:", daosResult);
-        setDaos(daosResult.data || []);
-      } else {
-        console.error("Erreur DAOs:", await daosResponse.text());
-      }
-
-      if (tasksResponse.ok) {
-        const tasksResult = await tasksResponse.json();
-        console.log("Résultat Tasks API:", tasksResult);
-        setTasks(tasksResult.data || []);
-      } else {
-        console.error("Erreur Tasks:", await tasksResponse.text());
-      }
-
-      if (usersResponse.ok) {
-        const usersResult = await usersResponse.json();
-        console.log("Résultat Users API:", usersResult);
-        setUsers(usersResult.data || []);
-      }
-
-      // Charger les commentaires
-      await loadComments();
-      
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      setLoading(false);
-      console.log("=== FIN FETCH DATA ===");
-    }
-  };
 
   // Charger les commentaires
   const loadComments = async () => {
@@ -282,7 +260,8 @@ export default function DirecteurGeneralDashboard() {
     setShowCommentModal(true);
   };
 
-  // Fonction pour télécharger en PDF complet adapté au Directeur Général
+  // Fonction pour imprimer en PDF
+// Fonction pour télécharger en PDF complet adapté au Directeur Général
   const downloadDGComprehensivePDF = async () => {
     try {
       // Afficher un indicateur de chargement
@@ -305,7 +284,40 @@ export default function DirecteurGeneralDashboard() {
       // Attendre que les graphiques soient complètement rendus
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Créer un conteneur temporaire pour le PDF optimisé A4
+      // Détecter le type d'écran et adapter la mise en page
+      const screenWidth = window.screen.width;
+      const screenHeight = window.screen.height;
+      const isMobile = screenWidth <= 768;
+      const isTablet = screenWidth > 768 && screenWidth <= 1024;
+      const isDesktop = screenWidth > 1024;
+      
+      // Adapter les dimensions et polices selon l'écran
+      let containerWidth, padding, fontSize, titleSize, cardPadding, gridCols;
+      
+      if (isMobile) {
+        containerWidth = '100%';
+        padding = '8mm';
+        fontSize = '10px';
+        titleSize = '20px';
+        cardPadding = '10px';
+        gridCols = 'repeat(2, 1fr)';
+      } else if (isTablet) {
+        containerWidth = '210mm';
+        padding = '12mm';
+        fontSize = '11px';
+        titleSize = '24px';
+        cardPadding = '15px';
+        gridCols = 'repeat(3, 1fr)';
+      } else {
+        containerWidth = '210mm';
+        padding = '15mm';
+        fontSize = '12px';
+        titleSize = '28px';
+        cardPadding = '20px';
+        gridCols = 'repeat(4, 1fr)';
+      }
+
+      // Créer un conteneur temporaire pour le PDF adaptatif
       const pdfContainer = document.createElement('div');
       pdfContainer.style.cssText = `
         position: absolute;
@@ -314,36 +326,64 @@ export default function DirecteurGeneralDashboard() {
         width: 210mm;
         min-height: 297mm;
         background: white;
-        padding: 15mm;
+        padding: 10mm;
         font-family: 'Roboto', Arial, sans-serif;
         box-sizing: border-box;
-        font-size: 12px;
+        font-size: ${fontSize};
         line-height: 1.4;
+        overflow: hidden;
       `;
 
-      // En-tête professionnel avec couleurs entreprise optimisé A4
+      // En-tête professionnel avec logo et couleurs entreprise adaptatif
       pdfContainer.innerHTML = `
-        <div style="background: linear-gradient(135deg, #4d83ff, #843cf6); color: white; text-align: center; padding: 20px 10px; margin: -15mm -15mm 20mm -15mm;">
-          <h1 style="margin: 0; font-size: 28px; font-weight: bold; letter-spacing: 1px;">Rapport de Synthèse des DAO</h1>
-          <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">Généré le ${new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        <div style="background: linear-gradient(135deg, #6493FF, #3155A7); color: white; text-align: center; padding: ${isMobile ? '15px 8px' : '20px 10px'}; margin: -10mm -10mm 15mm -10mm; border-radius: 0 0 ${isMobile ? '8px' : '15px'} ${isMobile ? '8px' : '15px'};">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${isMobile ? '12px' : '15px'};">
+            <div style="text-align: left;">
+              <div style="display: flex; align-items: center; gap: ${isMobile ? '10px' : '14px'};">
+                <div style="width: ${isMobile ? '60px' : '70px'}; height: ${isMobile ? '40px' : '45px'}; background: white; border-radius: ${isMobile ? '6px' : '8px'}; display: flex; align-items: center; justify-content: center; padding: ${isMobile ? '6px' : '8px'}; box-shadow: 0 4px 8px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.2);">
+                  <img src="/images/logo.png" alt="2SND Technologies" style="width: 100%; height: 100%; object-fit: contain; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;" />
+                </div>
+                <div>
+                  <div style="font-size: ${isMobile ? '14px' : '16px'}; font-weight: bold; opacity: 0.95; line-height: 1.1;">2SND Technologies</div>
+                  <div style="font-size: ${isMobile ? '9px' : '11px'}; opacity: 0.8; margin-top: 1px;">Plateforme DAO</div>
+                </div>
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: ${isMobile ? '9px' : '11px'}; opacity: 0.8;">${new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            </div>
+          </div>
+          <h3 style="margin: 0; font-size: ${isMobile ? '18px' : '22px'}; font-weight: bold; letter-spacing: 0.5px; text-align: center;">Rapport de Synthèse des DAO</h3>
         </div>
 
-        <!-- Section Synthèse optimisée A4 avec couleurs entreprise -->
-        <div style="margin-bottom: 20mm; background: linear-gradient(135deg, #f8f9fa, #e8eff4); padding: 18px; border-radius: 10px; border-left: 4px solid #4d83ff; box-shadow: 0 3px 5px rgba(0,0,0,0.1);">
-          <h3 style="color: #4d83ff; margin: 0 0 15px 0; font-size: 16px; font-weight: bold;">SYNTHÈSE</h3>
-          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
-            <div style="text-align: center; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); border-top: 3px solid #4d83ff;">
-              <div style="font-size: 32px; font-weight: bold; color: #4d83ff; margin-bottom: 6px;">${stats.totalDaos}</div>
-              <div style="font-size: 12px; color: #6b7280; font-weight: 600;">DAO Total</div>
+        <!-- Section Synthèse adaptative -->
+        <div style="margin-bottom: 12mm; background: white; border: 2px solid #e5e7eb; border-radius: ${isMobile ? '6px' : '8px'}; padding: ${isMobile ? '12px' : '16px'}; box-shadow: 0 3px 6px rgba(0,0,0,0.08);">
+          <div style="background: linear-gradient(135deg, #6493FF, #3155A7); color: white; padding: ${isMobile ? '10px 12px' : '12px 16px'}; margin: -${cardPadding} -${cardPadding} ${cardPadding} -${cardPadding}; border-radius: ${isMobile ? '4px' : '6px'} ${isMobile ? '4px' : '6px'} 0 0;">
+            <h3 style="margin: 0; font-size: ${isMobile ? '14px' : '16px'}; font-weight: bold; letter-spacing: 0.5px;">SYNTHÈSE</h3>
+          </div>
+          <div style="display: grid; grid-template-columns: ${gridCols}; gap: ${isMobile ? '8px' : '12px'}; padding-top: ${cardPadding};">
+            <div style="background: linear-gradient(135deg, #f8f9fa, #ffffff); border: 1px solid #e5e7eb; border-radius: ${isMobile ? '6px' : '8px'}; padding: ${isMobile ? '12px' : '16px'}; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.3s ease;">
+              <div style="width: 40px; height: 3px; background: linear-gradient(90deg, #6493FF, #3155A7); margin: 0 auto ${isMobile ? '8px' : '12px'} auto; border-radius: 2px;"></div>
+              <div style="font-size: ${isMobile ? '24px' : '30px'}; font-weight: bold; color: #6493FF; margin-bottom: 6px; line-height: 1;">${stats.totalDaos}</div>
+              <div style="font-size: ${isMobile ? '10px' : '12px'}; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">DAO Total</div>
             </div>
-            <div style="text-align: center; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); border-top: 3px solid #dc3545;">
-              <div style="font-size: 32px; font-weight: bold; color: #dc3545; margin-bottom: 6px;">${stats.atRiskDaos}</div>
-              <div style="font-size: 12px; color: #6b7280; font-weight: 600;">À Risque</div>
+            <div style="background: linear-gradient(135deg, #fef2f2, #ffffff); border: 1px solid #fecaca; border-radius: ${isMobile ? '6px' : '8px'}; padding: ${isMobile ? '12px' : '16px'}; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.3s ease;">
+              <div style="width: 40px; height: 3px; background: linear-gradient(90deg, #dc3545, #ef4444); margin: 0 auto ${isMobile ? '8px' : '12px'} auto; border-radius: 2px;"></div>
+              <div style="font-size: ${isMobile ? '24px' : '30px'}; font-weight: bold; color: #dc3545; margin-bottom: 6px; line-height: 1;">${stats.atRiskDaos}</div>
+              <div style="font-size: ${isMobile ? '10px' : '12px'}; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">À Risque</div>
             </div>
-            <div style="text-align: center; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); border-top: 3px solid #71c016;">
-              <div style="font-size: 32px; font-weight: bold; color: #71c016; margin-bottom: 6px;">${stats.inProgressDaos}</div>
-              <div style="font-size: 12px; color: #6b7280; font-weight: 600;">En Cours</div>
+            <div style="background: linear-gradient(135deg, #f0fdf4, #ffffff); border: 1px solid #bbf7d0; border-radius: ${isMobile ? '6px' : '8px'}; padding: ${isMobile ? '12px' : '16px'}; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.3s ease;">
+              <div style="width: 40px; height: 3px; background: linear-gradient(90deg, #71c016, #22c55e); margin: 0 auto ${isMobile ? '8px' : '12px'} auto; border-radius: 2px;"></div>
+              <div style="font-size: ${isMobile ? '24px' : '30px'}; font-weight: bold; color: #71c016; margin-bottom: 6px; line-height: 1;">${stats.inProgressDaos}</div>
+              <div style="font-size: ${isMobile ? '10px' : '12px'}; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">En Cours</div>
             </div>
+            ${!isMobile ? `
+            <div style="background: linear-gradient(135deg, #f0fdf4, #ffffff); border: 1px solid #bbf7d0; border-radius: ${isMobile ? '6px' : '8px'}; padding: ${isMobile ? '12px' : '16px'}; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.3s ease;">
+              <div style="width: 40px; height: 3px; background: linear-gradient(90deg, #10b981, #22c55e); margin: 0 auto ${isMobile ? '8px' : '12px'} auto; border-radius: 2px;"></div>
+              <div style="font-size: ${isMobile ? '24px' : '30px'}; font-weight: bold; color: #10b981; margin-bottom: 6px; line-height: 1;">${stats.completedDaos}</div>
+              <div style="font-size: ${isMobile ? '10px' : '12px'}; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Terminées</div>
+            </div>
+            ` : ''}
           </div>
         </div>
       `;
@@ -367,204 +407,170 @@ export default function DirecteurGeneralDashboard() {
           progress: task.progress || 0
         }));
         
+        const isFirstDao = daoIndex === 0;
+        
         return `
-          <!-- Section individuelle pour ${dao.reference} optimisée A4 avec couleurs entreprise -->
-          <div style="margin-bottom: 25mm; page-break-inside: avoid;">
-            <div style="background: linear-gradient(135deg, #4d83ff, #843cf6); color: white; padding: 15px 10px; border-radius: 10px 10px 0 0; text-align: center;">
-              <h2 style="margin: 0; font-size: 20px; font-weight: bold;">${dao.reference}</h2>
-              <p style="margin: 6px 0 0 0; font-size: 12px; opacity: 0.9;">${dao.objet}</p>
-            </div>
-            
-            <div style="background: white; border: 1px solid #e8eff4; border-top: none; border-radius: 0 0 10px 10px; padding: 18px;">
+          <!-- Section individuelle pour ${dao.reference} adaptative -->
+          <div style="margin-bottom: 15mm; ${isFirstDao ? 'page-break-before: avoid;' : 'page-break-before: always;'} page-break-inside: avoid;">
+            <div style="background: white; border: 2px solid #e5e7eb; border-radius: ${isMobile ? '8px' : '10px'}; box-shadow: 0 3px 6px rgba(0,0,0,0.08); overflow: hidden;">
+              <div style="background: linear-gradient(135deg, #6493FF, #3155A7); color: white; padding: ${isMobile ? '12px 16px' : '16px 20px'}; text-align: center;">
+                <h2 style="margin: 0; font-size: ${isMobile ? '16px' : '20px'}; font-weight: bold; letter-spacing: 0.5px;">${dao.reference}</h2>
+                <p style="margin: ${isMobile ? '4px' : '6px'} 0 0 0; font-size: ${isMobile ? '10px' : '12px'}; opacity: 0.9;">${dao.objet}</p>
+              </div>
               
-              <!-- KPIs principaux optimisés A4 avec couleurs entreprise -->
-              <div style="margin-bottom: 20mm;">
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
-                  <div style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 3px solid #4d83ff;">
-                    <div style="font-size: 24px; font-weight: bold; color: #4d83ff;">${avgProgress}%</div>
-                    <div style="font-size: 10px; color: #6b7280; margin-top: 3px;">Progression</div>
-                  </div>
-                  <div style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 3px solid ${performanceColor};">
-                    <div style="font-size: 24px; font-weight: bold; color: ${performanceColor};">${performance}</div>
-                    <div style="font-size: 10px; color: #6b7280; margin-top: 3px;">Performance</div>
-                  </div>
-                  <div style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 3px solid #71c016;">
-                    <div style="font-size: 24px; font-weight: bold; color: #71c016;">${completedTasks}</div>
-                    <div style="font-size: 10px; color: #6b7280; margin-top: 3px;">Tâches Complétées</div>
-                  </div>
-                  <div style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 3px solid #686868;">
-                    <div style="font-size: 24px; font-weight: bold; color: #686868;">${totalTasks}</div>
-                    <div style="font-size: 10px; color: #6b7280; margin-top: 3px;">Total Tâches</div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Graphique unique optimisé A4 avec couleurs entreprise -->
-              <div style="margin-bottom: 20mm;">
-                <h3 style="color: #4d83ff; margin: 0 0 15px 0; font-size: 16px; font-weight: bold; border-bottom: 2px solid #4d83ff; padding-bottom: 6px;">PROGRESSION DES TÂCHES</h3>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e8eff4;">
-                  <!-- Graphique optimisé A4 -->
-                  <div style="height: 220px; position: relative; background: white; border-radius: 4px; padding: 15px;">
-                    <!-- Axe Y -->
-                    <div style="position: absolute; left: 30px; top: 15px; bottom: 30px; width: 1px; background: #e8eff4;"></div>
-                    <!-- Labels Y -->
-                    <div style="position: absolute; left: 3px; top: 15px; font-size: 9px; color: #686868;">100%</div>
-                    <div style="position: absolute; left: 3px; top: 65px; font-size: 9px; color: #686868;">75%</div>
-                    <div style="position: absolute; left: 3px; top: 115px; font-size: 9px; color: #686868;">50%</div>
-                    <div style="position: absolute; left: 3px; top: 165px; font-size: 9px; color: #686868;">25%</div>
-                    <div style="position: absolute; left: 5px; bottom: 25px; font-size: 9px; color: #686868;">0%</div>
-                    
-                    <!-- Axe X -->
-                    <div style="position: absolute; left: 30px; bottom: 30px; right: 15px; height: 1px; background: #e8eff4;"></div>
-                    
-                    <!-- Barres de progression optimisées A4 avec couleurs entreprise -->
-                    <div style="position: absolute; left: 35px; bottom: 30px; right: 20px; top: 15px; display: flex; align-items: flex-end; justify-content: space-around; padding: 0 5px;">
-                      ${chartData.map((data, index) => {
-                        const barHeight = (data.progress / 100) * 160; // 160px est la hauteur disponible
-                        const barColor = data.progress === 100 ? '#71c016' : data.progress >= 50 ? '#4d83ff' : '#7859df';
-                        return `
-                          <div style="display: flex; flex-direction: column; align-items: center; flex: 1; max-width: 45px;">
-                            <div style="width: 20px; height: ${barHeight}px; background: ${barColor}; border-radius: 2px 2px 0 0; margin-bottom: 6px; position: relative;">
-                              ${data.progress > 0 ? `<div style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 8px; font-weight: bold; color: #2a2a2a;">${data.progress}%</div>` : ''}
-                            </div>
-                            <div style="font-size: 7px; color: #686868; text-align: center; max-width: 40px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${data.label}</div>
-                          </div>
-                        `;
-                      }).join('')}
+              <div style="padding: ${isMobile ? '16px' : '20px'};">
+                
+                <!-- KPIs principaux adaptatifs -->
+                <div style="margin-bottom: ${isMobile ? '12px' : '16mm'};">
+                  <div style="display: grid; grid-template-columns: ${isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)'}; gap: ${isMobile ? '8px' : '12px'};">
+                    <div style="background: linear-gradient(135deg, #f8f9fa, #ffffff); border: 1px solid #e5e7eb; border-radius: ${isMobile ? '6px' : '8px'}; padding: ${isMobile ? '12px' : '16px'}; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                      <div style="width: 30px; height: 2px; background: linear-gradient(90deg, #6493FF, #3155A7); margin: 0 auto ${isMobile ? '8px' : '10px'} auto; border-radius: 2px;"></div>
+                      <div style="font-size: ${isMobile ? '18px' : '24px'}; font-weight: bold; color: #6493FF; margin-bottom: 4px; line-height: 1;">${avgProgress}%</div>
+                      <div style="font-size: ${isMobile ? '8px' : '10px'}; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Progression</div>
                     </div>
-                    
-                    <!-- Ligne de moyenne optimisée A4 -->
-                    <div style="position: absolute; left: 35px; right: 20px; bottom: ${30 + (160 - (avgProgress / 100) * 160)}px; height: 1px; background: #dc3545; border-top: 1px dashed #dc3545;">
-                      <div style="position: absolute; right: -35px; top: -8px; font-size: 8px; color: #dc3545; font-weight: bold;">Moy: ${avgProgress}%</div>
+                    <div style="background: linear-gradient(135deg, #fef2f2, #ffffff); border: 1px solid #fecaca; border-radius: ${isMobile ? '6px' : '8px'}; padding: ${isMobile ? '12px' : '16px'}; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                      <div style="width: 30px; height: 2px; background: linear-gradient(90deg, ${performanceColor}, ${performanceColor}); margin: 0 auto ${isMobile ? '8px' : '10px'} auto; border-radius: 2px;"></div>
+                      <div style="font-size: ${isMobile ? '18px' : '24px'}; font-weight: bold; color: ${performanceColor}; margin-bottom: 4px; line-height: 1;">${performance}</div>
+                      <div style="font-size: ${isMobile ? '8px' : '10px'}; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Statut</div>
                     </div>
-                  </div>
-                  
-                  <!-- Légende optimisée A4 avec couleurs entreprise -->
-                  <div style="display: flex; justify-content: center; gap: 15px; margin-top: 12px;">
-                    <div style="display: flex; align-items: center; gap: 4px;">
-                      <div style="width: 10px; height: 10px; background: #71c016; border-radius: 2px;"></div>
-                      <span style="font-size: 9px; color: #686868;">Complété</span>
+                    <div style="background: linear-gradient(135deg, #f0fdf4, #ffffff); border: 1px solid #bbf7d0; border-radius: ${isMobile ? '6px' : '8px'}; padding: ${isMobile ? '12px' : '16px'}; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                      <div style="width: 30px; height: 2px; background: linear-gradient(90deg, #71c016, #22c55e); margin: 0 auto ${isMobile ? '8px' : '10px'} auto; border-radius: 2px;"></div>
+                      <div style="font-size: ${isMobile ? '18px' : '24px'}; font-weight: bold; color: #71c016; margin-bottom: 4px; line-height: 1;">${completedTasks}</div>
+                      <div style="font-size: ${isMobile ? '8px' : '10px'}; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Tâches Complétées</div>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 4px;">
-                      <div style="width: 10px; height: 10px; background: #4d83ff; border-radius: 2px;"></div>
-                      <span style="font-size: 9px; color: #686868;">En cours</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 4px;">
-                      <div style="width: 10px; height: 10px; background: #7859df; border-radius: 2px;"></div>
-                      <span style="font-size: 9px; color: #686868;">Démarré</span>
+                    <div style="background: linear-gradient(135deg, #f8f9fa, #ffffff); border: 1px solid #e5e7eb; border-radius: ${isMobile ? '6px' : '8px'}; padding: ${isMobile ? '12px' : '16px'}; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                      <div style="width: 30px; height: 2px; background: linear-gradient(90deg, #686868, #9ca3af); margin: 0 auto ${isMobile ? '8px' : '10px'} auto; border-radius: 2px;"></div>
+                      <div style="font-size: ${isMobile ? '18px' : '24px'}; font-weight: bold; color: #686868; margin-bottom: 4px; line-height: 1;">${totalTasks}</div>
+                      <div style="font-size: ${isMobile ? '8px' : '10px'}; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Total Tâches</div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <!-- Détails supplémentaires optimisés A4 -->
-              <div style="background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e8eff4;">
-                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; align-items: center;">
-                  <div>
-                    <div style="font-size: 11px; color: #686868; margin-bottom: 3px;">Autorité</div>
-                    <div style="font-size: 12px; font-weight: 600; color: #2a2a2a;">${dao.autorite || 'N/A'}</div>
-                  </div>
-                  <div>
-                    <div style="font-size: 11px; color: #686868; margin-bottom: 3px;">Date Dépôt</div>
-                    <div style="font-size: 12px; font-weight: 600; color: #2a2a2a;">${dao.date_depot ? new Date(dao.date_depot).toLocaleDateString('fr-FR') : 'N/A'}</div>
-                  </div>
-                  <div>
-                    <div style="font-size: 11px; color: #686868; margin-bottom: 3px;">Statut</div>
-                    <span style="background: #dbe6ff; color: #4d83ff; padding: 3px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">
-                      ${dao.statut || 'EN COURS'}
-                    </span>
+                <!-- Graphique Chart.js comme dans le dashboard -->
+                <div style="margin-bottom: ${isMobile ? '12px' : '16mm'};">
+                  <div style="background: white; border: 1px solid #e5e7eb; border-radius: ${isMobile ? '8px' : '10px'}; padding: ${isMobile ? '16px' : '20px'}; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <div style="background: linear-gradient(135deg, #6493FF, #3155A7); color: white; padding: ${isMobile ? '10px 12px' : '12px 16px'}; margin: -${isMobile ? '16px' : '20px'} -${isMobile ? '16px' : '20px'} ${isMobile ? '12px' : '16px'} -${isMobile ? '16px' : '20px'}; border-radius: ${isMobile ? '6px' : '8px'} ${isMobile ? '6px' : '8px'} 0 0;">
+                      <h3 style="margin: 0; font-size: ${isMobile ? '12px' : '14px'}; font-weight: bold; letter-spacing: 0.5px;">PROGRESSION DES TÂCHES</h3>
+                    </div>
+                    <div style="height: ${isMobile ? '140px' : '200px'}; position: relative; background: white; border-radius: ${isMobile ? '3px' : '4px'}; padding: ${isMobile ? '10px' : '14px'}; border: 1px solid #e5e7eb;">
+                      <canvas id="pdf-progress-chart-${dao.id}" style="width: 100%; height: 100%;"></canvas>
+                    </div>
                   </div>
                 </div>
-              </div>
 
+                <!-- Détails supplémentaires adaptatifs -->
+                <div style="background: linear-gradient(135deg, #f8f9fa, #ffffff); border: 1px solid #e5e7eb; border-radius: ${isMobile ? '8px' : '10px'}; padding: ${isMobile ? '12px' : '16px'}; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                  <div style="display: grid; grid-template-columns: ${isMobile ? '1fr' : '2fr 1fr 1fr'}; gap: ${isMobile ? '8px' : '12px'}; align-items: center;">
+                    <div>
+                      <div style="font-size: ${isMobile ? '8px' : '10px'}; color: #6b7280; margin-bottom: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Autorité</div>
+                      <div style="font-size: ${isMobile ? '9px' : '11px'}; font-weight: 600; color: #2a2a2a; padding: 4px 8px; background: white; border-radius: 4px; border: 1px solid #e5e7eb;">${dao.autorite || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <div style="font-size: ${isMobile ? '8px' : '10px'}; color: #6b7280; margin-bottom: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Date Dépôt</div>
+                      <div style="font-size: ${isMobile ? '9px' : '11px'}; font-weight: 600; color: #2a2a2a; padding: 4px 8px; background: white; border-radius: 4px; border: 1px solid #e5e7eb;">${dao.date_depot ? new Date(dao.date_depot).toLocaleDateString('fr-FR') : 'N/A'}</div>
+                    </div>
+                    <div>
+                      <div style="font-size: ${isMobile ? '8px' : '10px'}; color: #6b7280; margin-bottom: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Statut</div>
+                      <span style="background: linear-gradient(135deg, #dbe6ff, #bfdbfe); color: #6493FF; padding: 4px 8px; border-radius: 6px; font-size: ${isMobile ? '8px' : '10px'}; font-weight: 600; border: 1px solid #93c5fd;">
+                        ${dao.statut || 'EN COURS'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
             </div>
           </div>
         `;
       }).join('');
 
       
-      // Section Détails par DAO avec informations complètes
+      // Section Détails par DAO avec informations complètes adaptative
       pdfContainer.innerHTML += `
         <div style="margin-bottom: 30px;">
-          <h3 style="color: #1e40af; margin: 0 0 15px 0; font-size: 16px; font-weight: bold; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">DÉTAILS DES DAO</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; background: white;">
-            <thead>
-              <tr style="background: linear-gradient(135deg, #1e40af, #3b82f6); color: white;">
-                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-weight: 600;">Référence</th>
-                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-weight: 600;">Objet</th>
-                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-weight: 600;">Autorité</th>
-                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-weight: 600;">Date Dépôt</th>
-                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: center; font-weight: 600;">Statut</th>
-                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: center; font-weight: 600;">Progression</th>
-                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: center; font-weight: 600;">Tâches</th>
-                <th style="border: 1px solid #e5e7eb; padding: 10px; text-align: center; font-weight: 600;">Risque</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${daos.map((dao, index) => {
-                const daoTasks = tasks.filter(task => task.dao_id === dao.id);
-                const avgProgress = daoTasks.length > 0 
-                  ? Math.round(daoTasks.reduce((sum, task) => sum + (task.progress || 0), 0) / daoTasks.length)
-                  : 0;
-                
-                const completedTasks = daoTasks.filter(t => t.progress === 100).length;
-                const totalTasks = daoTasks.length;
-                
-                const computeStatus = () => {
-                  const statut = String(dao.statut || "").toUpperCase();
-                  if (statut === "TERMINEE" || statut === "TERMINE") {
-                    return { label: "Terminée", color: "#22c55e", bgColor: "#f0fdf4" };
-                  }
-                  if (!dao.date_depot) {
-                    return { label: "En cours", color: "#eab308", bgColor: "#fefce8" };
-                  }
-                  const dateDepot = new Date(dao.date_depot);
-                  const today = new Date();
-                  const diffDays = Math.floor((dateDepot.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                  if (diffDays >= 5) {
-                    return { label: "En cours", color: "#eab308", bgColor: "#fefce8" };
-                  }
-                  if (diffDays <= 3) {
-                    return { label: "À risque", color: "#ef4444", bgColor: "#fef2f2" };
-                  }
-                  return { label: "En cours", color: "#eab308", bgColor: "#fefce8" };
-                };
-
-                const status = computeStatus();
-                const rowColor = index % 2 === 0 ? '#f9fafb' : 'white';
-                
-                return `
-                  <tr style="background: ${rowColor};">
-                    <td style="border: 1px solid #e5e7eb; padding: 8px; font-weight: 600;">${dao.reference}</td>
-                    <td style="border: 1px solid #e5e7eb; padding: 8px;">${dao.objet}</td>
-                    <td style="border: 1px solid #e5e7eb; padding: 8px;">${dao.autorite || 'N/A'}</td>
-                    <td style="border: 1px solid #e5e7eb; padding: 8px;">${dao.date_depot ? new Date(dao.date_depot).toLocaleDateString('fr-FR') : 'N/A'}</td>
-                    <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: center;">
-                      <span style="background: ${status.bgColor}; color: ${status.color}; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600;">
-                        ${status.label}
-                      </span>
-                    </td>
-                    <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: center;">
-                      <div style="display: flex; align-items: center; justify-content: center; gap: 5px;">
-                        <div style="width: 30px; height: 6px; background: #e5e7eb; border-radius: 3px;">
-                          <div style="background: ${avgProgress > 70 ? '#22c55e' : avgProgress > 40 ? '#eab308' : '#ef4444'}; height: 6px; border-radius: 3px; width: ${avgProgress}%;"></div>
-                        </div>
-                        <span style="font-size: 10px; font-weight: 600; color: #374151;">${avgProgress}%</span>
-                      </div>
-                    </td>
-                    <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: center;">
-                      <span style="color: #374151; font-weight: 600;">${completedTasks}/${totalTasks}</span>
-                    </td>
-                    <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: center;">
-                      ${status.label === 'À risque' ? '<span style="color: #ef4444; font-weight: bold;">ÉLEVÉ</span>' : 
-                        status.label === 'En cours' ? '<span style="color: #eab308; font-weight: bold;">MODÉRÉ</span>' : 
-                        '<span style="color: #22c55e; font-weight: bold;">FAIBLE</span>'}
-                    </td>
+          <h3 style="color: #3155A7; margin: 0 0 15px 0; font-size: ${isMobile ? '14px' : '16px'}; font-weight: bold; border-bottom: 2px solid #6493FF; padding-bottom: 8px;">DÉTAILS DES DAO</h3>
+          <div style="background: white; border-radius: ${isMobile ? '6px' : '8px'}; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden;">
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; margin: 0; font-size: ${isMobile ? '9px' : '11px'}; min-width: ${isMobile ? '600px' : 'auto'};">
+                <thead>
+                  <tr style="background: linear-gradient(135deg, #6493FF, #3155A7); color: white;">
+                    <th style="padding: ${isMobile ? '8px 6px' : '10px'}; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap;">Référence</th>
+                    <th style="padding: ${isMobile ? '8px 6px' : '10px'}; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap;">Objet</th>
+                    <th style="padding: ${isMobile ? '8px 6px' : '10px'}; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap;">Autorité</th>
+                    <th style="padding: ${isMobile ? '8px 6px' : '10px'}; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap;">Date Dépôt</th>
+                    <th style="padding: ${isMobile ? '8px 6px' : '10px'}; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap;">Statut</th>
+                    <th style="padding: ${isMobile ? '8px 6px' : '10px'}; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap;">Progression</th>
+                    <th style="padding: ${isMobile ? '8px 6px' : '10px'}; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap;">Tâches</th>
+                    <th style="padding: ${isMobile ? '8px 6px' : '10px'}; text-align: center; font-weight: 600; white-space: nowrap;">Risque</th>
                   </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  ${daos.map((dao, index) => {
+                    const daoTasks = tasks.filter(task => task.dao_id === dao.id);
+                    const avgProgress = daoTasks.length > 0 
+                      ? Math.round(daoTasks.reduce((sum, task) => sum + (task.progress || 0), 0) / daoTasks.length)
+                      : 0;
+                    
+                    const completedTasks = daoTasks.filter(t => t.progress === 100).length;
+                    const totalTasks = daoTasks.length;
+                    
+                    const computeStatus = () => {
+                      const statut = String(dao.statut || "").toUpperCase();
+                      if (statut === "TERMINEE" || statut === "TERMINE") {
+                        return { label: "Terminée", color: "#22c55e", bgColor: "#f0fdf4" };
+                      }
+                      if (!dao.date_depot) {
+                        return { label: "En cours", color: "#eab308", bgColor: "#fefce8" };
+                      }
+                      const dateDepot = new Date(dao.date_depot);
+                      const today = new Date();
+                      const diffDays = Math.floor((dateDepot.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                      if (diffDays >= 5) {
+                        return { label: "En cours", color: "#eab308", bgColor: "#fefce8" };
+                      }
+                      if (diffDays <= 3) {
+                        return { label: "À risque", color: "#ef4444", bgColor: "#fef2f2" };
+                      }
+                      return { label: "En cours", color: "#eab308", bgColor: "#fefce8" };
+                    };
+
+                    const status = computeStatus();
+                    const rowColor = index % 2 === 0 ? '#f9fafb' : 'white';
+                    
+                    return `
+                      <tr style="background: ${rowColor}; ${index === daos.length - 1 ? '' : 'border-bottom: 1px solid #e2e8f0;'}">
+                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; font-weight: 600; color: #1f2937; border-right: 1px solid #e2e8f0; white-space: nowrap;">${dao.reference}</td>
+                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; color: #374151; border-right: 1px solid #e2e8f0; max-width: ${isMobile ? '120px' : '200px'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${dao.objet}</td>
+                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; color: #374151; border-right: 1px solid #e2e8f0; white-space: nowrap;">${dao.autorite || 'N/A'}</td>
+                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; color: #374151; border-right: 1px solid #e2e8f0; white-space: nowrap;">${dao.date_depot ? new Date(dao.date_depot).toLocaleDateString('fr-FR') : 'N/A'}</td>
+                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; text-align: center; border-right: 1px solid #e2e8f0; white-space: nowrap;">
+                          <span style="background: ${status.bgColor}; color: ${status.color}; padding: ${isMobile ? '2px 6px' : '3px 8px'}; border-radius: 12px; font-size: ${isMobile ? '8px' : '10px'}; font-weight: 600;">
+                            ${status.label}
+                          </span>
+                        </td>
+                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; text-align: center; border-right: 1px solid #e2e8f0; white-space: nowrap;">
+                          <div style="display: flex; align-items: center; justify-content: center; gap: ${isMobile ? '3px' : '6px'};">
+                            <div style="width: ${isMobile ? '25px' : '35px'}; height: 4px; background: #e2e8f0; border-radius: 2px;">
+                              <div style="background: ${avgProgress > 70 ? '#22c55e' : avgProgress > 40 ? '#6493FF' : '#3155A7'}; height: 4px; border-radius: 2px; width: ${avgProgress}%;"></div>
+                            </div>
+                            <span style="font-size: ${isMobile ? '8px' : '10px'}; font-weight: 600; color: #374151;">${avgProgress}%</span>
+                          </div>
+                        </td>
+                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; text-align: center; border-right: 1px solid #e2e8f0; white-space: nowrap;">
+                          <span style="color: #374151; font-weight: 600; font-size: ${isMobile ? '8px' : '10px'};">${completedTasks}/${totalTasks}</span>
+                        </td>
+                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; text-align: center; white-space: nowrap;">
+                          ${status.label === 'À risque' ? `<span style="color: #ef4444; font-weight: bold; font-size: ${isMobile ? '8px' : '10px'};">ÉLEVÉ</span>` : 
+                            status.label === 'En cours' ? `<span style="color: #eab308; font-weight: bold; font-size: ${isMobile ? '8px' : '10px'};">MODÉRÉ</span>` : 
+                            `<span style="color: #22c55e; font-weight: bold; font-size: ${isMobile ? '8px' : '10px'};">FAIBLE</span>`}
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       `;
 
@@ -577,28 +583,53 @@ export default function DirecteurGeneralDashboard() {
         return diffDays <= 3;
       }).length;
 
-      pdfContainer.innerHTML += `
-        <div style="margin-bottom: 30px; background: #fef3c7; padding: 20px; border-radius: 8px; border-left: 5px solid #f59e0b;">
-          <h3 style="color: #92400e; margin: 0 0 15px 0; font-size: 16px; font-weight: bold;">POINTS D'ATTENTION</h3>
-          <ul style="margin: 0; padding-left: 20px; color: #78350f;">
-            <li style="margin-bottom: 8px;"><strong>${riskDaosCount} DAO</strong> présentent un risque critique nécessitant une attention immédiate</li>
-            <li style="margin-bottom: 8px;">Taux de progression moyen : <strong>${Math.round(daos.reduce((sum, dao) => {
-              const daoTasks = tasks.filter(task => task.dao_id === dao.id);
-              return sum + (daoTasks.length > 0 ? Math.round(daoTasks.reduce((s, t) => s + (t.progress || 0), 0) / daoTasks.length) : 0);
-            }, 0) / daos.length)}%</strong></li>
-            <li style="margin-bottom: 8px;">Recommandation : Organiser une revue hebdomadaire pour les DAO à risque</li>
-            <li style="margin-bottom: 8px;">Action requise : Mobiliser les ressources nécessaires pour les projets en retard</li>
-          </ul>
-        </div>
-
-        <!-- Pied de page -->
-        <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 12px;">
-          <p style="margin: 0;">Rapport généré automatiquement par le système de gestion des DAO</p>
-          <p style="margin: 5px 0 0 0;">Direction Générale - ${new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-        </div>
-      `;
-
       document.body.appendChild(pdfContainer);
+
+      // Créer les graphiques Chart.js pour chaque DAO dans le PDF (identique au dashboard)
+      await new Promise(resolve => setTimeout(resolve, 500)); // Attendre que le DOM soit prêt
+      
+      daos.forEach(dao => {
+        const daoTasks = tasks.filter(task => task.dao_id === dao.id);
+        if (daoTasks.length === 0) return;
+        
+        const canvas = document.getElementById(`pdf-progress-chart-${dao.id}`) as HTMLCanvasElement;
+        if (!canvas) return;
+        
+        const sortedTasks = daoTasks.sort((a, b) => a.id_task - b.id_task);
+        
+        new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: sortedTasks.map(t => t.id_task.toString()),
+            datasets: [{
+              label: 'Progression (%)',
+              data: sortedTasks.map(t => t.progress || 0),
+              backgroundColor: sortedTasks.map(t => {
+                const progress = t.progress || 0;
+                if (progress === 100) return 'rgba(34, 197, 94, 0.8)';
+                if (progress >= 75) return 'rgba(59, 130, 246, 0.8)';
+                if (progress >= 50) return 'rgba(251, 146, 60, 0.8)';
+                if (progress >= 25) return 'rgba(250, 204, 21, 0.8)';
+                return 'rgba(239, 68, 68, 0.8)';
+              }),
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100
+              }
+            },
+            animation: {
+              duration: 0
+            }
+          }
+        });
+      });
 
       // Capturer le conteneur complet avec optimisation poids et résolution
       const canvas = await html2canvas(pdfContainer, {
@@ -691,523 +722,455 @@ export default function DirecteurGeneralDashboard() {
     }
   };
 
-  // Initialize charts
+  // Set first DAO as selected when data is loaded
   useEffect(() => {
-    if (!loading && daos.length > 0) {
-      initializeCharts();
+    if (daos.length > 0 && !selectedDao) {
+      setSelectedDao(daos[0]);
     }
-  }, [loading, daos, tasks, selectedDAO]);
+  }, [daos, selectedDao]);
 
-  const initializeCharts = () => {
-    console.log("Initialisation des graphiques...");
-    console.log("Nombre de DAO:", daos.length);
-    console.log("Nombre de tâches:", tasks.length);
+  // Calculate statistics
+  const stats = useMemo(() => {
+    return {
+      totalDaos: daos.length,
+      completedDaos: daos.filter(d => {
+        const statut = String(d.statut || "").toUpperCase();
+        return statut === "TERMINEE" || statut === "TERMINE";
+      }).length,
+      inProgressDaos: daos.filter(d => {
+        const statut = String(d.statut || "").toUpperCase();
+        if (statut === "TERMINEE" || statut === "TERMINE") {
+          return false;
+        }
+        if (!d.date_depot) {
+          return true;
+        }
+        const dateDepot = new Date(d.date_depot);
+        const today = new Date();
+        const diffMs = dateDepot.getTime() - today.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        return diffDays >= 4; // Changé de 5 à 4 pour inclure le cas 4 jours
+      }).length,
+      atRiskDaos: daos.filter(d => {
+        const statut = String(d.statut || "").toUpperCase();
+        if (statut === "TERMINEE" || statut === "TERMINE") {
+          return false;
+        }
+        if (!d.date_depot) {
+          return false;
+        }
+        const dateDepot = new Date(d.date_depot);
+        const today = new Date();
+        const diffMs = dateDepot.getTime() - today.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        return diffDays <= 3;
+      }).length,
+      totalTasks: tasks.length,
+      completedTasks: tasks.filter(t => t.progress === 100).length,
+      totalUsers: users.length,
+    };
+  }, [daos, tasks, users]);
 
-    // Global DAO Progress Chart
-    if (chartRef.current) {
-      const ctx = chartRef.current.getContext("2d");
-      if (ctx) {
-        const daoProgressData = daos.map(dao => {
-          const daoTasks = tasks.filter(task => task.dao_id === dao.id);
-          console.log(`DAO ${dao.id} (${dao.reference}): ${daoTasks.length} tâches`);
-          
-          if (daoTasks.length === 0) return 0;
-          const avgProgress = daoTasks.reduce((sum, task) => sum + (task.progress || 0), 0) / daoTasks.length;
-          console.log(`Progression moyenne: ${avgProgress}%`);
-          return Math.round(avgProgress);
-        });
+  // Get tasks for selected DAO
+  const selectedDaoTasks = useMemo(() => {
+    if (!selectedDao) return [];
+    return tasks.filter(task => task.dao_id === selectedDao.id);
+  }, [selectedDao, tasks]);
 
-        console.log("Données de progression DAO:", daoProgressData);
-
-        new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: daos.map(dao => dao.reference),
-            datasets: [
-              {
-                label: "Progression globale (%)",
-                data: daoProgressData,
-                borderColor: "rgb(59, 130, 246)",
-                backgroundColor: "rgba(59, 130, 246, 0.1)",
-                tension: 0.4,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: {
-                position: "top",
-              },
-              title: {
-                display: true,
-                text: "Progression des DAO",
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                max: 100,
-              },
-            },
-          },
-        });
-      }
+  // Calculate DAO status
+  const getDAOStatus = (dao: DAO) => {
+    const statut = String(dao.statut || "").toUpperCase();
+    
+    if (statut === "TERMINEE" || statut === "TERMINE") {
+      return { label: "Terminée", className: "px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800" };
     }
-
-    // Status Distribution Pie Chart
-    if (pieChartRef.current) {
-      const ctx = pieChartRef.current.getContext("2d");
-      if (ctx) {
-        const statusCounts = {
-          "en cours": daos.filter(d => d.statut === "en cours").length,
-          "validé": daos.filter(d => d.statut === "validé").length,
-          "terminé": daos.filter(d => d.statut === "terminé").length,
-          "annulé": daos.filter(d => d.statut === "annulé").length,
-        };
-
-        console.log("Répartition des statuts DAO:", statusCounts);
-
-        new Chart(ctx, {
-          type: "doughnut",
-          data: {
-            labels: Object.keys(statusCounts),
-            datasets: [
-              {
-                data: Object.values(statusCounts),
-                backgroundColor: [
-                  "rgba(59, 130, 246, 0.8)",
-                  "rgba(34, 197, 94, 0.8)",
-                  "rgba(168, 85, 247, 0.8)",
-                  "rgba(239, 68, 68, 0.8)",
-                ],
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: {
-                position: "bottom",
-              },
-              title: {
-                display: true,
-                text: "Répartition des statuts DAO",
-              },
-            },
-          },
-        });
-      }
+    
+    if (!dao.date_depot) {
+      return { label: "En cours", className: "px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800" };
     }
+    
+    const dateDepot = new Date(dao.date_depot);
+    const today = new Date();
+    const diffMs = dateDepot.getTime() - today.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays >= 4) { // Changé de 5 à 4 pour cohérence
+      return { label: "En cours", className: "px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800" };
+    }
+    
+    if (diffDays <= 3) {
+      return { label: "À risque", className: "px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800" };
+    }
+    
+    // Ce cas ne devrait plus arriver avec la correction, mais on le garde pour sécurité
+    return { label: "En cours", className: "px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800" };
+  };
 
-    // Tasks Priority Bar Chart
-    if (barChartRef.current) {
-      const ctx = barChartRef.current.getContext("2d");
-      if (ctx) {
-        const priorityCounts = {
-          
-        };
+  // Initialize charts - Only create once, then update data
+  useEffect(() => {
+    // Wait for data to be loaded and selected DAO to be set
+    if (!selectedDao || selectedDaoTasks.length === 0) return;
 
+    // Create charts only once
+    const timer = setTimeout(() => {
+      const progressCtx = document.getElementById('progressChart') as HTMLCanvasElement;
+      const statusCtx = document.getElementById('statusChart') as HTMLCanvasElement;
+      
+      if (progressCtx && statusCtx) {
+        // Check if charts already exist
+        const existingProgressChart = Chart.getChart('progressChart');
+        const existingStatusChart = Chart.getChart('statusChart');
         
+        if (!existingProgressChart) {
+          // Create progress chart
+          new Chart(progressCtx, {
+            type: 'bar',
+            data: {
+              labels: selectedDaoTasks.sort((a, b) => a.id_task - b.id_task).map(t => t.id_task.toString()),
+              datasets: [{
+                label: 'Progression (%)',
+                data: selectedDaoTasks.sort((a, b) => a.id_task - b.id_task).map(t => t.progress || 0),
+                backgroundColor: selectedDaoTasks.sort((a, b) => a.id_task - b.id_task).map(t => {
+                  const progress = t.progress || 0;
+                  if (progress === 100) return 'rgba(34, 197, 94, 0.8)';
+                  if (progress >= 75) return 'rgba(59, 130, 246, 0.8)';
+                  if (progress >= 50) return 'rgba(251, 146, 60, 0.8)';
+                  if (progress >= 25) return 'rgba(250, 204, 21, 0.8)';
+                  return 'rgba(239, 68, 68, 0.8)';
+                }),
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  max: 100
+                }
+              },
+              animation: {
+                duration: 0 // Disable animation for faster updates
+              }
+            }
+          });
+        } else {
+          // Update existing progress chart data
+          const sortedTasks = selectedDaoTasks.sort((a, b) => a.id_task - b.id_task);
+          existingProgressChart.data.labels = sortedTasks.map(t => t.id_task.toString());
+          existingProgressChart.data.datasets[0].data = sortedTasks.map(t => t.progress || 0);
+          existingProgressChart.data.datasets[0].backgroundColor = sortedTasks.map(t => {
+            const progress = t.progress || 0;
+            if (progress === 100) return 'rgba(34, 197, 94, 0.8)';
+            if (progress >= 75) return 'rgba(59, 130, 246, 0.8)';
+            if (progress >= 50) return 'rgba(251, 146, 60, 0.8)';
+            if (progress >= 25) return 'rgba(250, 204, 21, 0.8)';
+            return 'rgba(239, 68, 68, 0.8)';
+          });
+          existingProgressChart.update('none'); // Update without animation
+        }
+        
+        if (!existingStatusChart) {
+          // Create status chart
+          const statusCounts = {
+            completed: selectedDaoTasks.filter(t => (t.progress || 0) === 100).length,
+            inProgress: selectedDaoTasks.filter(t => (t.progress || 0) > 0 && (t.progress || 0) < 100).length,
+            notStarted: selectedDaoTasks.filter(t => (t.progress || 0) === 0).length,
+          };
 
-       
+          new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+              labels: ['Terminées', 'En cours', 'Non démarrées'],
+              datasets: [{
+                data: [statusCounts.completed, statusCounts.inProgress, statusCounts.notStarted],
+                backgroundColor: [
+                  'rgba(34, 197, 94, 0.8)',
+                  'rgba(251, 146, 60, 0.8)',
+                  'rgba(239, 68, 68, 0.8)'
+                ]
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: {
+                duration: 0 // Disable animation for faster updates
+              }
+            }
+          });
+        } else {
+          // Update existing status chart data
+          const statusCounts = {
+            completed: selectedDaoTasks.filter(t => (t.progress || 0) === 100).length,
+            inProgress: selectedDaoTasks.filter(t => (t.progress || 0) > 0 && (t.progress || 0) < 100).length,
+            notStarted: selectedDaoTasks.filter(t => (t.progress || 0) === 0).length,
+          };
+          
+          existingStatusChart.data.datasets[0].data = [
+            statusCounts.completed, 
+            statusCounts.inProgress, 
+            statusCounts.notStarted
+          ];
+          existingStatusChart.update('none'); // Update without animation
+        }
+        
+        setChartsReady(true);
       }
-    }
-  };
+    }, 100); // Increased delay to ensure DOM is ready
 
-  const stats = {
-    totalDaos: daos.length,
-    atRiskDaos: daos.filter(d => {
-      // Même logique que l'admin pour "À risque"
-      const statut = String(d.statut || "").toUpperCase();
-      
-      // Si terminé, pas à risque
-      if (statut === "TERMINEE" || statut === "TERMINE") {
-        return false;
-      }
-      
-      // Si pas de date_depot, considérer comme en cours (pas à risque)
-      if (!d.date_depot) {
-        return false;
-      }
-      
-      const dateDepot = new Date(d.date_depot);
-      const today = new Date();
-      // Nombre de jours restants : date_depot - aujourd'hui
-      const diffMs = dateDepot.getTime() - today.getTime();
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      
-      // À risque si ≤ 3 jours (même logique que admin)
-      return diffDays <= 3;
-    }).length,
-    inProgressDaos: daos.filter(d => {
-      // Même logique que l'admin pour "En cours"
-      const statut = String(d.statut || "").toUpperCase();
-      
-      // Si terminé, pas en cours
-      if (statut === "TERMINEE" || statut === "TERMINE") {
-        return false;
-      }
-      
-      // Si pas de date_depot, considérer comme en cours
-      if (!d.date_depot) {
-        return true;
-      }
-      
-      const dateDepot = new Date(d.date_depot);
-      const today = new Date();
-      // Nombre de jours restants : date_depot - aujourd'hui
-      const diffMs = dateDepot.getTime() - today.getTime();
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      
-      // En cours si ≥ 5 jours (même logique que admin)
-      return diffDays >= 5;
-    }).length,
-    totalUsers: users.length,
-  };
+    return () => clearTimeout(timer);
+  }, [selectedDao, selectedDaoTasks]);
 
-  // Logs pour déboguer
-  console.log("=== STATISTIQUES DASHBOARD ===");
-  console.log("DAOs récupérés:", daos.length);
-  console.log("Tâches récupérées:", tasks.length);
-  console.log("Utilisateurs récupérés:", users.length);
-  console.log("Statuts DAO:", daos.map(d => ({ id: d.id, statut: d.statut, date_depot: d.date_depot })));
-  console.log("Statuts tâches:", tasks.map(t => ({ id: t.id, statut: t.statut, progress: t.progress })));
-  console.log("Stats calculées:", stats);
-  
-  // Logs détaillés pour les DAO à risque (même logique que admin)
-  const today = new Date();
-  const atRiskDaos = daos.filter(d => {
-    const statut = String(d.statut || "").toUpperCase();
-    
-    if (statut === "TERMINEE" || statut === "TERMINE") {
-      return false;
-    }
-    
-    if (!d.date_depot) {
-      return false;
-    }
-    
-    const dateDepot = new Date(d.date_depot);
-    const diffMs = dateDepot.getTime() - today.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    return diffDays <= 3;
-  });
-  
-  const inProgressDaos = daos.filter(d => {
-    const statut = String(d.statut || "").toUpperCase();
-    
-    if (statut === "TERMINEE" || statut === "TERMINE") {
-      return false;
-    }
-    
-    if (!d.date_depot) {
-      return true;
-    }
-    
-    const dateDepot = new Date(d.date_depot);
-    const diffMs = dateDepot.getTime() - today.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    return diffDays >= 5;
-  });
-  
-  console.log("DAOs à risque (≤ 3 jours):", atRiskDaos.map(d => ({ 
-    id: d.id, 
-    reference: d.reference, 
-    date_depot: d.date_depot,
-    jours_restants: d.date_depot ? Math.floor((new Date(d.date_depot).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : 'N/A'
-  })));
-  
-  console.log("DAOs en cours (≥ 5 jours):", inProgressDaos.map(d => ({ 
-    id: d.id, 
-    reference: d.reference, 
-    date_depot: d.date_depot,
-    jours_restants: d.date_depot ? Math.floor((new Date(d.date_depot).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : 'N/A'
-  })));
-
-  const getDAOStatusColor = (status: string) => {
-    switch (status) {
-      case "en cours": return "text-blue-600 bg-blue-100";
-      case "validé": return "text-green-600 bg-green-100";
-      case "terminé": return "text-purple-600 bg-purple-100";
-      case "annulé": return "text-red-600 bg-red-100";
-      default: return "text-gray-600 bg-gray-100";
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "haute": return "text-red-600 bg-red-100";
-      case "moyenne": return "text-orange-600 bg-orange-100";
-      case "basse": return "text-green-600 bg-green-100";
-      default: return "text-gray-600 bg-gray-100";
-    }
-  };
+  // Cleanup charts on unmount
+  useEffect(() => {
+    return () => {
+      const progressChart = Chart.getChart('progressChart');
+      if (progressChart) {
+        progressChart.destroy();
+      }
+      
+      const statusChart = Chart.getChart('statusChart');
+      if (statusChart) {
+        statusChart.destroy();
+      }
+    };
+  }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement du dashboard...</p>
+          <p className="text-gray-600">Chargement du dashboard Lecteur...</p>
+          <p className="text-sm text-gray-500 mt-2">Récupération des DAOs et tâches</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (daos.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+            <p className="font-medium">Aucun DAO disponible</p>
+            <p className="text-sm mt-1">Veuillez contacter l'administrateur pour ajouter des DAOs</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-gray-50 p-6 no-print">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center">
-                <h3 className="text-2xl font-bold text-gray-900">Dashboard Directeur Général</h3>
-              </div>
-              <div className="flex items-center space-x-4">
-                {/* Icône de commentaire */}
-                <button
-                  onClick={openCommentModal}
-                  className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                  title="Ajouter un commentaire"
-                >
-                  <MessageSquare size={20} />
-                </button>
-              </div>
-            </div>
-          </div>
+    <div className="p-6">
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h4 className="text-3xl font-bold text-gray-800">Dashboard Directeur Général</h4>
         </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <StatCard
-            title="Total DAO"
-            value={stats.totalDaos}
-            icon={<FileText className="w-6 h-6 text-blue-600" />}
-            color="blue"
-          />
-          <StatCard
-            title="À risque"
-            value={stats.atRiskDaos}
-            icon={<AlertTriangle className="w-6 h-6 text-red-600" />}
-            color="yellow"
-          />
-          <StatCard
-            title="En cours"
-            value={stats.inProgressDaos}
-            icon={<Activity className="w-6 h-6 text-green-600" />}
-            color="green"
-          />
-          
-        </div>
-
-        {/* Charts Section */}
-       <div className="w-full mb-8">
-  <div id="progression-chart" className="bg-white p-6 rounded-lg shadow-sm w-full">
-    <div className="flex justify-between items-center mb-4">
-      <h3 className="text-lg font-semibold">
-        Progression des DAO
-      </h3>
-      <button
-        onClick={downloadDGComprehensivePDF}
-        className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-        title="Télécharger le rapport DG complet"
-      >
-        <FileText size={16} />
-      </button>
-    </div>
-    <div className="w-full h-[500px]">
-      <canvas ref={chartRef} className="w-full h-full"></canvas>
-    </div>
-  </div>
-</div>
         
+        <div className="flex gap-2">
+          {/* Bouton d'export PDF */}
+          <button
+            onClick={downloadDGComprehensivePDF}
+            className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+            title="Exporter le rapport en PDF"
+          >
+            <FileText size={20} />
+          </button>
+          
+          {/* Icône de commentaire */}
+          <button
+            onClick={openCommentModal}
+            className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+            title="Ajouter un commentaire"
+          >
+            <MessageSquare size={20} />
+          </button>
+        </div>
+      </div>
 
-        {/* DAOs List */}
-        <div id="daos-list" className="bg-white rounded-lg shadow-sm">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-gray-900">Liste des DAO</h3>
-              <div className="flex gap-2">
-                <button 
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  onClick={() => setSelectedDAO(null)}
-                >
-                  Voir tout
-                </button>
-                <button
-                  onClick={downloadDGComprehensivePDF}
-                  className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-                  title="Télécharger le rapport DG complet"
-                >
-                  <FileText size={16} />
-                </button>
-              </div>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 bg-blue-100 rounded-full">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Total DAOs</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.totalDaos}</p>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Référence
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Objet
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Autorité
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date de dépôt
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Statut
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Progression
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {loading ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                      <div className="flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
-                        Chargement...
-                      </div>
-                    </td>
-                  </tr>
-                ) : daos.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                      Aucun DAO trouvé
-                    </td>
-                  </tr>
-                ) : (
-                  daos.map((dao) => {
-                    const daoTasks = tasks.filter(task => task.dao_id === dao.id);
-                    const avgProgress = daoTasks.length > 0 
-                      ? Math.round(daoTasks.reduce((sum, task) => sum + (task.progress || 0), 0) / daoTasks.length)
-                      : 0;
+        </div>
 
-                    // Calcul du statut comme l'admin
-                    const computeStatus = () => {
-                      const statut = String(dao.statut || "").toUpperCase();
-                      
-                      if (statut === "TERMINEE" || statut === "TERMINE") {
-                        return {
-                          label: "Terminée",
-                          className: "px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800"
-                        };
-                      }
-                      
-                      if (!dao.date_depot) {
-                        return {
-                          label: "En cours",
-                          className: "px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800"
-                        };
-                      }
-                      
-                      const dateDepot = new Date(dao.date_depot);
-                      const today = new Date();
-                      const diffMs = dateDepot.getTime() - today.getTime();
-                      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                      
-                      if (diffDays >= 5) {
-                        return {
-                          label: "En cours",
-                          className: "px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800"
-                        };
-                      }
-                      
-                      if (diffDays <= 3) {
-                        return {
-                          label: "À risque",
-                          className: "px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800"
-                        };
-                      }
-                      
-                      return {
-                        label: "En cours",
-                        className: "px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800"
-                      };
-                    };
-
-                    const status = computeStatus();
-
-                    return (
-                      <tr key={dao.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {dao.reference}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {dao.objet}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {dao.autorite || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {dao.date_depot ? new Date(dao.date_depot).toLocaleDateString('fr-FR', {
-                            day: '2-digit',
-                            month: '2-digit', 
-                            year: 'numeric'
-                          }) : 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={status.className}>
-                            {status.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="flex-1 mr-2">
-                              <div className="w-full bg-gray-200 rounded-full h-2">
-                                <div
-                                  className="bg-blue-600 h-2 rounded-full"
-                                  style={{ width: `${avgProgress}%` }}
-                                ></div>
-                              </div>
-                            </div>
-                            <span className="text-sm text-gray-600">{avgProgress}%</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <button
-                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                            onClick={() => {
-                              // Rediriger vers les détails du DAO
-                              window.location.href = `/dash/DirecteurGeneral/task?id=${dao.id}`;
-                            }}
-                          >
-                            Détails
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 bg-green-100 rounded-full">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Terminées</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.completedDaos}</p>
+            </div>
           </div>
         </div>
-      </main>
 
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 bg-yellow-100 rounded-full">
+              <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">En cours</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.inProgressDaos}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 bg-red-100 rounded-full">
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">À risque</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.atRiskDaos}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* DAO Selection and Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* DAO Selection */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h6 className="text-lg font-semibold text-gray-800 mb-4">Sélectionner un DAO</h6>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {daos.map(dao => {
+              const status = getDAOStatus(dao);
+              return (
+                <div
+                  key={dao.id}
+                  className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                    selectedDao?.id === dao.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  onClick={() => setSelectedDao(dao)}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-medium text-gray-800">{dao.reference || `DAO-${dao.id}`}</p>
+                      <p className="text-sm text-gray-600">{dao.objet || 'Sans objet'}</p>
+                    </div>
+                    <span className={status.className}>
+                      {status.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Progress Chart */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h6 className="text-lg font-semibold text-gray-800 mb-4">
+            Progression des tâches <br /> <br /> {selectedDao ? `- ${selectedDao.reference}` : ''}
+          </h6>
+          <div className="h-64">
+            {selectedDaoTasks.length > 0 ? (
+              <canvas id="progressChart"></canvas>
+            ) : loading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-500">Chargement du graphique...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-sm text-gray-500">Aucune tâche pour ce DAO</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Status Chart and Task List */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Status Distribution */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h6 className="text-lg font-semibold text-gray-800 mb-4">Distribution des statuts</h6>
+          <div className="h-64">
+            {selectedDaoTasks.length > 0 ? (
+              <canvas id="statusChart"></canvas>
+            ) : loading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-500">Chargement du graphique...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-sm text-gray-500">Aucune tâche pour ce DAO</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Task List */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h6 className="text-lg font-semibold text-gray-800 mb-4">
+            Liste des tâches {selectedDao ? `- ${selectedDao.reference}` : ''}
+          </h6>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {selectedDaoTasks.length > 0 ? (
+              selectedDaoTasks.map(task => (
+                <div key={task.id} className="p-3 border border-gray-200 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="font-medium text-gray-800">{task.titre || `Tâche ${task.id}`}</p>
+                    <span className="text-sm text-gray-600">{task.progress || 0}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${task.progress || 0}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))
+            ) : loading ? (
+              <div className="flex items-center justify-center h-48">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-500">Chargement des tâches...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-48">
+                <p className="text-sm text-gray-500">Aucune tâche pour ce DAO</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      
       {/* Modal de commentaire */}
       {showCommentModal && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Commentaires</h2>
+              <h5 className="text-xl font-bold">Commentaires</h5>
               <button
                 onClick={() => setShowCommentModal(false)}
                 className="text-gray-500 hover:text-gray-700"
@@ -1229,7 +1192,7 @@ export default function DirecteurGeneralDashboard() {
                     ref={commentInputRef}
                     value={globalComment}
                     onChange={handleCommentChange}
-                    placeholder="Ajouter un commentaire global..."
+                    placeholder="Ajouter un commentaire ..."
                     className="w-full p-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={3}
                   />
@@ -1270,38 +1233,6 @@ export default function DirecteurGeneralDashboard() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-/* =======================
-   STAT CARD
-======================= */
-function StatCard({
-  title,
-  value,
-  icon,
-  color,
-}: {
-  title: string;
-  value: number;
-  icon: React.ReactNode;
-  color: "blue" | "green" | "yellow" | "purple";
-}) {
-  const colors = {
-    blue: "bg-blue-50 border-blue-200",
-    green: "bg-green-50 border-green-200",
-    yellow: "bg-yellow-50 border-yellow-200",
-    purple: "bg-purple-50 border-purple-200",
-  };
-
-  return (
-    <div className={`border rounded-xl p-4 ${colors[color]}`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="p-2 bg-white rounded-lg">{icon}</div>
-        <span className="text-2xl font-bold">{value}</span>
-      </div>
-      <p className="font-medium text-gray-800">{title}</p>
     </div>
   );
 }

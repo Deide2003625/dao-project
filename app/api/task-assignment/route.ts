@@ -46,19 +46,35 @@ export async function POST(req: NextRequest) {
 
     const connection = await db();
 
-    // Récupérer le nom de la tâche depuis la table task
-    const [taskRows]: any = await connection.execute(
-      "SELECT nom FROM task WHERE id = ?",
-      [Number(id_task)],
+    // Vérifier si une tâche existe déjà pour ce DAO et ce modèle
+    const [existingTasks]: any = await connection.execute(
+      "SELECT id FROM tasks WHERE dao_id = ? AND id_task = ?",
+      [Number(dao_id), Number(id_task)],
     );
 
-    const taskName = taskRows.length > 0 ? taskRows[0].nom : `Tâche ${id_task}`;
+    if (existingTasks.length > 0) {
+      // Mettre à jour la tâche existante
+      await connection.execute(
+        "UPDATE tasks SET assigned_to = ?, updated_at = NOW() WHERE dao_id = ? AND id_task = ?",
+        [Number(assigned_to), Number(dao_id), Number(id_task)],
+      );
+      console.log(`Tâche existante mise à jour: dao_id=${dao_id}, id_task=${id_task}, assigned_to=${assigned_to}`);
+    } else {
+      // Créer une nouvelle tâche seulement si elle n'existe pas
+      const [taskRows]: any = await connection.execute(
+        "SELECT nom FROM task WHERE id = ?",
+        [Number(id_task)],
+      );
 
-    await connection.execute(
-      `INSERT INTO tasks (dao_id, id_task, titre, description, assigned_to, progress, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-      [Number(dao_id), Number(id_task), taskName, description ?? null, Number(assigned_to), 0],
-    );
+      const taskName = taskRows.length > 0 ? taskRows[0].nom : `Tâche ${id_task}`;
+
+      await connection.execute(
+        `INSERT INTO tasks (dao_id, id_task, titre, description, assigned_to, progress, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+        [Number(dao_id), Number(id_task), taskName, description ?? null, Number(assigned_to), 0],
+      );
+      console.log(`Nouvelle tâche créée: dao_id=${dao_id}, id_task=${id_task}, assigned_to=${assigned_to}`);
+    }
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

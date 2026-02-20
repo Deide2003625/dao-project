@@ -156,7 +156,7 @@ export default function MembreEquipeDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
+      <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* LOADING / ERROR */}
         {loading && (
           <div className="bg-white rounded-xl shadow p-6 text-center">
@@ -203,16 +203,16 @@ export default function MembreEquipeDashboard() {
                 >
                   {/* HEADER */}
                   <div
-                    className="p-6 cursor-pointer"
+                    className="p-4 sm:p-6 cursor-pointer"
                     onClick={() =>
                       setExpandedTask(expandedTask === task.id ? null : task.id)
                     }
                   >
-                    <div className="flex justify-between items-start gap-4">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold">Tâche #{task.id}</h3>
+                        <h3 className="text-base sm:text-lg font-semibold">Tâche #{task.id}</h3>
 
-                        <div className="flex gap-4 text-sm text-gray-600 mt-2">
+                        <div className="flex flex-col sm:flex-row sm:gap-4 text-sm text-gray-600 mt-2">
                           <span className="flex items-center gap-1">
                             <CheckSquare size={14} /> DAO-{task.dao_id}
                             {task.dao_reference && ` (${task.dao_reference})`}
@@ -261,19 +261,19 @@ export default function MembreEquipeDashboard() {
                       )}
 
                       {/* BOUTONS PROGRESSION ET COMMENTER */}
-                      <div className="flex gap-3">
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                         <button
                           onClick={() =>
                             setEditingTask(
                               editingTask === task.id ? null : task.id
                             )
                           }
-                          className="px-3 py-1 text-xs border rounded hover:bg-gray-100"
+                          className="px-3 py-2 sm:py-1 text-xs border rounded hover:bg-gray-100"
                         >
                           Progression
                         </button>
                         <button
-                          className="px-3 py-1 text-xs border rounded hover:bg-gray-100"
+                          className="px-3 py-2 sm:py-1 text-xs border rounded hover:bg-gray-100"
                         >
                           Commenter
                         </button>
@@ -281,7 +281,7 @@ export default function MembreEquipeDashboard() {
 
                       {/* MODIFIER PROGRESSION */}
                       {editingTask === task.id && (
-                        <div className="bg-gray-50 p-4 rounded-lg border">
+                        <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border">
                           <div className="flex justify-between mb-2 text-sm">
                             <span>Avancement</span>
                             <span className="font-medium">
