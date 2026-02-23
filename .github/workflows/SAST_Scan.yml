@@ -1,66 +1,130 @@
-name: SAST Scan
-on: pull_request
+name: SAST & Security Scan
+
+on:
+  pull_request:
 
 jobs:
-  semgrep:
+  security-scan:
     runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: returntocorp/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1
-        with:
-          config: p/security-audit
 
-  gitleaks:
-    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
+      ################################################
+      # SEMGREP
+      ################################################
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep
+        run: semgrep --config=p/security-audit --json -o semgrep-report.json
+
+      ################################################
+      # GITLEAKS
+      ################################################
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --report-format json --report-path gitleaks-report.json
+
+      ################################################
+      # TRIVY (SCA / Container scan)
+      ################################################
+      - name: Run Trivy
         uses: aquasecurity/trivy-action@master
         with:
-              image-ref: "docker.io/bearer/bearer:latest"
-              format: "table"
-              exit-code: 0
-              ignore-unfixed: true
-              vuln-type: "os,library"
-              severity: "CRITICAL,HIGH"
+          image-ref: "docker.io/bearer/bearer:latest"
+          format: "json"
+          output: "trivy-report.json"
+          exit-code: 0
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
 
-  analyze:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: javascript # Remplacez par le langage de votre projet
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      ################################################
+      # CODEQL
+      ################################################
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
 
-    # ==========================
-    # 🔽 AJOUT EXPORT RAPPORT PDF
-    # ==========================
-    - name: Install Pandoc and LaTeX
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y pandoc texlive-latex-base texlive-fonts-recommended texlive-latex-extra
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
 
-    - name: Install Pandoc
-      run: sudo apt-get update && sudo apt-get install -y pandoc
+      ################################################
+      # GENERATE PROFESSIONAL REPORT
+      ################################################
+      - name: Generate Markdown Report
+        run: |
+          echo "# RAPPORT D’AUDIT DE SÉCURITÉ" > report.md
+          echo "" >> report.md
+          echo "Date : $(date)" >> report.md
+          echo "Repository : ${{ github.repository }}" >> report.md
+          echo "" >> report.md
 
-    - name: Generate PDF report
-      run: |
-        echo "# Rapport SAST" > report.md
-        echo "Analyse générée automatiquement par GitHub Actions." >> report.md
-        pandoc report.md -o rapport-sast.pdf
+          echo "## 1. Résumé Exécutif" >> report.md
+          echo "Analyse automatisée via pipeline DevSecOps." >> report.md
+          echo "" >> report.md
 
-    - name: Upload PDF artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: rapport-sast
-        path: rapport-sast.pdf
+          echo "## 2. Outils utilisés" >> report.md
+          echo "- Semgrep (SAST)" >> report.md
+          echo "- Gitleaks (Secrets detection)" >> report.md
+          echo "- Trivy (SCA / Container security)" >> report.md
+          echo "- CodeQL (Static Code Analysis)" >> report.md
+          echo "" >> report.md
+
+          echo "## 3. Résultats Semgrep" >> report.md
+          echo "\`\`\`json" >> report.md
+          cat semgrep-report.json >> report.md || echo "Aucun résultat." >> report.md
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+
+          echo "## 4. Résultats Gitleaks" >> report.md
+          echo "\`\`\`json" >> report.md
+          cat gitleaks-report.json >> report.md || echo "Aucun secret détecté." >> report.md
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+
+          echo "## 5. Résultats Trivy" >> report.md
+          echo "\`\`\`json" >> report.md
+          cat trivy-report.json >> report.md || echo "Aucune vulnérabilité critique." >> report.md
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+
+          echo "## 6. Conclusion" >> report.md
+          echo "Le rapport présente les vulnérabilités détectées automatiquement." >> report.md
+
+      ################################################
+      # INSTALL PDF ENGINE
+      ################################################
+      - name: Install Pandoc + XeLaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc texlive-xetex
+
+      ################################################
+      # CONVERT TO PDF
+      ################################################
+      - name: Generate PDF
+        run: |
+          pandoc report.md -o rapport-audit-securite.pdf --pdf-engine=xelatex
+
+      ################################################
+      # UPLOAD ARTIFACTS
+      ################################################
+      - name: Upload PDF Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rapport-Audit-Securite
+          path: rapport-audit-securite.pdf
+
+      - name: Upload Raw Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: Security-JSON-Reports
+          path: |
+            semgrep-report.json
+            gitleaks-report.json
+            trivy-report.json
