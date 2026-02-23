@@ -323,7 +323,7 @@ export default function DashboardChefEquipe() {
                 {/* Icône de commentaire */}
                 <button
                   onClick={openCommentModal}
-                  className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                  className="p-3 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors shadow-sm"
                   title="Ajouter un commentaire"
                 >
                   <MessageSquare size={20} />
@@ -494,68 +494,96 @@ export default function DashboardChefEquipe() {
 
       {/* Modal de commentaire */}
       {showCommentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Commentaires globaux</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full border border-gray-100">
+            <div className="border-b border-gray-100 p-6 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                  <MessageSquare className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Ajouter un commentaire</h3>
+                  <p className="text-sm text-gray-500">Partagez vos pensées avec l'équipe</p>
+                </div>
+              </div>
               <button
                 onClick={() => setShowCommentModal(false)}
-                className="text-gray-500 hover:text-gray-700"
+                className="p-2 hover:bg-gray-50 rounded-lg transition-colors"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            
-           
-
-            {/* Formulaire d'ajout de commentaire */}
-            <div className="border-t pt-4">
-              <div className="flex gap-3">
-                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                  <User size={16} className="text-gray-600" />
-                </div>
-                <div className="flex-1">
+            <div className="p-6">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Votre commentaire
+                </label>
+                <div className="relative">
                   <textarea
                     ref={commentInputRef}
                     value={globalComment}
                     onChange={handleCommentChange}
-                    placeholder="Ajouter un commentaire global..."
-                    className="w-full p-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows={3}
+                    placeholder="Écrivez votre commentaire ici... Tapez @ pour mentionner quelqu'un"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
+                    rows={4}
+                    style={{ minHeight: '100px' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setShowMentionSuggestions(false);
+                      }
+                    }}
                   />
-                  
-                  {/* Suggestions de mentions */}
-                  {showMentionSuggestions && (
-                    <div className="mt-2 p-2 bg-white border rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                      {users
-                        .filter(u => u.name.toLowerCase().includes(mentionSearch.toLowerCase()))
-                        .map((user) => (
-                          <div
-                            key={user.id}
-                            onClick={() => insertMention(user)}
-                            className="flex items-center gap-2 p-2 hover:bg-gray-100 cursor-pointer rounded"
-                          >
-                            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                              <span className="text-blue-600 text-xs font-bold">
-                                {user.name.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            <span className="text-sm">{user.name}</span>
-                          </div>
-                        ))}
-                    </div>
-                  )}
                 </div>
               </div>
               
-              <div className="flex justify-end mt-3">
+              {/* Suggestions de mentions */}
+              {showMentionSuggestions && (
+                <div className="absolute z-20 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto mt-2" style={{ 
+                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                  minWidth: '250px'
+                }}>
+                  <div className="p-2 border-b border-gray-100">
+                    <div className="text-xs font-medium text-gray-500 mb-2">Suggestions</div>
+                  </div>
+                  {users.filter(u => 
+                    u.name.toLowerCase().includes(mentionSearch.toLowerCase()) && 
+                    u.id !== currentUser?.id
+                  ).map((user) => (
+                    <div
+                      key={user.id}
+                      className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => insertMention(user)}
+                    >
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-50 rounded-full flex items-center justify-center">
+                        <span className="text-blue-600 text-sm font-medium">
+                          {user.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                        <div className="text-xs text-gray-500">Membre de l'équipe</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowCommentModal(false)}
+                  className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                >
+                  Annuler
+                </button>
                 <button
                   onClick={addGlobalComment}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={!globalComment.trim()}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center gap-2"
                 >
+                  <MessageSquare size={16} />
                   Envoyer
                 </button>
               </div>
