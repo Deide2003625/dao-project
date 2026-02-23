@@ -290,7 +290,12 @@ export default function Header() {
             className="navbar-toggler align-self-center"
             type="button"
             onClick={() => {
-              document.body.classList.toggle("sidebar-icon-only");
+              const container = document.querySelector('.container-scroller');
+              if (container) {
+                container.classList.toggle("sidebar-icon-only");
+              } else {
+                document.body.classList.toggle("sidebar-icon-only");
+              }
             }}
           >
             <span className="mdi mdi-sort-variant"></span>

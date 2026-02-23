@@ -116,27 +116,15 @@ export default function DirecteurGeneralTaskPage() {
         setTasks(adaptedTasks);
         console.log(` ${adaptedTasks.length} tâches chargées depuis la base`);
       } else {
-        console.log("❌ Erreur lors du chargement des tâches, utilisation des tâches par défaut");
-        // Garder les tâches par défaut si l'API échoue
-        setTasks([
-          { id: 1, name: "Analyse des besoins", progress: 100, comment: "Terminée", assigned_to: "Équipe technique" },
-          { id: 2, name: "Conception de l'architecture", progress: 75, comment: "En cours", assigned_to: "Équipe design" },
-          { id: 3, name: "Développement backend", progress: 50, comment: "En cours", assigned_to: "Équipe dev" },
-          { id: 4, name: "Développement frontend", progress: 25, comment: "À faire", assigned_to: "Équipe frontend" },
-          { id: 5, name: "Tests et validation", progress: 0, comment: "À faire", assigned_to: "Équipe QA" }
-        ]);
+        console.log("❌ Erreur lors du chargement des tâches, aucune tâche à afficher");
+        // Garder un tableau vide si l'API échoue
+        setTasks([]);
       }
     } catch (err) {
       console.error("Error fetching tasks:", err);
-      console.log("❌ Erreur lors du chargement des tâches, utilisation des tâches par défaut");
-      // Garder les tâches par défaut si l'API échoue
-      setTasks([
-        { id: 1, name: "Analyse des besoins", progress: 100, comment: "Terminée", assigned_to: "Équipe technique" },
-        { id: 2, name: "Conception de l'architecture", progress: 75, comment: "En cours", assigned_to: "Équipe design" },
-        { id: 3, name: "Développement backend", progress: 50, comment: "En cours", assigned_to: "Équipe dev" },
-        { id: 4, name: "Développement frontend", progress: 25, comment: "À faire", assigned_to: "Équipe frontend" },
-        { id: 5, name: "Tests et validation", progress: 0, comment: "À faire", assigned_to: "Équipe QA" }
-      ]);
+      console.log("❌ Erreur lors du chargement des tâches, aucune tâche à afficher");
+      // Garder un tableau vide si l'API échoue
+      setTasks([]);
     }
   }
 

@@ -11,49 +11,21 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-/* ======================
-   DONNÉES DE BASE
-====================== */
-
-const daoTasks = [
-  { id: 1, name: "Résumé sommaire DAO et Création du drive", progress: 10, comment: "À faire" },
-  { id: 2, name: "Demande de caution et garanties", progress: 0, comment: "À faire" },
-  { id: 3, name: "Identification et renseignement des profils dans le drive", progress: 0, comment: "À faire" },
-  { id: 4, name: "Identification et renseignement des ABE dans le drive", progress: 0, comment: "À faire" },
-  { id: 5, name: "Légalisation des ABE, diplômes, certificats, attestations et pièces administratives requis", progress: 0, comment: "À faire" },
-  { id: 6, name: "Indication directive d'élaboration de l'offre financier", progress: 0, comment: "À faire" },
-  { id: 7, name: "Elaboration de la méthodologie", progress: 0, comment: "À faire" },
-  { id: 8, name: "Planification prévisionnelle", progress: 0, comment: "À faire" },
-  { id: 9, name: "Identification des références précises des équipements et matériels", progress: 0, comment: "À faire" },
-  { id: 10, name: "Demande de cotation", progress: 60, comment: "En cours" },
-  { id: 11, name: "Elaboration du squelette des offres", progress: 0, comment: "À faire" },
-  { id: 12, name: "Rédaction du contenu des OF et OT", progress: 30, comment: "Brouillon" },
-  { id: 13, name: "Contrôle et validation des offres", progress: 0, comment: "À faire" },
-  { id: 14, name: "Impression et présentation des offres (Valider l'étiquette)", progress: 0, comment: "À faire" },
-  { id: 15, name: "Dépôt des offres et clôture", progress: 0, comment: "À faire" },
-];
-
-const commentsData = [
-  {
-    taskId: 1,
-    comments: [
-      {
-        id: 1,
-        user: "Jean",
-        role: "Chef de projet",
-        text: "N'oubliez pas d'ajouter les références du DCE.",
-        time: "Il y a 1 heure",
-      },
-    ],
-  },
-];
+interface Task {
+  id: number;
+  name: string;
+  progress: number;
+  comment: string;
+  assigned_to?: string;
+  deadline?: Date;
+}
 
 /* ======================
    COMPOSANT PRINCIPAL
 ====================== */
 
 export default function DaoDetailStatic() {
-  const [tasks, setTasks] = useState(daoTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [newComment, setNewComment] = useState("");
 
@@ -64,6 +36,7 @@ export default function DaoDetailStatic() {
 
   /* PROGRESSION GLOBALE */
   const globalProgress = useMemo(() => {
+    if (tasks.length === 0) return 0;
     const total = tasks.reduce((sum, t) => sum + t.progress, 0);
     return Math.round(total / tasks.length);
   }, [tasks]);
@@ -78,17 +51,13 @@ export default function DaoDetailStatic() {
     );
   };
 
-  const taskComments = selectedTaskId
-    ? commentsData.find((c) => c.taskId === selectedTaskId)
-    : undefined;
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* HEADER */}
-      <header className="bg-gray-50 p-6 no-print">
+      <header className="bg-gray-50 p-4 sm:p-6 no-print">
         <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center gap-4 min-w-0">
                 <Link href="/dash/ChefProjet/MyDao" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                   <ArrowLeft className="w-5 h-5 text-gray-700" />
@@ -126,14 +95,20 @@ export default function DaoDetailStatic() {
         <section className="bg-white rounded shadow p-4">
           <h2 className="font-semibold mb-3">Tâches</h2>
 
-          {tasks.map((task) => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              onProgressChange={(v) => updateProgress(task.id, v)}
-              onCommentClick={() => setSelectedTaskId(task.id)}
-            />
-          ))}
+          {tasks.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">
+              Aucune tâche disponible pour ce DAO
+            </p>
+          ) : (
+            tasks.map((task) => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                onProgressChange={(v) => updateProgress(task.id, v)}
+                onCommentClick={() => setSelectedTaskId(task.id)}
+              />
+            ))
+          )}
         </section>
       </main>
 
@@ -154,33 +129,9 @@ export default function DaoDetailStatic() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {taskComments && taskComments.comments.map((comment: { id: number; user: string; role: string; text: string; time: string }) => (
-                <div
-                  key={comment.id}
-                  className="bg-gray-50 rounded-lg p-4 shadow-sm"
-                >
-                  <div className="flex justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <User size={16} className="text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{comment.user}</p>
-                        <p className="text-xs text-gray-500">{comment.role}</p>
-                      </div>
-                    </div>
-                    <span className="text-xs text-gray-400">
-                      {comment.time}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-700">{comment.text}</p>
-                </div>
-              ))}
-              {(!taskComments || taskComments.comments.length === 0) && (
-                <p className="text-sm text-gray-500 text-center py-4">
-                  Aucun commentaire pour cette tâche
-                </p>
-              )}
+              <p className="text-sm text-gray-500 text-center py-4">
+                Aucun commentaire pour cette tâche
+              </p>
             </div>
 
             <div className="border-t p-3 flex gap-2">
@@ -217,7 +168,7 @@ function TaskItem({
   const [showProgress, setShowProgress] = useState(false);
 
   return (
-    <div className="border rounded p-3 mb-3">
+    <div className="border rounded p-3 sm:p-4 mb-3">
       <h3 className="text-sm font-medium">{task.name}</h3>
       
       <div className="mt-2">
@@ -225,7 +176,7 @@ function TaskItem({
           <span className="text-xs">Assigné à: Non assigné</span>
         </div>
         
-        <div className="flex justify-between text-xs mb-1">
+        <div className="flex flex-col sm:flex-row sm:justify-between text-xs mb-1 gap-1">
           <span>Avancement</span>
           <span>{task.progress}%</span>
         </div>

@@ -54,10 +54,8 @@ interface Comment {
 }
 
 /* ======================
-   DONNÉES DE BASE
+   COMPOSANT PRINCIPAL
 ====================== */
-
-
 
 const commentsData: Comment[] = [
   {
@@ -321,7 +319,7 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
   // Charger les tâches depuis la base de données
   async function loadTasks(daoId: string) {
     try {
-      const res = await fetch(`/api/tasks?dao_id=${daoId}`, { cache: "no-store" });
+      const res = await fetch(`/api/tasks?daoId=${daoId}`, { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
 
       if (res.ok && json.success && json.data) {
@@ -335,22 +333,20 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
         }));
         
         setTasks(adaptedTasks);
-        console.log(` ${adaptedTasks.length} tâches chargées depuis la base`);
+        console.log(` ${adaptedTasks.length} tâches chargées depuis la base pour le DAO ${daoId}`);
         
         // Charger les commentaires pour la première tâche
         if (adaptedTasks.length > 0) {
           await loadComments(adaptedTasks[0].id);
         }
       } else {
-        console.log("Erreur lors du chargement des tâches, aucune tâche trouvée pour ce DAO");
-        // Ne pas utiliser de tâches par défaut - afficher que ce DAO n'a pas de tâches
-        setTasks([]);
+        console.log(" Aucune tâche trouvée pour ce DAO ou erreur API");
+        setTasks([]); // Vider les tâches si aucune n'est trouvée
       }
     } catch (err) {
       console.error("Error fetching tasks:", err);
-      console.log("Erreur lors du chargement des tâches, aucune tâche trouvée pour ce DAO");
-      // Ne pas utiliser de tâches par défaut - afficher que ce DAO n'a pas de tâches
-      setTasks([]);
+      console.log(" Erreur lors du chargement des tâches pour le DAO", daoId);
+      setTasks([]); // Vider les tâches en cas d'erreur
     }
   }
   const globalProgress = useMemo(() => {
@@ -515,8 +511,14 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
           
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {tasks.map((task) => (
+          {tasks.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">Aucune tâche trouvée pour ce DAO.</p>
+              <p className="text-sm text-gray-400 mt-2">Les 15 tâches standards devraient être créées automatiquement lors de la création du DAO.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {tasks.map((task) => (
               <div
                 key={task.id}
                 className={`border rounded-lg p-4 cursor-pointer transition-all ${
@@ -570,7 +572,8 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
             ))}
-          </div>
+            </div>
+          )}
         </section>
 
         
@@ -579,72 +582,94 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
 
       {/* MODAL POUR ÉCRIRE UN COMMENTAIRE */}
       {showCommentModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="border-b p-4 flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Ajouter un commentaire</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full border border-gray-100">
+            <div className="border-b border-gray-100 p-6 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                  <MessageCircle className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Ajouter un commentaire</h3>
+                  <p className="text-sm text-gray-500">Partagez vos pensées avec l'équipe</p>
+                </div>
+              </div>
               <button
                 onClick={() => setShowCommentModal(false)}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                className="p-2 hover:bg-gray-50 rounded-lg transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
 
-            <div className="p-4">
-              <div className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                <AtSign size={12} />
-                Tapez @ pour mentionner un utilisateur (au début pour un message privé)
+            <div className="p-6">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Votre commentaire
+                </label>
+                <div className="relative">
+                  <textarea
+                    ref={commentInputRef}
+                    value={globalComment}
+                    onChange={handleCommentChange}
+                    placeholder="Écrivez votre commentaire ici... Tapez @ pour mentionner quelqu'un"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
+                    rows={4}
+                    style={{ minHeight: '100px' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setShowMentionSuggestions(false);
+                      }
+                    }}
+                  />
+                </div>
               </div>
-              <textarea
-                ref={commentInputRef}
-                value={globalComment}
-                onChange={handleCommentChange}
-                placeholder="Écrivez votre commentaire ici... (@nom pour une mention privée)"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                rows={4}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setShowMentionSuggestions(false);
-                  }
-                }}
-              />
               
               {/* SUGGESTIONS DE MENTIONS */}
               {showMentionSuggestions && (
-                <div className="absolute z-10 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto mt-1">
+                <div className="absolute z-20 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto mt-2" style={{ 
+                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                  minWidth: '250px'
+                }}>
+                  <div className="p-2 border-b border-gray-100">
+                    <div className="text-xs font-medium text-gray-500 mb-2">Suggestions</div>
+                  </div>
                   {users.filter(u => 
                     u.name.toLowerCase().includes(mentionSearch.toLowerCase()) && 
                     u.id !== currentUser?.id
                   ).map((user) => (
                     <div
                       key={user.id}
-                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer flex items-center gap-2"
+                      className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors"
                       onClick={() => insertMention(user)}
                     >
-                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-blue-600 text-xs font-bold">
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-50 rounded-full flex items-center justify-center">
+                        <span className="text-blue-600 text-sm font-medium">
                           {user.name.charAt(0).toUpperCase()}
                         </span>
                       </div>
-                      <span className="text-sm">{user.name}</span>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                        <div className="text-xs text-gray-500">Membre de l'équipe</div>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
               
-              <div className="flex justify-end gap-2 mt-3">
+              <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowCommentModal(false)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
                 >
                   Annuler
                 </button>
                 <button
                   onClick={addGlobalComment}
                   disabled={!globalComment.trim()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center gap-2"
                 >
+                  <Send size={16} />
                   Envoyer
                 </button>
               </div>

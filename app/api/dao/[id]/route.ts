@@ -188,22 +188,19 @@ export async function DELETE(
 
     
 
-    // Supprimer les membres de l'équipe
+    // Supprimer les tâches associées au DAO
+    await connection.execute("DELETE FROM tasks WHERE dao_id = ?", [id]);
 
+    // Supprimer les membres de l'équipe
     await connection.execute("DELETE FROM team_members WHERE team_id IN (SELECT team_id FROM daos WHERE id = ?)", [id]);
 
     
-
     // Supprimer l'équipe
-
     await connection.execute("DELETE FROM teams WHERE id IN (SELECT team_id FROM daos WHERE id = ?)", [id]);
 
     
-
     // Supprimer le DAO
-
     await connection.execute("DELETE FROM daos WHERE id = ?", [id]);
-
 
 
     return NextResponse.json({ success: true });

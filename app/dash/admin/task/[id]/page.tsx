@@ -106,7 +106,8 @@ export default function ChefProjetTasksPage() {
     }
 
     try {
-      await fetch(`/api/task-assignment`, {
+      // Utiliser l'API task-assignment qui gère maintenant les mises à jour automatiquement
+      const response = await fetch(`/api/task-assignment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -116,8 +117,18 @@ export default function ChefProjetTasksPage() {
           description: null,
         }),
       });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Tâche assignée avec succès:`, result);
+        
+        // Rafraîchir les données pour voir les changements
+        window.location.reload();
+      } else {
+        console.error("Erreur lors de l'assignation de la tâche");
+      }
     } catch (e) {
-      console.error("Erreur lors de la creation de la tache assignee", e);
+      console.error("Erreur lors de l'assignation de la tache", e);
     }
   };
 
