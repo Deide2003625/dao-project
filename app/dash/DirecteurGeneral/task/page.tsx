@@ -163,11 +163,7 @@ export default function DirecteurGeneralTaskPage() {
     setNewComment("");
   };
 
-  // Télécharger la page en PDF
-  const downloadPDF = () => {
-    window.print();
-  };
-
+  
   // Afficher le modal pour écrire un commentaire
   const showAllComments = () => {
     setShowCommentModal(true);

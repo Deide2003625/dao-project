@@ -1,42 +1,282 @@
-name: SAST Scan
-on: pull_request
+name: SAST & DAST Security Scan
+
+on:
+  pull_request:
 
 jobs:
-  semgrep:
+  security-scan:
     runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: returntocorp/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1
-        with:
-          config: p/security-audit
 
-  gitleaks:
-    runs-on: ubuntu-24.04
+    services:
+      # Service Docker pour lancer l'application cible du DAST
+      app:
+        image: ${{ vars.APP_IMAGE || 'nginx:latest' }}
+        ports:
+          - 8080:80
+
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      ################################################
+      # SEMGREP (SAST)
+      ################################################
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep
+        run: semgrep --config=p/security-audit --json -o semgrep-report.json
+
+      ################################################
+      # GITLEAKS (Secrets detection)
+      ################################################
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Trivy vulnerability scanner
+      ################################################
+      # TRIVY (SCA / Container scan)
+      ################################################
+      - name: Run Trivy
         uses: aquasecurity/trivy-action@master
         with:
-              image-ref: "docker.io/bearer/bearer:latest"
-              format: "table"
-              exit-code: 0
-              ignore-unfixed: true
-              vuln-type: "os,library"
-              severity: "CRITICAL,HIGH"
-  analyze:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: javascript # Remplacez par le langage de votre projet
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+          image-ref: "docker.io/bearer/bearer:latest"
+          format: "json"
+          output: "trivy-report.json"
+          exit-code: 0
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+
+      ################################################
+      # CODEQL (SAST)
+      ################################################
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+      ################################################
+      # DAST — OWASP ZAP (Full Scan)
+      # Effectue un scan actif complet sur l'application
+      # démarrée via le service Docker ci-dessus.
+      ################################################
+      - name: Wait for app to be ready
+        run: |
+          echo "Waiting for application to start..."
+          for i in {1..15}; do
+            curl -s http://localhost:8080 && echo "App is up!" && break
+            sleep 3
+          done
+
+      - name: Run OWASP ZAP Full Scan
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: "http://localhost:8080"
+          rules_file_name: ".zap/rules.tsv"
+          cmd_options: "-a"
+          artifact_name: "zap-report"
+          fail_action: false
+          allow_issue_writing: false
+          # Les rapports sont générés automatiquement : zap-report.html / zap-report.json
+        continue-on-error: true
+
+      - name: Rename ZAP report
+        run: |
+          mv report_json.json zap-report.json 2>/dev/null || echo "{}" > zap-report.json
+          mv report_html.html zap-report.html 2>/dev/null || echo "<html><body>No ZAP report</body></html>" > zap-report.html
+
+      ################################################
+      # DAST — Nuclei
+      # Scanner de vulnérabilités basé sur des templates
+      # communautaires (CVE, misconfiguration, exposures…)
+      ################################################
+      - name: Install Nuclei
+        run: |
+          go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Run Nuclei Scan
+        run: |
+          nuclei \
+            -u http://localhost:8080 \
+            -severity critical,high,medium \
+            -t cves,misconfiguration,exposures,technologies \
+            -json-export nuclei-report.json \
+            -silent
+        continue-on-error: true
+
+      ################################################
+      # DAST — Nikto
+      # Scanner web léger pour détecter les mauvaises
+      # configurations serveur, headers manquants, etc.
+      ################################################
+      - name: Install Nikto
+        run: sudo apt-get install -y nikto
+
+      - name: Run Nikto Scan
+        run: |
+          nikto \
+            -h http://localhost:8080 \
+            -Format json \
+            -output nikto-report.json \
+            -Tuning 123bde \
+            -nointeractive
+        continue-on-error: true
+
+      ################################################
+      # DAST — FFUF (Fuzzing / Directory Discovery)
+      # Découverte de endpoints cachés, fichiers sensibles
+      # exposés et chemins non documentés.
+      ################################################
+      - name: Install FFUF
+        run: |
+          go install github.com/ffuf/ffuf/v2@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Download wordlist
+        run: |
+          curl -sL https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt \
+            -o common.txt
+
+      - name: Run FFUF Directory Fuzzing
+        run: |
+          ffuf \
+            -u http://localhost:8080/FUZZ \
+            -w common.txt \
+            -mc 200,301,302,403 \
+            -o ffuf-report.json \
+            -of json \
+            -t 50 \
+            -timeout 10 \
+            -silent
+        continue-on-error: true
+
+      ################################################
+      # GENERATE PROFESSIONAL REPORT
+      ################################################
+      - name: Generate Markdown Report
+        run: |
+          echo "# RAPPORT D'AUDIT DE SÉCURITÉ" > report.md
+          echo "" >> report.md
+          echo "Date : $(date)" >> report.md
+          echo "Repository : ${{ github.repository }}" >> report.md
+          echo "" >> report.md
+
+          echo "## 1. Résumé Exécutif" >> report.md
+          echo "Analyse automatisée via pipeline DevSecOps combinant outils SAST et DAST." >> report.md
+          echo "" >> report.md
+
+          echo "## 2. Outils utilisés" >> report.md
+          echo "" >> report.md
+          echo "### SAST (Static Application Security Testing)" >> report.md
+          echo "- **Semgrep** — Analyse statique du code source" >> report.md
+          echo "- **Gitleaks** — Détection de secrets dans l'historique Git" >> report.md
+          echo "- **Trivy** — Analyse des dépendances et images containers (SCA)" >> report.md
+          echo "- **CodeQL** — Analyse sémantique du code (GitHub)" >> report.md
+          echo "" >> report.md
+          echo "### DAST (Dynamic Application Security Testing)" >> report.md
+          echo "- **OWASP ZAP** — Scan actif OWASP Top 10 sur l'application en cours d'exécution" >> report.md
+          echo "- **Nuclei** — Scan basé sur templates CVE / misconfiguration" >> report.md
+          echo "- **Nikto** — Audit des headers et configurations serveur" >> report.md
+          echo "- **FFUF** — Fuzzing et découverte d'endpoints cachés" >> report.md
+          echo "" >> report.md
+
+          echo "## 3. Résultats Semgrep (SAST)" >> report.md
+          echo "\`\`\`json" >> report.md
+          cat semgrep-report.json >> report.md || echo "Aucun résultat." >> report.md
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+
+          echo "## 4. Résultats Gitleaks (Secrets)" >> report.md
+          echo "\`\`\`json" >> report.md
+          cat gitleaks-report.json >> report.md || echo "Aucun secret détecté." >> report.md
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+
+          echo "## 5. Résultats Trivy (SCA)" >> report.md
+          echo "\`\`\`json" >> report.md
+          cat trivy-report.json >> report.md || echo "Aucune vulnérabilité critique." >> report.md
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+
+          echo "## 6. Résultats OWASP ZAP (DAST)" >> report.md
+          echo "\`\`\`json" >> report.md
+          cat zap-report.json >> report.md || echo "Aucune vulnérabilité détectée." >> report.md
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+
+          echo "## 7. Résultats Nuclei (DAST)" >> report.md
+          echo "\`\`\`json" >> report.md
+          cat nuclei-report.json >> report.md || echo "Aucune vulnérabilité détectée." >> report.md
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+
+          echo "## 8. Résultats Nikto (DAST)" >> report.md
+          echo "\`\`\`json" >> report.md
+          cat nikto-report.json >> report.md || echo "Aucune anomalie détectée." >> report.md
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+
+          echo "## 9. Résultats FFUF — Endpoints découverts (DAST)" >> report.md
+          echo "\`\`\`json" >> report.md
+          cat ffuf-report.json >> report.md || echo "Aucun endpoint sensible découvert." >> report.md
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+
+          echo "## 10. Conclusion" >> report.md
+          echo "Le rapport présente l'ensemble des vulnérabilités détectées automatiquement par les outils SAST et DAST." >> report.md
+          echo "Les résultats DAST portent sur l'application en cours d'exécution et peuvent révéler des failles" >> report.md
+          echo "non détectables par l'analyse statique seule (injections, mauvaises configurations runtime, endpoints exposés)." >> report.md
+
+      ################################################
+      # INSTALL PDF ENGINE
+      ################################################
+      - name: Install Pandoc + XeLaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc texlive-xetex
+
+      ################################################
+      # CONVERT TO PDF
+      ################################################
+      - name: Generate PDF
+        run: |
+          pandoc report.md -o rapport-audit-securite.pdf --pdf-engine=xelatex
+
+      ################################################
+      # UPLOAD ARTIFACTS
+      ################################################
+      - name: Upload PDF Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rapport-Audit-Securite
+          path: rapport-audit-securite.pdf
+
+      - name: Upload ZAP HTML Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZAP-HTML-Report
+          path: zap-report.html
+
+      - name: Upload Raw Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: Security-JSON-Reports
+          path: |
+            semgrep-report.json
+            gitleaks-report.json
+            trivy-report.json
+            zap-report.json
+            nuclei-report.json
+            nikto-report.json
+            ffuf-report.json

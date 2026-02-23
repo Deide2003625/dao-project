@@ -172,7 +172,11 @@ export default function DashboardChefEquipe() {
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Date dépôt</span>
                       <span className="font-medium">
-                        {dao.date_depot || "-"}
+                        {new Date(dao.date_depot!).toLocaleDateString('fr-FR', {
+                            day: '2-digit',
+                            month: '2-digit', 
+                            year: 'numeric'
+                          })}
                       </span>
                     </div>
 

@@ -7,6 +7,9 @@ import {
   Search,
   ChevronRight,
   User,
+  Briefcase,
+  Users2,
+  FolderOpen,
 } from "lucide-react";
 
 interface ApiTeamDao {
@@ -109,7 +112,6 @@ export default function ChefProjetDashboard() {
             return {
               id: item.daoId,
               name: item.numero,
-
               leader: item.chefName || "",
               memberCount: members.length,
               daoCount: 1,
@@ -206,19 +208,19 @@ export default function ChefProjetDashboard() {
           <StatCard
             title="Équipes Totales"
             value={stats.totalTeams}
-            icon={<Users className="text-blue-700" />}
+            icon={<Briefcase className="text-blue-700" />}
             color="blue"
           />
           <StatCard
             title="Membres Totaux"
             value={stats.totalMembers}
-            icon={<Users className="text-purple-700" />}
+            icon={<Users2 className="text-purple-700" />}
             color="purple"
           />
           <StatCard
             title="DAOs Assignés"
             value={stats.totalDaos}
-            icon={<Users className="text-orange-700" />}
+            icon={<FolderOpen className="text-orange-700" />}
             color="orange"
           />
         </div>
@@ -254,15 +256,15 @@ export default function ChefProjetDashboard() {
             </div>
 
             {/* LISTE DES ÉQUIPES */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="p-4 border-b">
-                <h4 className="text-lg font-semibold">Équipes</h4>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+              <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+                <h4 className="text-lg font-semibold text-gray-900">Équipes</h4>
               </div>
-              <div className="divide-y">
+              <div className="divide-y divide-gray-200">
                 {filteredTeams.map((team) => (
                   <div
                     key={team.id}
-                    className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${selectedTeam === team.id ? "bg-blue-50" : ""}`}
+                    className={`p-6 hover:bg-gray-50 cursor-pointer transition-all duration-200 ${selectedTeam === team.id ? "bg-gray-50" : ""}`}
                     onClick={() =>
                       setSelectedTeam(selectedTeam === team.id ? null : team.id)
                     }
@@ -307,103 +309,102 @@ export default function ChefProjetDashboard() {
 
                     {/* DÉTAILS DE L'ÉQUIPE (DÉPLIÉ) */}
                     {selectedTeam === team.id && (
-                      <div className="mt-4 pt-4 border-t animate-fadeIn">
+                      <div className="mt-6 pt-6 animate-fadeIn">
                         {/* TÂCHES ASSIGNÉES */}
-                        <div>
-                          <h4 className="font-medium mb-3">
+                        <div className="bg-gray-100 rounded-xl p-4 mb-4">
+                          <h4 className="font-semibold text-gray-900">
                             Tâches Assignées
                           </h4>
-                          <div className="space-y-4">
-                            {team.members.map((member) => {
-                              // Filtrer les tâches pour ce DAO spécifique
-                              const memberTasksForDao = member.tasks?.filter((task: Task) => task.dao_id === team.id) || [];
-                              
-                              if (memberTasksForDao.length === 0) {
-                                return null; // Ne pas afficher les membres sans tâches sur ce DAO
-                              }
-                              
-                              return (
-                                <div key={member.id} className="border rounded-lg bg-gray-50">
-                                  {/* En-tête avec nom du membre */}
-                                  <div className="bg-white px-4 py-3 border-b rounded-t-lg">
-                                    <div className="flex items-center gap-3">
-                                      <div
-                                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        </div>
+                        <div className="space-y-4">
+                          {team.members.map((member) => {
+                            // Filtrer les tâches pour ce DAO spécifique
+                            const memberTasksForDao = member.tasks?.filter((task: Task) => task.dao_id === team.id) || [];
+
+                            if (memberTasksForDao.length === 0) {
+                              return null; // Ne pas afficher les membres sans tâches sur ce DAO
+                            }
+
+                            return (
+                              <div key={member.id} className="border-2 border-gray-200 rounded-xl bg-gradient-to-br from-gray-50 to-white shadow-sm hover:shadow-md transition-all duration-200">
+                                {/* En-tête avec nom du membre */}
+                                <div className="bg-gray-100 px-4 py-3 border-b-2 border-gray-200 rounded-t-xl">
+                                  <div className="flex items-center gap-3">
+                                    <div
+                                      className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm ${
+                                        member.status === "available"
+                                          ? "bg-green-100 border-2 border-green-200"
+                                          : member.status === "busy"
+                                            ? "bg-yellow-100 border-2 border-yellow-200"
+                                            : "bg-gray-100 border-2 border-gray-200"
+                                      }`}
+                                    >
+                                      <User
+                                        size={18}
+                                        className={
                                           member.status === "available"
-                                            ? "bg-green-100"
+                                            ? "text-green-600"
                                             : member.status === "busy"
-                                              ? "bg-yellow-100"
-                                              : "bg-gray-100"
-                                        }`}
-                                      >
-                                        <User
-                                          size={16}
-                                          className={
-                                            member.status === "available"
-                                              ? "text-green-600"
-                                              : member.status === "busy"
-                                                ? "text-yellow-600"
-                                                : "text-gray-400"
-                                          }
-                                        />
-                                      </div>
-                                      <div>
-                                        <p className="font-semibold text-sm">
-                                          {member.name}
-                                        </p>
-                                        <p className="text-xs text-gray-500">
-                                          {member.role}
-                                        </p>
-                                      </div>
+                                              ? "text-yellow-600"
+                                              : "text-gray-400"
+                                        }
+                                      />
+                                    </div>
+                                    <div>
+                                      <p className="font-semibold text-gray-900">
+                                        {member.name}
+                                      </p>
+                                      <p className="text-xs text-gray-600">
+                                        {member.role}
+                                      </p>
                                     </div>
                                   </div>
-                                  
-                                  {/* Liste des tâches du membre */}
-                                  <div className="p-4 space-y-3">
-                                    {memberTasksForDao.map((task: Task) => {
-                                      // Utiliser la progression sauvegardée, fallback sur le statut si non défini
-                                      const progress = task.progress !== undefined ? task.progress : getProgressFromStatus(task.statut);
-                                      return (
-                                        <div key={task.id} className="bg-white p-3 rounded border">
-                                          <div className="flex justify-between items-center mb-2">
-                                            <span className="text-sm font-medium text-blue-600 truncate">
-                                              {task.id_task} - {task.titre || task.description || `Tâche ${task.id}`}
-                                            </span>
-                                            <span className="text-sm font-semibold text-blue-600">
-                                              {progress}%
-                                            </span>
-                                          </div>
-                                          <div className="w-full bg-gray-200 h-2 rounded">
-                                            <div
-                                              className={`h-2 rounded ${
-                                                task.statut === 'termine' ? 'bg-green-600' :
-                                                task.statut === 'en_cours' ? 'bg-yellow-600' : 'bg-blue-600'
-                                              }`}
-                                              style={{ width: `${progress}%` }}
-                                            />
-                                          </div>
-                                          <div className="mt-2 flex justify-between items-center">
-                                            <span className="text-xs text-gray-500">
-                                              Statut: {task.statut}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
                                 </div>
-                              );
-                            })}
-                            
-                            {/* Message si aucune tâche assignée sur ce DAO */}
-                            {team.members.every((member) => 
-                              (member.tasks?.filter((task: Task) => task.dao_id === team.id) || []).length === 0
-                            ) && (
-                              <div className="text-sm text-gray-500 italic text-center py-8">
-                                Aucune tâche assignée sur ce DAO
+
+                                {/* Liste des tâches du membre */}
+                                <div className="p-4 space-y-3">
+                                  {memberTasksForDao.map((task: Task) => {
+                                    // Utiliser la progression sauvegardée, fallback sur le statut si non défini
+                                    const progress = task.progress !== undefined ? task.progress : getProgressFromStatus(task.statut);
+                                    return (
+                                      <div key={task.id} className="bg-white p-4 rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md hover:border-gray-400 transition-all duration-200">
+                                        <div className="flex justify-between items-center mb-3">
+                                          <span className="text-sm font-semibold text-gray-700 truncate flex-1 mr-3">
+                                            {task.id_task} - {task.titre || task.description || `Tâche ${task.id}`}
+                                          </span>
+                                          <span className="text-sm font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded-md">
+                                            {progress}%
+                                          </span>
+                                        </div>
+                                        <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
+                                          <div
+                                            className={`h-3 rounded-full transition-all duration-300 ${
+                                              task.statut === 'termine' ? 'bg-gradient-to-r from-green-500 to-green-600' :
+                                              task.statut === 'en_cours' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' : 
+                                              'bg-gradient-to-r from-blue-500 to-blue-600'
+                                            }`}
+                                            style={{ width: `${progress}%` }}
+                                          />
+                                        </div>
+                                        <span className="text-xs font-medium px-2 py-1 rounded text-white">
+                                            {task.statut}
+                                          </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            )}
-                          </div>
+                            );
+                          })}
+
+                          {/* Message si aucune tâche assignée sur ce DAO */}
+                          {team.members.every((member) => 
+                            (member.tasks?.filter((task: Task) => task.dao_id === team.id) || []).length === 0
+                          ) && (
+                            <div className="text-sm text-gray-500 italic text-center py-8">
+                              Aucune tâche assignée sur ce DAO
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
