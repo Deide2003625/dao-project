@@ -29,6 +29,7 @@ jobs:
               ignore-unfixed: true
               vuln-type: "os,library"
               severity: "CRITICAL,HIGH"
+
   analyze:
     runs-on: ubuntu-latest
     steps:
@@ -40,3 +41,22 @@ jobs:
         languages: javascript # Remplacez par le langage de votre projet
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
+
+    # ==========================
+    # 🔽 AJOUT EXPORT RAPPORT PDF
+    # ==========================
+
+    - name: Install Pandoc
+      run: sudo apt-get update && sudo apt-get install -y pandoc
+
+    - name: Generate PDF report
+      run: |
+        echo "# Rapport SAST" > report.md
+        echo "Analyse générée automatiquement par GitHub Actions." >> report.md
+        pandoc report.md -o rapport-sast.pdf
+
+    - name: Upload PDF artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: rapport-sast
+        path: rapport-sast.pdf
