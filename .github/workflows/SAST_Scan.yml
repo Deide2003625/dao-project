@@ -21,12 +21,15 @@ jobs:
         run: semgrep --config=p/security-audit --json -o semgrep-report.json
 
       ################################################
-      # GITLEAKS
+      # GITLEAKS (Secrets detection)
       ################################################
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: detect --report-format json --report-path gitleaks-report.json
+          report_format: json
+          report_path: gitleaks-report.json
 
       ################################################
       # TRIVY (SCA / Container scan)
