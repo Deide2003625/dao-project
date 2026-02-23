@@ -45,6 +45,10 @@ jobs:
     # ==========================
     # 🔽 AJOUT EXPORT RAPPORT PDF
     # ==========================
+    - name: Install Pandoc and LaTeX
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pandoc texlive-latex-base texlive-fonts-recommended texlive-latex-extra
 
     - name: Install Pandoc
       run: sudo apt-get update && sudo apt-get install -y pandoc
