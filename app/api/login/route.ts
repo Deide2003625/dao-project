@@ -17,9 +17,37 @@ function getRedirectByRole(roleId: number): string {
 }
 
 export async function POST(request: Request) {
+  console.log("=== DÉBUT API LOGIN ===");
+  
   try {
-    const body = await request.json();
-    console.log("Requête reçue avec le corps:", JSON.stringify(body, null, 2));
+    let body;
+    try {
+      const text = await request.text();
+      console.log("Corps brut de la requête:", text);
+      
+      if (!text || text.trim() === '') {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Corps de requête vide",
+          },
+          { status: 400 },
+        );
+      }
+      
+      body = JSON.parse(text);
+      console.log("Requête reçue avec le corps:", JSON.stringify(body, null, 2));
+    } catch (jsonError) {
+      console.error("Erreur de parsing JSON:", jsonError);
+      console.error("Corps de la requête invalide");
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Format de requête invalide - JSON mal formé",
+        },
+        { status: 400 },
+      );
+    }
 
     const { email, password, password_confirmation, isNewUser } = body;
 
@@ -27,7 +55,7 @@ export async function POST(request: Request) {
 
     // Validation de base
     if (!email) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         {
           success: false,
           errors: {
@@ -36,6 +64,8 @@ export async function POST(request: Request) {
         },
         { status: 400 },
       );
+      console.log("Réponse email manquant:", JSON.stringify(response.body, null, 2));
+      return response;
     }
 
     // Vérifier si l'utilisateur existe déjà
@@ -99,7 +129,7 @@ export async function POST(request: Request) {
         }
       } else {
         // Sinon, on crée un nouvel utilisateur
-        const result = await createUser(email, password);
+        const result = await createUser(email, password, email.split("@")[0], 4); // Par défaut: Membre Equipe (nombre)
         if (!result.success) {
           return NextResponse.json(
             {

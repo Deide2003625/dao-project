@@ -49,16 +49,22 @@ export async function authenticateUser(email: string, password: string) {
 export async function createUser(
   email: string,
   password: string,
-  username: string,
-  roleId: string = "user",
+  username?: string,
+  roleId: number | string = 4, // Par défaut: Membre Equipe (accepte nombre ou string)
 ) {
   try {
     const connection = await db();
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Générer un username à partir de l'email si non fourni
+    const finalUsername = username || email.split("@")[0];
+
+    // Convertir roleId en nombre si c'est une string
+    const finalRoleId = typeof roleId === 'string' ? parseInt(roleId, 10) : roleId;
+
     await connection.execute(
       "INSERT INTO users (email, password, username, role_id) VALUES (?, ?, ?, ?)",
-      [email, hashedPassword, username, roleId],
+      [email, hashedPassword, finalUsername, finalRoleId],
     );
 
     return { success: true };

@@ -46,45 +46,63 @@ async function seedDatabase() {
     const users: User[] = [
       {
         username: "admin",
-        email: "admin@example.com",
+        email: "admin@dao.com",
         password: await bcrypt.hash("admin123", 10),
         role_id: 2, // Administrateur
       },
       {
+        username: "superadmin",
+        email: "superadmin@dao.com",
+        password: await bcrypt.hash("superadmin123", 10),
+        role_id: 2, // Super Administrateur
+      },
+      {
+        username: "lio",
+        email: "lio@dao.com",
+        password: await bcrypt.hash("lio123", 10),
+        role_id: 2, // Administrateur
+      },
+      {
+        username: "directeur",
+        email: "directeur@dao.com",
+        password: await bcrypt.hash("directeur123", 10),
+        role_id: 1, // Directeur General
+      },
+      {
         username: "user1",
-        email: "user1@example.com",
+        email: "user1@dao.com",
         password: await bcrypt.hash("user1123", 10),
         role_id: 4, // MembreEquipe
       },
       {
         username: "user2",
-        email: "user2@example.com",
+        email: "use@example.com",
         password: await bcrypt.hash("user2123", 10),
-        role_id: 4,
+        role_id: 2,
       },
       {
         username: "manager1",
-        email: "manager@example.com",
+        email: "manager@dao.com",
         password: await bcrypt.hash("manager123", 10),
         role_id: 3, // ChefProjet
       },
       {
+        username: "chef_projet1",
+        email: "chef1@dao.com",
+        password: await bcrypt.hash("chef123", 10),
+        role_id: 3, // ChefProjet
+      },
+      {
         username: "dev1",
-        email: "dev@example.com",
+        email: "dev1@dao.com",
         password: await bcrypt.hash("dev1234", 10),
         role_id: 4, // MembreEquipe
       },
       {
-        username: "Directeur General",
-        email: "directeur@example.com",
-        password: await bcrypt.hash("directeur123", 10),
-        role_id: 1, // Directeur General
-      },
-      {
-        username: "lio",
-        email: "lio@example.com",
-        password: await bcrypt.hash("lio123", 10),
-        role_id: 2, // Administrateur
+        username: "membre1",
+        email: "membre1@dao.com",
+        password: await bcrypt.hash("membre123", 10),
+        role_id: 4, // MembreEquipe
       },
     ];
 
@@ -173,6 +191,7 @@ async function seedDatabase() {
         console.log("Données de test ajoutées à la table purchases.");
       }
     }
+  } catch (error) {
     console.error("Erreur lors du peuplement de la base de données :", error);
   } finally {
     await connection.end();

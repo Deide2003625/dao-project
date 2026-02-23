@@ -106,7 +106,9 @@ export default function UsersTable() {
         const usersData = await usersResponse.json();
         console.log("7. Données des utilisateurs:", usersData);
 
-        setUsers(Array.isArray(usersData) ? usersData : []);
+        // L'API retourne { success: true, data: [...] }
+        const usersArray = usersData.success && Array.isArray(usersData.data) ? usersData.data : [];
+        setUsers(usersArray);
 
         // Ne pas définir de rôle par défaut
         console.log("8. Aucun rôle sélectionné par défaut");
@@ -187,10 +189,8 @@ export default function UsersTable() {
 
       // Fermer la modale après 3 secondes
       const timer = setTimeout(() => {
-        setIsModalOpen(false);
-        // Effacer le message après la fermeture de la modale
-        setTimeout(() => setMessage(""), 1000);
-      }, 3000);
+        
+      },);
 
       // Nettoyer le timer si le composant est démonté
       return () => clearTimeout(timer);
@@ -338,7 +338,13 @@ export default function UsersTable() {
                             </td>
                             <td className="align-middle p-2">
                               <span
-                                className={`badge ${user.roleName === "admin" ? "badge-success" : "badge-info"}`}
+                                className={`badge ${
+                                  user.roleName === "admin" ? "badge-success" : 
+                                  user.roleName === "directeur" ? "badge-primary" :
+                                  user.roleName === "chef_projet" ? "badge-warning" :
+                                  user.roleName === "membre_equipe" ? "badge-info" :
+                                  "badge-secondary"
+                                }`}
                               >
                                 {user.roleLabel}
                               </span>

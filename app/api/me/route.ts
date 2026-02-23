@@ -19,7 +19,7 @@ export async function GET(request: Request) {
        FROM sessions
        JOIN users ON users.id = sessions.user_id
        WHERE sessions.session_token = ? 
-       AND sessions.expires_at > NOW()`,
+       AND sessions.expires > NOW()`,
       [sessionToken],
     );
 

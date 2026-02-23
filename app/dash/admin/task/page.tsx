@@ -1,234 +1,345 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft, Download, MoreVertical, Check, X, Send, User } from "lucide-react";
+import { useState, useEffect } from "react";
+import { CheckCircle, Search, ChevronDown, Minus, Plus, CheckSquare } from "lucide-react";
 
-interface Dao {
+/* =======================
+   TYPES
+======================= */
+interface Task {
   id: number;
-  numero: string;
-  reference: string;
-  autorite: string;
-  date_depot?: string;
-  statut?: string;
-  chef_projet?: string;
-  chef_id?: number;
-  team_id?: string;
+  dao_id: number;
+  id_task: number;
+  description?: string;
+  progress: number;
+  assigned_to: number;
+  created_at: string;
+  updated_at?: string;
+  dao_reference?: string;
+  dao_objet?: string;
 }
 
-interface User {
-  id: number;
-  username: string;
-  email: string;
-  role: string;
-  role_id: string;
-}
-
-export default function DaoListPage() {
-  const router = useRouter();
-  const [daos, setDaos] = useState<Dao[]>([]);
+/* =======================
+   DASHBOARD
+======================= */
+export default function MembreEquipeDashboard() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [expandedTask, setExpandedTask] = useState<number | null>(null);
+  const [editingTask, setEditingTask] = useState<number | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>("");
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [taskProgress, setTaskProgress] = useState<Record<number, number>>({});
 
+  // Fetch tasks from API
   useEffect(() => {
-    loadUserAndDaos();
+    const fetchTasks = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        console.log("Début du chargement des tâches...");
+        
+        // Récupérer l'utilisateur depuis une variable en mémoire
+        // NOTE: localStorage n'est pas supporté dans les artifacts Claude.ai
+        const mockUser = { id: 1 }; // Simule un utilisateur connecté
+        
+        const userId = mockUser.id;
+        console.log("ID utilisateur:", userId);
+        
+        if (!userId) {
+          const errorMsg = "Erreur: ID utilisateur non trouvé";
+          console.error(errorMsg);
+          setError(errorMsg);
+          return;
+        }
+        
+        try {
+          console.log(`Envoi de la requête à /api/member-tasks?userId=${userId}`);
+          const response = await fetch(`/api/member-tasks?userId=${userId}`);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Erreur HTTP: ${response.status} - ${errorText}`);
+          }
+          
+          const result = await response.json();
+          console.log("Réponse brute de l'API:", JSON.stringify(result, null, 2));
+          
+          if (result.success) {
+            console.log(`${result.data?.length || 0} tâches reçues`);
+            
+            setTasks(result.data || []);
+            
+            // Initialize progress from database
+            const progressMap: Record<number, number> = {};
+            (result.data || []).forEach((task: Task) => {
+              if (task.id === undefined) {
+                console.error("Tâche sans ID détectée:", task);
+              } else {
+                progressMap[task.id] = task.progress || 0;
+              }
+            });
+            
+            console.log("Carte de progression initialisée:", progressMap);
+            setTaskProgress(progressMap);
+          } else {
+            const errorMsg = result.message || 'Erreur inconnue lors du chargement des tâches';
+            console.error("Erreur de l'API:", errorMsg);
+            setError(errorMsg);
+          }
+        } catch (error) {
+          const errorMsg = `Erreur lors de la récupération des tâches: ${error instanceof Error ? error.message : String(error)}`;
+          console.error(errorMsg);
+          setError(errorMsg);
+        }
+      } catch (err) {
+        setError('Erreur de connexion au serveur');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTasks();
   }, []);
 
-  async function loadUserAndDaos() {
-    try {
-      setLoading(true);
-      setError("");
+  const filteredTasks = tasks.filter(
+    (task: Task) =>
+      (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (task.dao_reference && task.dao_reference.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (task.dao_objet && task.dao_objet.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      task.id.toString().includes(searchTerm.toLowerCase())
+  );
 
-      // Fetch current user
-      const userRes = await fetch("/api/me", { cache: "no-store" });
-      const userJson = await userRes.json().catch(() => ({}));
-      if (!userRes.ok || !userJson.user) {
-        setError("Utilisateur non authentifié");
-        return;
-      }
-      setCurrentUser(userJson.user);
-
-      // Fetch all DAOs
-      const daoRes = await fetch("/api/dao", { cache: "no-store" });
-      const daoJson = await daoRes.json().catch(() => ({}));
-
-      if (!daoRes.ok) {
-        console.error("API /api/dao error:", daoJson);
-        setDaos([]);
-        setError(daoJson?.message || "Erreur lors du chargement des DAO");
-        return;
-      }
-
-      // API renvoie { success: true, data: [...] }
-      const allDaos = Array.isArray(daoJson?.data) ? (daoJson.data as Dao[]) : [];
-
-      // Filter DAOs based on user role
-      let filteredDaos = allDaos;
-      const userRole = userJson.user.role_id;
-
-      if (userRole === "2") {
-        // Admin - voit tous les DAOs
-        filteredDaos = allDaos;
-      } else if (userRole === "3") {
-        // ChefProjet - voit ses DAOs
-        filteredDaos = allDaos.filter((dao) => dao.chef_id === userJson.user.id);
-      } else if (userRole === "4") {
-        // MembreEquipe - voit les DAOs de son équipe
-        // Pour cela, il faudrait récupérer les équipes de l'utilisateur
-        // Pour l'instant, on laisse tous les DAOs (à améliorer)
-        filteredDaos = allDaos;
-      }
-
-      setDaos(filteredDaos);
-    } catch (err) {
-      console.error("Error fetching data:", err);
-      setDaos([]);
-      setError("Erreur réseau lors du chargement des données");
-    } finally {
-      setLoading(false);
+  const updateProgress = async (taskId: number, value: number) => {
+    const newValue = Math.min(100, Math.max(0, value));
+    
+    if (!taskId || isNaN(Number(taskId))) {
+      return;
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 text-gray-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="spinner-border" role="status">
-            <span className="sr-only">Chargement...</span>
-          </div>
-          <p className="mt-2">Chargement des DAO...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 text-gray-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="alert alert-danger">{error}</div>
-          <button className="btn btn-primary mt-3" onClick={loadUserAndDaos}>
-            Réessayer
-          </button>
-        </div>
-      </div>
-    );
-  }
+    
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) {
+      return;
+    }
+    
+    setTaskProgress((prev) => ({
+      ...prev,
+      [taskId]: newValue
+    }));
+    
+    try {
+      const apiUrl = `/api/tasks/${taskId}/progress`;
+      
+      const response = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ progress: newValue }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Échec de la mise à jour');
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Erreur lors de la mise à jour');
+      }
+      
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour de la progression:', error);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
-      {/* Header */}
-      <header className="flex items-center justify-between bg-white p-4 border-b">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dash/admin"
-            className="text-gray-600 hover:text-black"
-          >
-            <ArrowLeft />
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold">Gestion des DAO</h1>
-            <p className="text-sm text-gray-500">Tous les DAO accessibles</p>
+    <div className="min-h-screen bg-gray-50">
+      <main className="max-w-7xl mx-auto p-6 space-y-6">
+        {/* LOADING / ERROR */}
+        {loading && (
+          <div className="bg-white rounded-xl shadow p-6 text-center">
+            <p>Chargement des tâches...</p>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <input
-            placeholder="Rechercher (n°, référence, autorité...)"
-            className="px-3 py-2 border rounded w-72 text-sm"
-          />
-          <button className="px-3 py-2 bg-blue-600 text-white rounded text-sm">
-            Filtrer
-          </button>
-        </div>
-      </header>
-
-      <main className="p-6">
-        {/* DAO list */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm text-gray-500">
-              Cliquez sur un DAO pour voir les détails et tâches
-            </span>
-            <span className="text-sm text-gray-500">
-              {daos.length} DAO{daos.length > 1 ? 's' : ''} trouvé{daos.length > 1 ? 's' : ''}
-            </span>
+        )}
+        
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+            <p className="text-red-700">{error}</p>
           </div>
+        )}
 
-          {daos.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">Aucun DAO trouvé pour votre rôle.</p>
+        {/* RECHERCHE */}
+        {!loading && !error && (
+          <div className="bg-white rounded-xl shadow p-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher une tâche ou un DAO"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {daos.map((dao) => (
-                <article
-                  key={dao.id}
-                  onClick={() => router.push(`/dash/admin/task/${dao.id}`)}
-                  className="bg-white p-4 rounded shadow cursor-pointer hover:shadow-md transition-shadow"
+          </div>
+        )}
+
+        {/* LISTE DES TÂCHES */}
+        {!loading && !error && (
+          <div className="space-y-4">
+            {filteredTasks.length === 0 ? (
+              <div className="bg-white rounded-xl shadow p-6 text-center">
+                <p className="text-gray-500">
+                  {searchTerm ? "Aucune tâche trouvée pour votre recherche" : "Aucune tâche assignée"}
+                </p>
+              </div>
+            ) : (
+              filteredTasks.map((task: Task) => (
+                <div
+                  key={task.id}
+                  className="bg-white rounded-xl border shadow-sm"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg">N° {dao.numero}</h3>
-                      <p className="text-sm text-gray-600 line-clamp-2 mt-1">
-                        {dao.reference} - {dao.autorite}
-                      </p>
-                    </div>
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        dao.statut === "EN_COURS"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : dao.statut === "TERMINE"
-                          ? "bg-green-100 text-green-800"
-                          : dao.statut === "ANNULE"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {dao.statut || "EN_COURS"}
-                    </span>
-                  </div>
+                  {/* HEADER */}
+                  <div
+                    className="p-6 cursor-pointer"
+                    onClick={() =>
+                      setExpandedTask(expandedTask === task.id ? null : task.id)
+                    }
+                  >
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold">Tâche #{task.id}</h3>
 
-                  <div className="mt-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Date dépôt</span>
-                      <span className="font-medium">
-                        {dao.date_depot || "N/A"}
-                      </span>
-                    </div>
+                        <div className="flex gap-4 text-sm text-gray-600 mt-2">
+                          <span className="flex items-center gap-1">
+                            <CheckSquare size={14} /> DAO-{task.dao_id}
+                            {task.dao_reference && ` (${task.dao_reference})`}
+                          </span>
+                          {task.dao_objet && (
+                            <span className="flex items-center gap-1">
+                              <CheckSquare size={14} /> {task.dao_objet}
+                            </span>
+                          )}
+                        </div>
 
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Chef projet</span>
-                      <span className="font-medium">
-                        {dao.chef_projet || "N/A"}
-                      </span>
-                    </div>
-
-                    <div className="mt-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Progression</span>
-                        <span className="font-medium">0%</span>
+                        {/* PROGRESSION */}
+                        <div className="mt-4">
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>Progression</span>
+                            <span className="font-medium">
+                              {taskProgress[task.id] || 0}%
+                            </span>
+                          </div>
+                          <div className="h-2 bg-gray-200 rounded">
+                            <div
+                              className="h-2 bg-blue-600 rounded transition-all"
+                              style={{ width: `${taskProgress[task.id] || 0}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-full bg-gray-100 h-2 rounded mt-2">
-                        <div
-                          className="h-2 bg-blue-600 rounded"
-                          style={{ width: "0%" }}
-                        />
-                      </div>
+
+                      <ChevronDown
+                        className={`transition-transform ${
+                          expandedTask === task.id ? "rotate-180" : ""
+                        }`}
+                      />
                     </div>
                   </div>
 
-                  <div className="mt-4 flex justify-end">
-                    <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                      Voir détails →
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
+                  {/* ACTIONS */}
+                  {expandedTask === task.id && (
+                    <div className="px-6 pb-6 space-y-4">
+                      {/* DESCRIPTION */}
+                      {task.description && (
+                        <div className="bg-gray-50 p-4 rounded-lg border">
+                          <h4 className="font-medium text-sm mb-2">Description</h4>
+                          <p className="text-sm text-gray-700">{task.description}</p>
+                        </div>
+                      )}
+
+                      {/* BOUTONS PROGRESSION ET COMMENTER */}
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() =>
+                            setEditingTask(
+                              editingTask === task.id ? null : task.id
+                            )
+                          }
+                          className="px-3 py-1 text-xs border rounded hover:bg-gray-100"
+                        >
+                          Progression
+                        </button>
+                        <button
+                          className="px-3 py-1 text-xs border rounded hover:bg-gray-100"
+                        >
+                          Commenter
+                        </button>
+                      </div>
+
+                      {/* MODIFIER PROGRESSION */}
+                      {editingTask === task.id && (
+                        <div className="bg-gray-50 p-4 rounded-lg border">
+                          <div className="flex justify-between mb-2 text-sm">
+                            <span>Avancement</span>
+                            <span className="font-medium">
+                              {taskProgress[task.id] || 0}%
+                            </span>
+                          </div>
+
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={5}
+                            value={taskProgress[task.id] || 0}
+                            onChange={(e) =>
+                              updateProgress(task.id, Number(e.target.value))
+                            }
+                            className="w-full"
+                          />
+
+                          <div className="flex justify-between mt-3">
+                            <button
+                              onClick={() =>
+                                updateProgress(task.id, (taskProgress[task.id] || 0) - 5)
+                              }
+                              disabled={(taskProgress[task.id] || 0) <= 0}
+                              className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <button
+                              onClick={() =>
+                                updateProgress(task.id, (taskProgress[task.id] || 0) + 5)
+                              }
+                              disabled={(taskProgress[task.id] || 0) >= 100}
+                              className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* MESSAGE DE TÂCHE TERMINÉE */}
+                      {taskProgress[task.id] === 100 && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                          <CheckCircle className="mx-auto text-green-600 mb-2" />
+                          <p className="font-medium text-green-700">
+                            Tâche terminée à 100%
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

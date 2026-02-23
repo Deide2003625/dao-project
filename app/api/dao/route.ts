@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sendDaoCreationEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,14 +81,17 @@ async function getNextDaoNumero(connection: any) {
   return generatedNumero;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const connection = await db();
 
     // crée les tables si besoin
     await ensureTables(connection);
 
-    const [rows]: any = await connection.execute(`
+    const { searchParams } = new URL(req.url);
+    const chefId = searchParams.get("chefId");
+
+    let query = `
       SELECT 
         d.id,
         d.numero,
@@ -95,27 +99,43 @@ export async function GET() {
         d.autorite,
         d.date_depot,
         d.statut,
+        d.chef_id,
+        d.groupement,
+        d.nom_partenaire,
         u.username as chef_projet
       FROM daos d
       LEFT JOIN users u ON d.chef_id = u.id
-      ORDER BY d.created_at DESC
-    `);
+    `;
+
+    const params: any[] = [];
+
+    if (chefId) {
+      query += " WHERE d.chef_id = ?";
+      params.push(Number(chefId));
+    }
+
+    query += " ORDER BY d.numero ASC";
+
+    const [rows]: any = await connection.execute(query, params);
 
     // Calculer le statut pour chaque DAO basé sur la date de dépôt
     const daosWithStatus = rows.map((dao: any) => {
-      if (dao.date_depot) {
-        const dateDepot = new Date(dao.date_depot);
+      // Créer une copie pour ne pas modifier l'original
+      const updatedDao = { ...dao };
+      
+      if (updatedDao.date_depot) {
+        const dateDepot = new Date(updatedDao.date_depot);
         const today = new Date();
         const diffTime = today.getTime() - dateDepot.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
         // Si déposé il y a 3 jours ou plus, statut = aRisque
         // Sinon, statut = enCours
-        dao.statut = diffDays >= 3 ? 'aRisque' : 'enCours';
+        updatedDao.statut = diffDays >= 3 ? 'aRisque' : 'enCours';
       } else {
-        dao.statut = 'enCours'; // Par défaut si pas de date
+        updatedDao.statut = 'enCours'; // Par défaut si pas de date
       }
-      return dao;
+      return updatedDao;
     });
 
     return NextResponse.json({ success: true, data: daosWithStatus });
@@ -139,7 +159,11 @@ export async function POST(req: NextRequest) {
       autorite,
       chefEquipe,
       membres,
+      groupement,
+      nomPartenaire,
     } = body;
+
+    const year = new Date().getFullYear();
 
     // numero n'est plus requis côté client (car généré côté serveur)
     if (!date_depot || !objet || !description || !reference || !autorite) {
@@ -153,6 +177,18 @@ export async function POST(req: NextRequest) {
 
     // crée les tables si besoin
     await ensureTables(connection);
+
+    // Ajouter les colonnes groupement et nom_partenaire si elles n'existent pas
+    try {
+      await connection.execute(`
+        ALTER TABLE daos 
+        ADD COLUMN IF NOT EXISTS groupement VARCHAR(20) NULL,
+        ADD COLUMN IF NOT EXISTS nom_partenaire VARCHAR(255) NULL
+      `);
+    } catch (err) {
+      // Ignorer les erreurs de colonne existante
+      console.log("Mise à jour table daos (colonnes groupement/nom_partenaire可能 déjà existent):", err);
+    }
 
     // Vérifier que le chef et les membres existent et ont les bons rôles
     const userIds: number[] = [];
@@ -177,17 +213,12 @@ export async function POST(req: NextRequest) {
       idToRole[Number(r.id)] = String(r.role_id);
     });
 
-    // Chef must have chef role (role_id 3 = ChefProjet)
-    if (chefEquipe && String(idToRole[Number(chefEquipe)]) !== "3") {
-      return NextResponse.json(
-        { success: false, message: "Le chef d'équipe sélectionné n'a pas le rôle ChefProjet" },
-        { status: 400 },
-      );
-    }
+    // Vérification du rôle ChefProjet supprimée pour permettre à n'importe quel utilisateur d'être chef d'équipe
 
     // Members must have member role (role_id 4 = MembreEquipe)
     for (const m of membres || []) {
-      if (String(idToRole[Number(m)]) !== "4") {
+      const userRole = String(idToRole[Number(m)]);
+      if (userRole !== "4") {
         return NextResponse.json(
           { success: false, message: `L'utilisateur ${m} n'a pas le rôle MembreEquipe` },
           { status: 400 },
@@ -204,14 +235,35 @@ export async function POST(req: NextRequest) {
       [teamId, teamCode],
     );
 
-    // Générer le numéro DAO côté serveur (atomique)
-    const generatedNumero = await getNextDaoNumero(connection);
+    // Générer le numéro DAO côté serveur (atomique) - basé sur le dernier ID
+    const [lastDaoRows]: any = await connection.execute(
+      `SELECT id, numero FROM daos 
+       WHERE numero LIKE ? 
+       ORDER BY id DESC 
+       LIMIT 1`,
+      [`DAO-${year}-%`]
+    );
+    
+    let nextSeq = 1;
+    if (Array.isArray(lastDaoRows) && lastDaoRows.length > 0) {
+      const lastNumero = lastDaoRows[0].numero;
+      console.log("Dernier numéro trouvé:", lastNumero);
+      
+      // Extraire le numéro séquentiel du dernier numéro
+      const match = lastNumero.match(new RegExp(`DAO-${year}-(\\d+)`));
+      if (match && match[1]) {
+        nextSeq = parseInt(match[1]) + 1;
+      }
+    }
+    
+    const generatedNumero = `DAO-${year}-${String(nextSeq).padStart(3, "0")}`;
+    console.log("Numéro DAO généré lors de l'insertion:", generatedNumero);
 
     // Insérer DAO
     const [insertRes]: any = await connection.execute(
       `
-      INSERT INTO daos (numero, date_depot, objet, description, reference, autorite, statut, chef_id, team_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO daos (numero, date_depot, objet, description, reference, autorite, statut, chef_id, team_id, groupement, nom_partenaire)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       [
         generatedNumero,
@@ -220,9 +272,11 @@ export async function POST(req: NextRequest) {
         description,
         reference,
         autorite,
-        'EN_COURS',
+        'enCours',
         Number(chefEquipe),
         teamId,
+        groupement || null,
+        groupement === "oui" ? nomPartenaire : null,
       ],
     );
 
@@ -234,6 +288,85 @@ export async function POST(req: NextRequest) {
         "INSERT INTO team_members (team_id, user_id) VALUES (?, ?)",
         [teamId, Number(m)],
       );
+    }
+
+    // Créer automatiquement la première tâche assignée au chef de projet
+    // Vérifier et mettre à jour la structure de la table tasks
+    try {
+      await connection.execute(`
+        ALTER TABLE tasks 
+          ADD COLUMN IF NOT EXISTS titre VARCHAR(255) NOT NULL DEFAULT '',
+          ADD COLUMN IF NOT EXISTS description TEXT,
+          ADD COLUMN IF NOT EXISTS statut ENUM('a_faire', 'en_cours', 'termine') DEFAULT 'a_faire',
+          ADD COLUMN IF NOT EXISTS date_creation DATE,
+          ADD COLUMN IF NOT EXISTS date_echeance DATE,
+          ADD COLUMN IF NOT EXISTS priorite ENUM('basse', 'moyenne', 'haute') DEFAULT 'moyenne',
+          ADD COLUMN IF NOT EXISTS assigned_to BIGINT UNSIGNED,
+          ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      `);
+    } catch (err) {
+      // Ignorer les erreurs de colonne existante
+      console.log("Mise à jour table tasks (colonnes可能 déjà existent):", err);
+    }
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        dao_id INT NOT NULL,
+        titre VARCHAR(255) NOT NULL,
+        description TEXT,
+        statut ENUM('a_faire', 'en_cours', 'termine') DEFAULT 'a_faire',
+        date_creation DATE,
+        date_echeance DATE,
+        priorite ENUM('basse', 'moyenne', 'haute') DEFAULT 'moyenne',
+        assigned_to BIGINT UNSIGNED,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_tasks_dao (dao_id),
+        INDEX idx_tasks_assigned (assigned_to),
+        CONSTRAINT fk_tasks_dao FOREIGN KEY (dao_id) REFERENCES daos(id) ON DELETE CASCADE,
+        CONSTRAINT fk_tasks_user FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // Récupérer les informations du chef de projet pour l'email
+    let chefProjetInfo = { name: "Non spécifié", email: "Non spécifié" };
+    if (chefEquipe) {
+      try {
+        const [chefRows] = await connection.execute(
+          "SELECT username, email FROM users WHERE id = ?",
+          [Number(chefEquipe)]
+        );
+        
+        if (Array.isArray(chefRows) && chefRows.length > 0) {
+          const chef = chefRows[0] as any;
+          chefProjetInfo = {
+            name: chef.username || "Non spécifié",
+            email: chef.email || "Non spécifié"
+          };
+        }
+      } catch (chefError) {
+        console.error("Erreur lors de la récupération du chef de projet:", chefError);
+      }
+    }
+
+    // Envoyer un email de notification à l'admin
+    try {
+      console.log("Envoi de l'email de création de DAO...");
+      const emailResult = await sendDaoCreationEmail(
+        objet,
+        chefProjetInfo.name,
+        chefProjetInfo.email
+      );
+      
+      if (emailResult.success) {
+        console.log("✅ Email de création de DAO envoyé avec succès");
+      } else {
+        console.error("❌ Erreur lors de l'envoi de l'email de création de DAO:", emailResult.error);
+      }
+    } catch (emailError) {
+      console.error("❌ Exception lors de l'envoi de l'email de création de DAO:", emailError);
     }
 
     return NextResponse.json({

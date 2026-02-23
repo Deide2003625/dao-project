@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sendDepositNotification } from "@/lib/email";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const checkDeposits = searchParams.get("checkDeposits");
 
     if (!userId) {
       return NextResponse.json(
@@ -14,6 +16,11 @@ export async function GET(request: NextRequest) {
     }
 
     const connection = await db();
+
+    // Si checkDeposits=true, vérifier les dates de dépôt des DAOs
+    if (checkDeposits === "true") {
+      await checkAndCreateDepositNotifications(connection, parseInt(userId));
+    }
 
     // Get notifications for the user
     const [notifications] = await connection.execute(
@@ -56,6 +63,99 @@ export async function GET(request: NextRequest) {
       { error: "Internal server error" },
       { status: 500 }
     );
+  }
+}
+
+// Fonction pour vérifier les dates de dépôt et créer des notifications
+async function checkAndCreateDepositNotifications(connection: any, userId: number) {
+  try {
+    // Récupérer tous les DAOs avec leur date de dépôt
+    const [daos] = await connection.execute(
+      `
+      SELECT id, nom, date_depot
+      FROM daos
+      WHERE date_depot IS NOT NULL
+      ORDER BY date_depot ASC
+      `
+    );
+
+    const now = new Date();
+    const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+
+    for (const dao of daos as any[]) {
+      const depositDate = new Date(dao.date_depot);
+      
+      // Vérifier si la date de dépôt est dans 3 jours ou moins
+      if (depositDate <= threeDaysFromNow && depositDate >= now) {
+        const daysUntilDeposit = Math.ceil((depositDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+        
+        // Vérifier si une notification existe déjà pour ce DAO
+        const [existingNotif] = await connection.execute(
+          `
+          SELECT id FROM notifications 
+          WHERE user_id = ? AND title LIKE ? AND message LIKE ?
+          `,
+          [userId, `%Date de dépôt%`, `%${dao.nom}%`]
+        );
+
+        if ((existingNotif as any[]).length === 0) {
+          // Créer une nouvelle notification
+          await connection.execute(
+            `
+            INSERT INTO notifications (user_id, type, title, message)
+            VALUES (?, ?, ?, ?)
+            `,
+            [
+              userId,
+              daysUntilDeposit <= 1 ? 'error' : 'warning',
+              'Date de dépôt approche',
+              `Le DAO "${dao.nom}" doit être déposé dans ${daysUntilDeposit} jour${daysUntilDeposit > 1 ? 's' : ''}`
+            ]
+          );
+
+          // Envoyer un email à l'admin
+          const adminEmail = process.env.ADMIN_EMAIL || 'deidesarr@gmail.com';
+          await sendDepositNotification(adminEmail, dao.nom, daysUntilDeposit);
+        }
+      }
+      
+      // Vérifier si la date de dépôt est dépassée depuis moins de 3 jours
+      if (depositDate < now && depositDate >= threeDaysAgo) {
+        const daysOverdue = Math.ceil((now.getTime() - depositDate.getTime()) / (24 * 60 * 60 * 1000));
+        
+        // Vérifier si une notification existe déjà pour ce DAO en retard
+        const [existingNotif] = await connection.execute(
+          `
+          SELECT id FROM notifications 
+          WHERE user_id = ? AND title LIKE ? AND message LIKE ?
+          `,
+          [userId, `%dépassée%`, `%${dao.nom}%`]
+        );
+
+        if ((existingNotif as any[]).length === 0) {
+          // Créer une notification de retard
+          await connection.execute(
+            `
+            INSERT INTO notifications (user_id, type, title, message)
+            VALUES (?, ?, ?, ?)
+            `,
+            [
+              userId,
+              'error',
+              'Date de dépôt dépassée',
+              `Le DAO "${dao.nom}" était dû il y a ${daysOverdue} jour${daysOverdue > 1 ? 's' : ''}`
+            ]
+          );
+
+          // Envoyer un email à l'admin
+          const adminEmail = process.env.ADMIN_EMAIL || 'deidesarr@gmail.com';
+          await sendDepositNotification(adminEmail, dao.nom, -daysOverdue);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error checking deposit notifications:", error);
   }
 }
 
@@ -109,6 +209,8 @@ function getNotificationIcon(type: string): string {
       return "mdi-account-box";
     case "system":
       return "mdi-cog";
+    case "comment":
+      return "mdi-comment-text";
     default:
       return "mdi-bell";
   }
@@ -128,6 +230,8 @@ function getNotificationBgColor(type: string): string {
       return "bg-primary";
     case "system":
       return "bg-secondary";
+    case "comment":
+      return "bg-primary";
     default:
       return "bg-primary";
   }
