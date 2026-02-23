@@ -101,31 +101,60 @@ export default function ChefProjetTasksPage() {
       [task.id]: numericMemberId,
     }));
 
-    if (!daoId || !numericMemberId) {
+    if (!daoId) {
       return;
     }
 
     try {
-      // Utiliser l'API task-assignment qui gère maintenant les mises à jour automatiquement
-      const response = await fetch(`/api/task-assignment`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dao_id: Number(daoId),
-          id_task: task.id,
-          assigned_to: numericMemberId,
-          description: null,
-        }),
-      });
+      // Si numericMemberId est null, on désassigne la tâche
+      if (!numericMemberId) {
+        // Appeler l'API pour désassigner
+        const response = await fetch(`/api/task-assignment/unassign`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dao_id: Number(daoId),
+            id_task: task.id,
+          }),
+        });
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`Tâche assignée avec succès:`, result);
-        
-        // Rafraîchir les données pour voir les changements
-        window.location.reload();
+        if (response.ok) {
+          const result = await response.json();
+          console.log(`Tâche désassignée avec succès:`, result);
+          // Pas besoin de recharger, l'état est déjà mis à jour localement
+        } else {
+          console.error("Erreur lors de la désassignation de la tâche");
+          // En cas d'erreur, on restore l'état précédent
+          setAssignments((prev) => ({
+            ...prev,
+            [task.id]: assignments[task.id], // Restore previous value
+          }));
+        }
       } else {
-        console.error("Erreur lors de l'assignation de la tâche");
+        // Utiliser l'API task-assignment qui gère maintenant les mises à jour automatiquement
+        const response = await fetch(`/api/task-assignment`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dao_id: Number(daoId),
+            id_task: task.id,
+            assigned_to: numericMemberId,
+          }),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log(`Tâche assignée avec succès:`, result);
+          // Rafraîchir les données pour voir les changements
+          router.refresh();
+        } else {
+          console.error("Erreur lors de l'assignation de la tâche");
+          // En cas d'erreur, on restore l'état précédent
+          setAssignments((prev) => ({
+            ...prev,
+            [task.id]: assignments[task.id], // Restore previous value
+          }));
+        }
       }
     } catch (e) {
       console.error("Erreur lors de l'assignation de la tache", e);

@@ -54,6 +54,26 @@ export async function POST(req: NextRequest) {
 
     const connection = await db();
 
+    // Récupérer le nom de la tâche
+    const [taskRows]: any = await connection.execute(
+      "SELECT nom FROM task WHERE id = ?",
+      [Number(id_task)],
+    );
+
+    const taskName = taskRows.length > 0 ? taskRows[0].nom : `Tâche ${id_task}`;
+    console.log("Nom de la tâche:", taskName);
+
+    // Récupérer les informations de l'utilisateur assigné et du DAO
+    const [userInfo]: any = await connection.execute(
+      `SELECT u.username, u.email, d.objet as dao_name 
+       FROM users u 
+       JOIN daos d ON d.id = ? 
+       WHERE u.id = ?`,
+      [Number(dao_id), Number(assigned_to)],
+    );
+
+    console.log("Informations utilisateur:", JSON.stringify(userInfo, null, 2));
+
     // Vérifier si une tâche existe déjà pour ce DAO et ce modèle
     const [existingTasks]: any = await connection.execute(
       "SELECT id FROM tasks WHERE dao_id = ? AND id_task = ?",
@@ -69,25 +89,6 @@ export async function POST(req: NextRequest) {
       console.log(`Tâche existante mise à jour: dao_id=${dao_id}, id_task=${id_task}, assigned_to=${assigned_to}`);
     } else {
       // Créer une nouvelle tâche seulement si elle n'existe pas
-      const [taskRows]: any = await connection.execute(
-        "SELECT nom FROM task WHERE id = ?",
-        [Number(id_task)],
-      );
-
-      const taskName = taskRows.length > 0 ? taskRows[0].nom : `Tâche ${id_task}`;
-    console.log("Nom de la tâche:", taskName);
-
-    // Récupérer les informations de l'utilisateur assigné et du DAO
-    const [userInfo]: any = await connection.execute(
-      `SELECT u.username, u.email, d.objet as dao_name 
-       FROM users u 
-       JOIN daos d ON d.id = ? 
-       WHERE u.id = ?`,
-      [Number(dao_id), Number(assigned_to)],
-    );
-
-    console.log("Informations utilisateur:", JSON.stringify(userInfo, null, 2));
-
       await connection.execute(
         `INSERT INTO tasks (dao_id, id_task, titre, description, assigned_to, progress, created_at)
          VALUES (?, ?, ?, ?, ?, ?, NOW())`,
