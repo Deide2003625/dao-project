@@ -31,14 +31,51 @@ export default function NewDaoPage() {
   ]);
 
   useEffect(() => {
-    // Génération basique d'un numéro séquentiel conservé en localStorage
-    const year = new Date().getFullYear();
-    const key = `dao-seq-${year}`;
-    let seq = Number(localStorage.getItem(key) || "0");
-    seq = seq + 1;
-    localStorage.setItem(key, String(seq));
-    const num = `DAO-${year}-${String(seq).padStart(3, "0")}`;
-    setGeneratedNumber(num);
+    // Récupérer le prochain numéro DAO depuis la base de données
+    (async () => {
+      try {
+        console.log("=== DÉBOGAGE NUMÉRO DAO - DÉBUT ===");
+        console.log("AVANT appel API - generatedNumber:", generatedNumber);
+        
+        const res = await fetch("/api/dao/next-number");
+        console.log("Status API:", res.status);
+        
+        if (!res.ok) {
+          console.error("Erreur lors de la récupération du prochain numéro DAO:", await res.text());
+          // En cas d'erreur, utiliser un format par défaut
+          const year = new Date().getFullYear();
+          const num = `DAO-${year}-001`;
+          console.log("API erreur - Utilisation par défaut:", num);
+          setGeneratedNumber(num);
+          return;
+        }
+        
+        const data = await res.json();
+        console.log("Réponse API complète:", JSON.stringify(data, null, 2));
+        
+        if (data.success && data.numero) {
+          console.log("Prochain numéro DAO récupéré:", data.numero);
+          console.log("AVANT setGeneratedNumber - generatedNumber:", generatedNumber);
+          setGeneratedNumber(data.numero);
+          console.log("APRÈS setGeneratedNumber - generatedNumber:", generatedNumber);
+        } else {
+          // Si pas de numéro retourné, utiliser un format par défaut
+          const year = new Date().getFullYear();
+          const num = `DAO-${year}-001`;
+          console.log("API sans numéro - Utilisation par défaut:", num);
+          setGeneratedNumber(num);
+        }
+      } catch (error) {
+        console.error("Erreur lors de la récupération du numéro DAO:", error);
+        // En cas d'erreur, utiliser un format par défaut
+        const year = new Date().getFullYear();
+        const num = `DAO-${year}-001`;
+        console.log("Exception - Utilisation par défaut:", num);
+        setGeneratedNumber(num);
+      }
+      
+      console.log("=== DÉBOGAGE NUMÉRO DAO - FIN ===");
+    })();
 
     // Charger utilisateurs (endpoint existant attendu : /api/users)
     (async () => {
@@ -185,9 +222,8 @@ export default function NewDaoPage() {
       return;
     }
 
-    // Exemple de payload
+    // Exemple de payload (le numéro sera généré côté serveur)
     const payload = {
-      numero: generatedNumber,
       date_depot: dateDepot,
       objet,
       description,
@@ -242,7 +278,7 @@ export default function NewDaoPage() {
                 readOnly
               />
               <div className="form-text">
-                Numéro généré automatiquement en séquence
+                Numéro généré automatiquement depuis la base de données
               </div>
             </div>
 

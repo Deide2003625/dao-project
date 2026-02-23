@@ -18,14 +18,32 @@ export async function GET(request: Request) {
     });
   }
 
+  // Diagnostic de la requête entrante
+  console.log("=== DIAGNOSTIC CHECK-EMAIL API ===");
+  console.log("URL complète:", request.url);
+  console.log("Méthode:", request.method);
+  
   const { searchParams } = new URL(request.url);
   const email = searchParams.get("email");
+  
+  console.log("Paramètres URL complets:", Object.fromEntries(searchParams.entries()));
+  console.log("Email extrait:", email);
+  console.log("Type de l'email:", typeof email);
+  console.log("Email vide?", !email);
+  console.log("=====================================");
 
   if (!email) {
+    console.log(" ERREUR 400: Email requis");
     return NextResponse.json(
       {
         success: false,
         error: "Email requis",
+        debug: {
+          url: request.url,
+          hasEmailParam: searchParams.has("email"),
+          emailValue: email,
+          allParams: Object.fromEntries(searchParams.entries())
+        }
       },
       {
         status: 400,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sendEmail } from "@/lib/email";
 import bcrypt from "bcryptjs";
 
 // Mapping des rôles
@@ -13,6 +14,79 @@ const ROLES = [
 
 function getRoleById(roleId: number) {
   return ROLES.find(role => role.id === roleId) || { id: roleId, name: "inconnu", label: "Rôle inconnu" };
+}
+
+// Fonction pour envoyer l'email de confirmation de création de compte
+async function sendAccountCreationEmail(email: string, username: string, roleLabel: string) {
+  const subject = "✅ Votre compte a été créé avec succès";
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Confirmation de création de compte - DAO Project</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: 'Roboto', Arial, sans-serif; background-color: #f5f5f5;">
+      <div style="max-width: 600px; margin: 20px auto; background-color: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #4b49ac, #7da0fa); padding: 30px 20px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 500;">DAO Project</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">Système de Gestion</p>
+        </div>
+        
+        <!-- Content -->
+        <div style="padding: 30px 20px;">
+          <div style="background-color: #d4edda; border-left: 4px solid #28a745; padding: 20px; margin: 20px 0; border-radius: 4px;">
+            <h2 style="color: #155724; margin: 0 0 10px 0; font-size: 18px;">🎉 Votre compte a été créé !</h2>
+            <p style="color: #155724; margin: 0; font-size: 16px; line-height: 1.5;">
+              Votre compte a été créé avec succès en tant que <strong>${roleLabel}</strong>.
+            </p>
+          </div>
+          
+          <div style="margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">
+            <h3 style="color: #495057; margin: 0 0 15px 0; font-size: 16px;">📋 Informations de votre compte :</h3>
+            <ul style="color: #495057; margin: 0; padding-left: 20px; line-height: 1.6;">
+              <li style="margin-bottom: 8px;"><strong>Nom d'utilisateur :</strong> ${username}</li>
+              <li style="margin-bottom: 8px;"><strong>Email :</strong> ${email}</li>
+              <li style="margin-bottom: 8px;"><strong>Rôle :</strong> ${roleLabel}</li>
+            </ul>
+          </div>
+          
+          <div style="margin: 30px 0; padding: 20px; background-color: #fff3cd; border-radius: 4px; border: 1px solid #ffeaa7;">
+            <h3 style="color: #856404; margin: 0 0 15px 0; font-size: 16px;">🔐 Prochaines étapes :</h3>
+            <ol style="color: #856404; margin: 0; padding-left: 20px; line-height: 1.6;">
+              <li style="margin-bottom: 8px;">Connectez-vous à votre compte en utilisant votre email</li>
+              <li style="margin-bottom: 8px;">Votre mot de passe vous sera communiqué par l'administrateur</li>
+              <li style="margin-bottom: 8px;">Une fois connecté, vous pourrez accéder à votre tableau de bord</li>
+            </ol>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/login" 
+               style="display: inline-block; background: linear-gradient(135deg, #4b49ac, #7da0fa); color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500; font-size: 16px;">
+              🚀 Se connecter maintenant
+            </a>
+          </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="background-color: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #dee2e6;">
+          <p style="color: #6c757d; margin: 0; font-size: 14px;">
+            Cet email a été généré automatiquement par le système DAO Project.<br>
+            Veuillez ne pas répondre à cet email. Pour toute question, contactez votre administrateur.
+          </p>
+          <p style="color: #6c757d; margin: 10px 0 0 0; font-size: 12px;">
+            © 2024 DAO Project. Tous droits réservés.
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return await sendEmail(email, subject, html);
 }
 
 export async function GET(request: NextRequest) {
@@ -158,10 +232,57 @@ export async function POST(request: NextRequest) {
 
     console.log("Utilisateur créé et normalisé:", normalizedUser);
 
+    // Envoyer l'email de confirmation de création de compte
+    let emailStatus = {
+      sent: false,
+      message: "",
+      error: null as string | null
+    };
+
+    // Diagnostic des variables d'environnement email
+    console.log("=== DIAGNOSTIC EMAIL ===");
+    console.log("EMAIL_HOST:", process.env.EMAIL_HOST);
+    console.log("EMAIL_PORT:", process.env.EMAIL_PORT);
+    console.log("EMAIL_USER:", process.env.EMAIL_USER ? "***" + process.env.EMAIL_USER.slice(-4) : "NON DÉFINI");
+    console.log("EMAIL_PASSWORD:", process.env.EMAIL_PASSWORD ? "***CONFIGURÉ***" : "NON DÉFINI");
+    console.log("EMAIL_FROM:", process.env.EMAIL_FROM);
+    console.log("EMAIL_FROM_NAME:", process.env.EMAIL_FROM_NAME);
+    console.log("NEXTAUTH_URL:", process.env.NEXTAUTH_URL);
+    console.log("========================");
+
+    try {
+      console.log("Envoi de l'email de confirmation à:", email);
+      const emailResult = await sendAccountCreationEmail(email, username, role.label);
+      
+      if (emailResult.success) {
+        console.log("Email de confirmation envoyé avec succès:", emailResult.messageId);
+        emailStatus = {
+          sent: true,
+          message: "Email de confirmation envoyé avec succès",
+          error: null
+        };
+      } else {
+        console.error("Erreur lors de l'envoi de l'email de confirmation:", emailResult.error);
+        emailStatus = {
+          sent: false,
+          message: "L'email de confirmation n'a pas pu être envoyé",
+          error: (emailResult.error as string) || "Erreur inconnue"
+        };
+      }
+    } catch (emailError) {
+      console.error("Exception lors de l'envoi de l'email de confirmation:", emailError);
+      emailStatus = {
+        sent: false,
+        message: "Une erreur est survenue lors de l'envoi de l'email",
+        error: String(emailError)
+      };
+    }
+
     return NextResponse.json({
       success: true,
       user: normalizedUser,
-      message: "Utilisateur créé avec succès"
+      message: "Utilisateur créé avec succès",
+      emailNotification: emailStatus
     });
 
   } catch (error: any) {

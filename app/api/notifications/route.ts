@@ -115,7 +115,7 @@ async function checkAndCreateDepositNotifications(connection: any, userId: numbe
           );
 
           // Envoyer un email à l'admin
-          const adminEmail = process.env.ADMIN_EMAIL || 'admin@dao-project.com';
+          const adminEmail = process.env.ADMIN_EMAIL || 'deidesarr@gmail.com';
           await sendDepositNotification(adminEmail, dao.nom, daysUntilDeposit);
         }
       }
@@ -149,7 +149,7 @@ async function checkAndCreateDepositNotifications(connection: any, userId: numbe
           );
 
           // Envoyer un email à l'admin
-          const adminEmail = process.env.ADMIN_EMAIL || 'admin@dao-project.com';
+          const adminEmail = process.env.ADMIN_EMAIL || 'deidesarr@gmail.com';
           await sendDepositNotification(adminEmail, dao.nom, -daysOverdue);
         }
       }

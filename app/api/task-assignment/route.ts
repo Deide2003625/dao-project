@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sendTaskAssignmentEmail } from "@/lib/task-email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,8 +35,15 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    console.log("=== ASSIGNATION DE TÂCHE - DÉBUT ===");
+    
     const body = await req.json();
     const { dao_id, id_task, assigned_to, description } = body || {};
+
+    console.log("Données reçues:", JSON.stringify(body, null, 2));
+    console.log("dao_id:", dao_id);
+    console.log("id_task:", id_task);
+    console.log("assigned_to:", assigned_to);
 
     if (!dao_id || !id_task || !assigned_to) {
       return NextResponse.json(
@@ -53,12 +61,56 @@ export async function POST(req: NextRequest) {
     );
 
     const taskName = taskRows.length > 0 ? taskRows[0].nom : `Tâche ${id_task}`;
+    console.log("Nom de la tâche:", taskName);
+
+    // Récupérer les informations de l'utilisateur assigné et du DAO
+    const [userInfo]: any = await connection.execute(
+      `SELECT u.username, u.email, d.objet as dao_name 
+       FROM users u 
+       JOIN daos d ON d.id = ? 
+       WHERE u.id = ?`,
+      [Number(dao_id), Number(assigned_to)],
+    );
+
+    console.log("Informations utilisateur:", JSON.stringify(userInfo, null, 2));
 
     await connection.execute(
       `INSERT INTO tasks (dao_id, id_task, titre, description, assigned_to, progress, created_at)
        VALUES (?, ?, ?, ?, ?, ?, NOW())`,
       [Number(dao_id), Number(id_task), taskName, description ?? null, Number(assigned_to), 0],
     );
+
+    // Envoyer un email de notification à l'utilisateur assigné
+    if (Array.isArray(userInfo) && userInfo.length > 0) {
+      const user = userInfo[0];
+      console.log("Envoi de l'email de notification de tâche assignée...");
+      
+      try {
+        const emailResult = await sendTaskAssignmentEmail(
+          taskName,
+          description || 'Non spécifiée',
+          user.username || 'Non spécifié',
+          user.email || 'Non spécifié',
+          user.dao_name || 'Non spécifié',
+          'moyenne', // priorité par défaut
+          undefined // pas de date d'échéance
+        );
+        
+        console.log("Résultat de l'envoi d'email:", JSON.stringify(emailResult, null, 2));
+        
+        if (emailResult.success) {
+          console.log("✅ Email de notification de tâche assignée envoyé avec succès");
+        } else {
+          console.error("❌ Erreur lors de l'envoi de l'email de notification de tâche:", emailResult.error);
+        }
+      } catch (emailError) {
+        console.error("❌ Exception lors de l'envoi de l'email de notification de tâche:", emailError);
+      }
+    } else {
+      console.log("❌ Aucune information utilisateur trouvée pour l'ID:", assigned_to);
+    }
+
+    console.log("=== ASSIGNATION DE TÂCHE - TERMINÉE ===");
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sendTaskAssignmentEmail } from "@/lib/task-email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -93,6 +94,15 @@ export async function PUT(
     const body = await request.json();
     const { titre, description, statut, progress, date_echeance, priorite, assigned_to } = body;
 
+    console.log("=== MISE À JOUR TÂCHE - DÉBUT ===");
+    console.log("Task ID:", taskId);
+    console.log("Données reçues:", JSON.stringify(body, null, 2));
+    console.log("assigned_to:", assigned_to);
+    console.log("assigned_to type:", typeof assigned_to);
+    console.log("assigned_to !== undefined:", assigned_to !== undefined);
+    console.log("assigned_to !== null:", assigned_to !== null);
+    console.log("Condition d'envoi email:", assigned_to !== undefined && assigned_to !== null);
+
     if (!taskId) {
       return NextResponse.json(
         { error: "ID de tâche requis" },
@@ -153,6 +163,67 @@ export async function PUT(
     `;
     
     await connection.execute(updateQuery, updateValues);
+    
+    // Envoyer un email de notification si la tâche est assignée à un utilisateur
+    if (assigned_to !== undefined && assigned_to !== null) {
+      console.log(" DÉCLENCHEMENT DE L'ENVOI D'EMAIL - DÉBUT");
+      console.log("assigned_to condition remplie, tentative d'envoi d'email...");
+      
+      try {
+        // Récupérer les informations de la tâche et de l'utilisateur
+        console.log("Récupération des informations de la tâche et de l'utilisateur...");
+        const [taskInfo] = await connection.execute(`
+          SELECT 
+            t.titre,
+            t.description,
+            t.priorite,
+            t.date_echeance,
+            u.username as assigned_username,
+            u.email as assigned_email,
+            d.objet as dao_name
+          FROM tasks t
+          LEFT JOIN users u ON t.assigned_to = u.id
+          LEFT JOIN daos d ON t.dao_id = d.id
+          WHERE t.id = ?
+        `, [taskId]);
+        
+        console.log("Résultat de la requête taskInfo:", JSON.stringify(taskInfo, null, 2));
+        
+        if (Array.isArray(taskInfo) && taskInfo.length > 0) {
+          const task = taskInfo[0] as any;
+          console.log("Informations de la tâche trouvées:", JSON.stringify(task, null, 2));
+          
+          console.log("Envoi de l'email de notification de tâche assignée...");
+          const emailResult = await sendTaskAssignmentEmail(
+            task.titre || `Tâche ${taskId}`,
+            task.description || 'Non spécifiée',
+            task.assigned_username || 'Non spécifié',
+            task.assigned_email || 'Non spécifié',
+            task.dao_name || 'Non spécifié',
+            task.priorite || 'Non spécifiée',
+            task.date_echeance ? new Date(task.date_echeance).toLocaleDateString('fr-FR') : undefined
+          );
+          
+          console.log("Résultat de l'envoi d'email:", JSON.stringify(emailResult, null, 2));
+          
+          if (emailResult.success) {
+            console.log(" Email de notification de tâche assignée envoyé avec succès");
+          } else {
+            console.error(" Erreur lors de l'envoi de l'email de notification de tâche:", emailResult.error);
+          }
+        } else {
+          console.log(" Aucune information de tâche trouvée pour l'ID:", taskId);
+        }
+      } catch (emailError) {
+        console.error(" Exception lors de l'envoi de l'email de notification de tâche:", emailError);
+      }
+      
+      console.log("📧 DÉCLENCHEMENT DE L'ENVOI D'EMAIL - FIN");
+    } else {
+      console.log("📧 PAS D'ENVOI D'EMAIL - Condition non remplie");
+      console.log("assigned_to est undefined ou null, pas d'envoi d'email");
+    }
+    
     await connection.end();
 
     return NextResponse.json({

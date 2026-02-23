@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sendDaoCreationEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -113,7 +114,7 @@ export async function GET(req: NextRequest) {
       params.push(Number(chefId));
     }
 
-    query += " ORDER BY d.created_at DESC";
+    query += " ORDER BY d.numero ASC";
 
     const [rows]: any = await connection.execute(query, params);
 
@@ -161,6 +162,8 @@ export async function POST(req: NextRequest) {
       groupement,
       nomPartenaire,
     } = body;
+
+    const year = new Date().getFullYear();
 
     // numero n'est plus requis côté client (car généré côté serveur)
     if (!date_depot || !objet || !description || !reference || !autorite) {
@@ -232,8 +235,29 @@ export async function POST(req: NextRequest) {
       [teamId, teamCode],
     );
 
-    // Générer le numéro DAO côté serveur (atomique)
-    const generatedNumero = await getNextDaoNumero(connection);
+    // Générer le numéro DAO côté serveur (atomique) - basé sur le dernier ID
+    const [lastDaoRows]: any = await connection.execute(
+      `SELECT id, numero FROM daos 
+       WHERE numero LIKE ? 
+       ORDER BY id DESC 
+       LIMIT 1`,
+      [`DAO-${year}-%`]
+    );
+    
+    let nextSeq = 1;
+    if (Array.isArray(lastDaoRows) && lastDaoRows.length > 0) {
+      const lastNumero = lastDaoRows[0].numero;
+      console.log("Dernier numéro trouvé:", lastNumero);
+      
+      // Extraire le numéro séquentiel du dernier numéro
+      const match = lastNumero.match(new RegExp(`DAO-${year}-(\\d+)`));
+      if (match && match[1]) {
+        nextSeq = parseInt(match[1]) + 1;
+      }
+    }
+    
+    const generatedNumero = `DAO-${year}-${String(nextSeq).padStart(3, "0")}`;
+    console.log("Numéro DAO généré lors de l'insertion:", generatedNumero);
 
     // Insérer DAO
     const [insertRes]: any = await connection.execute(
@@ -271,15 +295,15 @@ export async function POST(req: NextRequest) {
     try {
       await connection.execute(`
         ALTER TABLE tasks 
-        ADD COLUMN IF NOT EXISTS titre VARCHAR(255) NOT NULL DEFAULT '',
-        ADD COLUMN IF NOT EXISTS description TEXT,
-        ADD COLUMN IF NOT EXISTS statut ENUM('a_faire', 'en_cours', 'termine') DEFAULT 'a_faire',
-        ADD COLUMN IF NOT EXISTS date_creation DATE,
-        ADD COLUMN IF NOT EXISTS date_echeance DATE,
-        ADD COLUMN IF NOT EXISTS priorite ENUM('basse', 'moyenne', 'haute') DEFAULT 'moyenne',
-        ADD COLUMN IF NOT EXISTS assigned_to BIGINT UNSIGNED,
-        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          ADD COLUMN IF NOT EXISTS titre VARCHAR(255) NOT NULL DEFAULT '',
+          ADD COLUMN IF NOT EXISTS description TEXT,
+          ADD COLUMN IF NOT EXISTS statut ENUM('a_faire', 'en_cours', 'termine') DEFAULT 'a_faire',
+          ADD COLUMN IF NOT EXISTS date_creation DATE,
+          ADD COLUMN IF NOT EXISTS date_echeance DATE,
+          ADD COLUMN IF NOT EXISTS priorite ENUM('basse', 'moyenne', 'haute') DEFAULT 'moyenne',
+          ADD COLUMN IF NOT EXISTS assigned_to BIGINT UNSIGNED,
+          ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       `);
     } catch (err) {
       // Ignorer les erreurs de colonne existante
@@ -305,6 +329,45 @@ export async function POST(req: NextRequest) {
         CONSTRAINT fk_tasks_user FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    // Récupérer les informations du chef de projet pour l'email
+    let chefProjetInfo = { name: "Non spécifié", email: "Non spécifié" };
+    if (chefEquipe) {
+      try {
+        const [chefRows] = await connection.execute(
+          "SELECT username, email FROM users WHERE id = ?",
+          [Number(chefEquipe)]
+        );
+        
+        if (Array.isArray(chefRows) && chefRows.length > 0) {
+          const chef = chefRows[0] as any;
+          chefProjetInfo = {
+            name: chef.username || "Non spécifié",
+            email: chef.email || "Non spécifié"
+          };
+        }
+      } catch (chefError) {
+        console.error("Erreur lors de la récupération du chef de projet:", chefError);
+      }
+    }
+
+    // Envoyer un email de notification à l'admin
+    try {
+      console.log("Envoi de l'email de création de DAO...");
+      const emailResult = await sendDaoCreationEmail(
+        objet,
+        chefProjetInfo.name,
+        chefProjetInfo.email
+      );
+      
+      if (emailResult.success) {
+        console.log("✅ Email de création de DAO envoyé avec succès");
+      } else {
+        console.error("❌ Erreur lors de l'envoi de l'email de création de DAO:", emailResult.error);
+      }
+    } catch (emailError) {
+      console.error("❌ Exception lors de l'envoi de l'email de création de DAO:", emailError);
+    }
 
     return NextResponse.json({
       success: true,

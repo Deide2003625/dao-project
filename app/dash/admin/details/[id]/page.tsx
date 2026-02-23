@@ -57,23 +57,7 @@ interface Comment {
    DONNÉES DE BASE
 ====================== */
 
-const daoTasks: Task[] = [
-  { id: 1, name: "Résumé sommaire DAO et Création du drive", progress: 10, comment: "À faire", assigned_to: "Jean Dupont" },
-  { id: 2, name: "Demande de caution et garanties", progress: 0, comment: "À faire", assigned_to: "Marie Martin" },
-  { id: 3, name: "Identification et renseignement des profils dans le drive", progress: 0, comment: "À faire", assigned_to: "Pierre Durand" },
-  { id: 4, name: "Identification et renseignement des ABE dans le drive", progress: 0, comment: "À faire", assigned_to: "Sophie Bernard" },
-  { id: 5, name: "Légalisation des ABE, diplômes, certificats, attestations et pièces administratives requis", progress: 0, comment: "À faire", assigned_to: "Jean Dupont" },
-  { id: 6, name: "Indication directive d'élaboration de l'offre financier", progress: 0, comment: "À faire", assigned_to: "Marie Martin" },
-  { id: 7, name: "Elaboration de la méthodologie", progress: 0, comment: "À faire", assigned_to: "Pierre Durand" },
-  { id: 8, name: "Planification prévisionnelle", progress: 0, comment: "À faire", assigned_to: "Sophie Bernard" },
-  { id: 9, name: "Identification des références précises des équipements et matériels", progress: 0, comment: "À faire", assigned_to: "Jean Dupont" },
-  { id: 10, name: "Demande de cotation", progress: 60, comment: "En cours", assigned_to: "Marie Martin" },
-  { id: 11, name: "Elaboration du squelette des offres", progress: 0, comment: "À faire", assigned_to: "Pierre Durand" },
-  { id: 12, name: "Rédaction du contenu des OF et OT", progress: 30, comment: "Brouillon", assigned_to: "Sophie Bernard" },
-  { id: 13, name: "Contrôle et validation des offres", progress: 0, comment: "À faire", assigned_to: "Jean Dupont" },
-  { id: 14, name: "Impression et présentation des offres (Valider l'étiquette)", progress: 0, comment: "À faire", assigned_to: "Marie Martin" },
-  { id: 15, name: "Dépôt des offres et clôture", progress: 0, comment: "À faire", assigned_to: "Pierre Durand" },
-];
+
 
 const commentsData: Comment[] = [
   {
@@ -358,18 +342,19 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
           await loadComments(adaptedTasks[0].id);
         }
       } else {
-        console.log(" Erreur lors du chargement des tâches, utilisation des tâches par défaut");
-        // Garder les tâches par défaut si l'API échoue
+        console.log("Erreur lors du chargement des tâches, aucune tâche trouvée pour ce DAO");
+        // Ne pas utiliser de tâches par défaut - afficher que ce DAO n'a pas de tâches
+        setTasks([]);
       }
     } catch (err) {
       console.error("Error fetching tasks:", err);
-      console.log(" Erreur lors du chargement des tâches, utilisation des tâches par défaut");
-      // Garder les tâches par défaut si l'API échoue
+      console.log("Erreur lors du chargement des tâches, aucune tâche trouvée pour ce DAO");
+      // Ne pas utiliser de tâches par défaut - afficher que ce DAO n'a pas de tâches
+      setTasks([]);
     }
   }
-
-  // Calculer la progression globale
   const globalProgress = useMemo(() => {
+    if (tasks.length === 0) return 0;
     const total = tasks.reduce((sum, t) => sum + t.progress, 0);
     return Math.round(total / tasks.length);
   }, [tasks]);
