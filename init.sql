@@ -256,7 +256,7 @@ INSERT INTO `roles` (id, name) VALUES
 
 -- Mot de passe : admin123 (bcrypt)
 INSERT INTO `users` (id, username, email, password, role_id) VALUES
-(41, 'admin',      'admin@dao.com',      '$2b$10$wTvd0d0TXmjgX09vjNRQLeNRqqBStfXbQ4xvfTmrZO8Xxd0tPNTWK', 2),
+(41, 'admin',      'admin@dao.com',      'admin123', 2),
 
 
 INSERT INTO `task` (id, nom) VALUES
