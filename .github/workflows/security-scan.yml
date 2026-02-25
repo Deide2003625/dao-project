@@ -10,7 +10,10 @@ on:
 jobs:
   security-scan:
     runs-on: ubuntu-24.04
-
+    permissions:
+      contents: read          # Checkout du repo
+      security-events: write  # CodeQL — écriture des résultats SARIF
+      actions: read           # CodeQL — lecture des infos du workflow
     services:
       # Service Docker pour lancer l'application cible du DAST
       app:
