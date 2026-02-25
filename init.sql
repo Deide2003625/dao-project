@@ -275,7 +275,6 @@ INSERT INTO `roles` (id, name) VALUES
 -- -------------------------------------------------------
 INSERT INTO `users` (id, username, email, password, role_id) VALUES
 (1, 'admin',      'admin@dao.com',      '$2b$10$wTvd0d0TXmjgX09vjNRQLeNRqqBStfXbQ4xvfTmrZO8Xxd0tPNTWK', 2),
-(2, 'erwann',     'erwann@example.com',     '$2b$10$wTvd0d0TXmjgX09vjNRQLeNRqqBStfXbQ4xvfTmrZO8Xxd0tPNTWK', 2);
 
 INSERT INTO `task` (id, nom) VALUES
 (1,  'Résumé sommaire DAO et Création du drive'),
