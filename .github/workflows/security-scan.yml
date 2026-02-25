@@ -2,7 +2,11 @@ name: SAST & DAST Security Scan
 
 on:
   pull_request:
-
+    branches:
+      - feature/Docker  # Se déclenche uniquement pour les PR vers feature/Docker
+  push:
+    branches:
+      - feature/Docker  # Se déclenche aussi sur les push directs
 jobs:
   security-scan:
     runs-on: ubuntu-24.04
