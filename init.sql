@@ -256,8 +256,12 @@ INSERT INTO `roles` (id, name) VALUES
 
 -- Mot de passe : admin123 (bcrypt)
 INSERT INTO `users` (id, username, email, password, role_id) VALUES
-(41, 'admin',      'admin@dao.com',      'admin123', 2),
-
+(41, 'admin',      'admin@dao.com',      '$2b$10$wTvd0d0TXmjgX09vjNRQLeNRqqBStfXbQ4xvfTmrZO8Xxd0tPNTWK', 2),
+(42, 'superadmin', 'superadmin@dao.com', '$2b$10$qQH.wq8VEtRGj2PK3quGleGLvpgv1MBJzE76RUqv0hAluQXKkQxuG', 2),
+(43, 'lio',        'lio@dao.com',        '$2b$10$bhmqGzsRCataE.bjK8r/F.Sp42KA9tTXHrIEZbggamXb4w4.QmToC', 2),
+(44, 'directeur',  'directeur@dao.com',  '$2b$10$Xc4W.h1MKG.g.p6IqkREOe.8QoPar8P4h4Cr3CK5ueBOWZy89Skme', 1),
+(45, 'user1',      'user1@dao.com',      '$2b$10$T7QqUJaAXzoXrVsDR1jzmOX9klzeaXGUCCdAQcGfWM5w3yLEfPyCu', 4),
+(47, 'manager1',   'manager@dao.com',    '$2b$10$PDAeE7n2ot8IrAB6RMoTGudRV2LUvMBlMb/WUkrK66mD7IDyPXYTa', 3);
 
 INSERT INTO `task` (id, nom) VALUES
 (1,  'Résumé sommaire DAO et Création du drive'),
