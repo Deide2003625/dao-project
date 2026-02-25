@@ -59,7 +59,7 @@ async function _verifyDatabaseStructure(connection: mysql.Pool) {
         username VARCHAR(255) NOT NULL,
         email VARCHAR(255) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
-        role_id VARCHAR(50) NOT NULL,
+        role_id INT NOT NULL,
         url_photo VARCHAR(500) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -76,13 +76,17 @@ async function _verifyDatabaseStructure(connection: mysql.Pool) {
     console.log("Création de la table sessions pour NextAuth...");
     await connection.execute(`
       CREATE TABLE sessions (
-        id VARCHAR(255) NOT NULL,
-        session_token VARCHAR(255) NOT NULL,
+        id INT AUTO_INCREMENT PRIMARY KEY,
         user_id BIGINT UNSIGNED NOT NULL,
-        expires TIMESTAMP NOT NULL,
-        UNIQUE(session_token),
-        PRIMARY KEY (id),
-        INDEX idx_sessions_user_id (user_id),
+        session_token VARCHAR(255) NOT NULL UNIQUE,
+        expires_at DATETIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        ip_address VARCHAR(45) NULL,
+        user_agent TEXT NULL,
+        INDEX idx_session_token (session_token),
+        INDEX idx_user_id (user_id),
+        INDEX idx_expires_at (expires_at),
         CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -187,17 +191,17 @@ async function _verifyDatabaseStructure(connection: mysql.Pool) {
     await connection.execute(`
       CREATE TABLE messages (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        sender_id BIGINT UNSIGNED NOT NULL,
-        receiver_id BIGINT UNSIGNED NOT NULL,
-        subject VARCHAR(255) NOT NULL,
+        task_id INT NOT NULL,
+        user_id INT NOT NULL,
         content TEXT NOT NULL,
-        is_read BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_messages_receiver (receiver_id),
-        INDEX idx_messages_sender (sender_id),
-        INDEX idx_messages_created_at (created_at),
-        CONSTRAINT fk_messages_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
-        CONSTRAINT fk_messages_receiver FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        mentioned_user_id INT NULL,
+        mentioned_user_name VARCHAR(255) NULL,
+        is_public TINYINT(1) DEFAULT 1,
+        INDEX idx_task_id (task_id),
+        INDEX idx_user_id (user_id),
+        INDEX idx_created_at (created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
     console.log("Table messages créée avec succès");

@@ -7,7 +7,7 @@ import { RowDataPacket } from "mysql2";
 function getRedirectByRole(roleId: number): string {
   const roleRedirects: Record<number, string> = {
     1: "/dash/DirecteurGeneral",
-    2: "/dash/admin",
+    2: "/dash/admin", 
     3: "/dash/ChefProjet",
     4: "/dash/MembreEquipe",
     5: "/dash/Lecteur",
