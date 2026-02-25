@@ -8,7 +8,7 @@ DB_HOST=mysql
 DB_PORT=3306
 DB_USER=dao_user
 DB_PASSWORD=dao_secure_password_2024
-DB_NAME=dao_project
+DB_NAME=dao
 
 # Configuration de l'application Next.js
 NODE_ENV=production
