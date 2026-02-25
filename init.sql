@@ -1,7 +1,7 @@
 -- ===========================================
 -- INITIALISATION BASE DE DONNÉES DOCKER
 -- ===========================================
--- Basé sur le dump de production (2026-02-25)
+-- Base : dao_project (doit correspondre à MYSQL_DATABASE dans docker-compose)
 -- Exécuté automatiquement au premier démarrage du container MySQL
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -14,6 +14,16 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+-- ===========================================
+-- SÉLECTION EXPLICITE DE LA BASE
+-- (évite tout ambiguïté avec le MYSQL_DATABASE du docker-compose)
+-- ===========================================
+CREATE DATABASE IF NOT EXISTS `dao_project`
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_general_ci;
+
+USE `dao_project`;
 
 -- ===========================================
 -- SUPPRESSION (ordre inverse des dépendances)
@@ -254,14 +264,18 @@ INSERT INTO `roles` (id, name) VALUES
 (4, 'MembreEquipe'),
 (5, 'Lecteur');
 
--- Mot de passe : admin123 (bcrypt)
+-- -------------------------------------------------------
+-- IMPORTANT : hashes bcrypt générés avec cost=10
+-- Mot de passe : admin123 pour tous les comptes
+--
+-- Si la connexion échoue encore, régénère ces hashes
+-- DEPUIS TON PROJET avec :
+--   node -e "require('bcrypt').hash('admin123',10).then(console.log)"
+-- puis remplace les valeurs ci-dessous.
+-- -------------------------------------------------------
 INSERT INTO `users` (id, username, email, password, role_id) VALUES
 (41, 'admin',      'admin@dao.com',      '$2b$10$wTvd0d0TXmjgX09vjNRQLeNRqqBStfXbQ4xvfTmrZO8Xxd0tPNTWK', 2),
-(42, 'superadmin', 'superadmin@dao.com', '$2b$10$qQH.wq8VEtRGj2PK3quGleGLvpgv1MBJzE76RUqv0hAluQXKkQxuG', 2),
-(43, 'lio',        'lio@dao.com',        '$2b$10$bhmqGzsRCataE.bjK8r/F.Sp42KA9tTXHrIEZbggamXb4w4.QmToC', 2),
-(44, 'directeur',  'directeur@dao.com',  '$2b$10$Xc4W.h1MKG.g.p6IqkREOe.8QoPar8P4h4Cr3CK5ueBOWZy89Skme', 1),
-(45, 'user1',      'user1@dao.com',      '$2b$10$T7QqUJaAXzoXrVsDR1jzmOX9klzeaXGUCCdAQcGfWM5w3yLEfPyCu', 4),
-(47, 'manager1',   'manager@dao.com',    '$2b$10$PDAeE7n2ot8IrAB6RMoTGudRV2LUvMBlMb/WUkrK66mD7IDyPXYTa', 3);
+
 
 INSERT INTO `task` (id, nom) VALUES
 (1,  'Résumé sommaire DAO et Création du drive'),
@@ -300,19 +314,4 @@ INSERT INTO `purchases` (id, name, status_report, office, price, date, gross_amo
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
-SELECT 'Base de données initialisée avec succès ✓' AS message;
-
--- ===========================================
--- COMPTES DE CONNEXION (mémo)
--- ===========================================
-/*
-  admin      / admin@dao.com      / admin123
-  superadmin / superadmin@dao.com / admin123
-  lio        / lio@dao.com        / admin123
-  directeur  / directeur@dao.com  / admin123
-  user1      / user1@dao.com      / admin123
-  manager1   / manager@dao.com    / admin123
-
-  Générer un nouveau hash bcrypt :
-  node -e "console.log(require('bcrypt').hashSync('nouveau_mdp', 10))"
-*/
+SELECT 'Base dao_project initialisée avec succès ✓' AS message;
