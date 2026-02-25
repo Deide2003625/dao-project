@@ -1,0 +1,63 @@
+# ===========================================
+# CONFIGURATION DOCKER - PRODUCTION
+# ===========================================
+# Copiez ce fichier en .env.production et modifiez les valeurs
+
+# Configuration de la base de données MySQL
+DB_HOST=mysql
+DB_PORT=3306
+DB_USER=dao_user
+DB_PASSWORD=dao_secure_password_2024
+DB_NAME=dao_project
+
+# Configuration de l'application Next.js
+NODE_ENV=production
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=CHANGEZ_CECI_PAR_UNE_VRAIE_CLÉ_SECRÈTE_DE_32_CARACTÈRES_MINIMUM
+
+# Configuration de l'email (SMTP)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=votre_email@gmail.com
+EMAIL_PASSWORD=votre_mot_de_passe_application_gmail
+EMAIL_FROM=noreply@dao-project.com
+EMAIL_FROM_NAME=DAO Project
+
+# Configuration Redis (cache et sessions)
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# Configuration sécurité
+JWT_SECRET=CHANGEZ_CECI_PAR_UN_AUTRE_SECRET_POUR_JWT
+BCRYPT_ROUNDS=12
+
+# Configuration application
+APP_NAME=DAO Project
+APP_URL=http://localhost:3000
+APP_VERSION=1.0.0
+
+# Configuration uploads
+MAX_FILE_SIZE=10485760
+UPLOAD_DIR=/app/uploads
+
+# Configuration logs
+LOG_LEVEL=info
+LOG_FILE=/app/logs/app.log
+
+# Configuration monitoring
+HEALTH_CHECK_ENABLED=true
+METRICS_ENABLED=true
+
+# ===========================================
+# SÉCURITÉ - À MODIFIER OBLIGATOIREMENT
+# ===========================================
+# 1. NEXTAUTH_SECRET : Générez avec : openssl rand -base64 32
+# 2. JWT_SECRET : Générez avec : openssl rand -base64 32
+# 3. DB_PASSWORD : Utilisez un mot de passe fort
+# 4. EMAIL_PASSWORD : Utilisez un mot de passe d'application Gmail
+#
+# Pour générer des secrets sécurisés :
+# openssl rand -base64 32
+# ou
+# node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"

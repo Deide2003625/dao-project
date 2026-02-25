@@ -250,4 +250,4 @@ Pour toute question ou problème:
 
 **Version**: 1.0.0  
 **Dernière mise à jour**: 2025  
-**Développé par**: SND Technologies
+**Développé par**: 2SND Technologies

@@ -7,22 +7,6 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "2mb",
     },
-    // Désactive Turbopack pour utiliser Webpack
-    turbo: false,
-  },
-  // Configuration des alias pour la compatibilité avec Webpack
-  webpack: (config, { dev, isServer }) => {
-    config.resolve.alias = {
-      "@": path.resolve(__dirname, "./"),
-    };
-    
-    // Assurer le traitement correct des fichiers CSS
-    config.module.rules.push({
-      test: /\.css$/i,
-      use: ['style-loader', 'css-loader', 'postcss-loader'],
-    });
-
-    return config;
   },
   // Configuration des en-têtes pour les API
   async headers() {
@@ -50,8 +34,7 @@ const nextConfig = {
   },
   // Désactive les vérifications TypeScript pendant la compilation
   typescript: {
-    ignoreBuildErrors: true,
-    ignoreWarnings: true
+    ignoreBuildErrors: true
   }
 };
 

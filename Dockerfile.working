@@ -1,0 +1,37 @@
+# Dockerfile fonctionnel pour Next.js
+FROM node:20-alpine
+
+# Variables d'environnement
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Répertoire de travail
+WORKDIR /app
+
+# Copier les fichiers de dépendances
+COPY package*.json ./
+
+# Installer toutes les dépendances
+RUN npm ci && npm cache clean --force
+
+# Installer les dépendances de build manquantes
+RUN npm install --save-dev autoprefixer postcss
+
+# Copier tout le code source
+COPY . .
+
+# Créer un utilisateur non-root pour la sécurité
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 -G nodejs nextjs
+
+# Changer les permissions
+RUN chown -R nextjs:nodejs /app
+
+# Changer vers l'utilisateur non-root
+USER nextjs
+
+# Exposer le port
+EXPOSE 3000
+
+# Démarrer l'application sans build (mode développement dans Docker)
+CMD ["npm", "run", "dev"]
