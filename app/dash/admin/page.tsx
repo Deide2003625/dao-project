@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 interface Dao {
   id: number;
@@ -13,6 +14,7 @@ interface Dao {
   statut?: string | null; // optionnel si ajouter plus tard dans la DB
   groupement?: string | null; // type de groupement
   nom_partenaire?: string | null; // nom du partenaire si groupement
+  type_dao?: string | null; // type de DAO (AMI/DP/DC/AAO)
 }
 
 export default function Page() {
@@ -352,6 +354,7 @@ export default function Page() {
                   <thead>
                     <tr>
                       <th>Nom</th>
+                      <th>Type de DAO</th>
                       <th>Référence</th>
                       <th>Autorité contractante</th>
                       <th>Chef Projet</th>
@@ -363,17 +366,22 @@ export default function Page() {
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={7}>Chargement...</td>
+                        <td colSpan={8}>Chargement...</td>
                       </tr>
                     ) : daos.length === 0 ? (
                       <tr>
-                        <td colSpan={7}>Aucun DAO pour le moment.</td>
+                        <td colSpan={8}>Aucun DAO pour le moment.</td>
                       </tr>
                     ) : (
                       daos.map((dao) => (
                         <tr key={dao.id}>
                           {/* "Nom" : numero, sinon on peux mettre objet si on le renvoies */}
                           <td>{dao.numero}</td>
+                          <td>
+                            <span className="badge bg-info text-white">
+                              {dao.type_dao || 'N/A'}
+                            </span>
+                          </td>
                           <td>{dao.reference}</td>
                           <td>{dao.autorite}</td>
                           <td>{dao.chef_projet || 'N/A'}</td>
@@ -397,10 +405,18 @@ export default function Page() {
                             })()}
                           </td>
                           <td>
+                            <Link 
+                              href={`/dash/admin/EditDao/${dao.id}`}
+                              className="btn btn-sm btn-warning mr-2"
+                              title="Modifier le DAO"
+                            >
+                              <i className="mdi mdi-pencil"></i>
+                            </Link>
                             <button
-                              className="btn btn-sm btn-danger ml-2"
+                              className="btn btn-sm btn-danger"
                               onClick={() => handleDeleteDao(dao.id)}
                               disabled={loading}
+                              title="Supprimer le DAO"
                             >
                               <i className="mdi mdi-delete"></i>
                             </button>

@@ -51,7 +51,7 @@ export default function Sidebar() {
             <li className="nav-item">
               <a className="nav-link" href="/dash/admin/CreateDao">
                 <i className="mdi mdi-folder-plus menu-icon"></i>
-                <span className="menu-title">Create DAO</span>
+                <span className="menu-title">Créer un DAO</span>
               </a>
             </li>
             <li className="nav-item">
@@ -64,6 +64,12 @@ export default function Sidebar() {
               <a className="nav-link" href="/dash/admin/allDao/">
                 <i className="mdi mdi-file-document-multiple menu-icon"></i>
                 <span className="menu-title">Tous les DAO</span>
+              </a>
+            </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/dash/admin/History/">
+                <i className="mdi mdi-history menu-icon"></i>
+                <span className="menu-title">Historique</span>
               </a>
             </li>
           </>

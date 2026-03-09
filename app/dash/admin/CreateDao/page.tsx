@@ -25,10 +25,18 @@ export default function NewDaoPage() {
   const [membresFlipUp, setMembresFlipUp] = useState(false);
   const [groupement, setGroupement] = useState<string>("");
   const [nomPartenaire, setNomPartenaire] = useState("");
-  const [groupementOptions] = useState([
+  const [typeDao, setTypeDao] = useState<string>("");
+  const groupementOptions = [
     { value: "oui", label: "Oui", description: "DAO avec groupement d'entreprises" },
     { value: "non", label: "Non", description: "DAO sans groupement" }
-  ]);
+  ];
+
+  const typeDaoOptions = [
+    { value: "AMI", label: "AMI"},
+    { value: "DP", label: "DP" },
+    { value: "DC", label: "DC" },
+    { value: "AAO", label: "AAO" }
+  ];
 
   useEffect(() => {
     // Récupérer le prochain numéro DAO depuis la base de données
@@ -196,6 +204,7 @@ export default function NewDaoPage() {
 
   const validate = () => {
     if (!dateDepot) return "La date de dépôt est requise.";
+    if (!typeDao) return "Le type de DAO est requis.";
     if (!objet) return "L'objet est requis.";
     if (description.trim().length < 5)
       return "La description doit contenir au moins 5 caractères.";
@@ -225,6 +234,7 @@ export default function NewDaoPage() {
     // Exemple de payload (le numéro sera généré côté serveur)
     const payload = {
       date_depot: dateDepot,
+      typeDao,
       objet,
       description,
       reference,
@@ -291,6 +301,49 @@ export default function NewDaoPage() {
                 onChange={(e) => setDateDepot(e.target.value)}
                 required
               />
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label">Type de DAO *</label>
+              
+              <div className="border p-3 bg-white rounded-lg">
+                {/* Options de type de DAO */}
+                {typeDaoOptions.map((option) => (
+                  <div key={option.value} className="mb-2 last:mb-0">
+                    <label
+                      className="form-check d-flex align-items-start cursor-pointer p-2 rounded hover:bg-gray-50"
+                      style={{
+                        gap: "12px",
+                        fontSize: "0.95rem",
+                      }}
+                    >
+                      <input
+                        className="form-check-input mt-1"
+                        type="radio"
+                        name="typeDao"
+                        value={option.value}
+                        checked={typeDao === option.value}
+                        onChange={() => setTypeDao(option.value)}
+                        style={{
+                          width: 18,
+                          height: 18,
+                          minWidth: 18,
+                          minHeight: 18,
+                          margin: 0,
+                        }}
+                      />
+                      <div className="flex-1">
+                        <div className="form-check-label fw-medium">
+                          {option.label}
+                        </div>
+                        <div className="text-muted small">
+                          {option.description}
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="mb-3">
@@ -403,14 +456,14 @@ export default function NewDaoPage() {
             </div>
 
             <div className="mb-3">
-              <label className="form-label">Chef d'équipe *</label>
+              <label className="form-label">Chef Projet *</label>
               <select
                 className="form-select"
                 value={chefEquipe}
                 onChange={(e) => setChefEquipe(e.target.value)}
                 required
               >
-                <option value="">Sélectionnez un chef d'équipe</option>
+                <option value="">Sélectionnez un chef Projet</option>
                 {teamLeaders.length > 0 ? (
                   teamLeaders.map((user) => (
                     <option key={user.id} value={user.id}>
