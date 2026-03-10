@@ -50,20 +50,18 @@ export default function EditDaoPage() {
   const [groupement, setGroupement] = useState<string>("");
   const [nomPartenaire, setNomPartenaire] = useState("");
   const [typeDao, setTypeDao] = useState<string>("");
+  const [typeDaoOptions, setTypeDaoOptions] = useState<Array<{ value: string; label: string; description: string }>>([]);
+  const [showAddTypeModal, setShowAddTypeModal] = useState(false);
+  const [newTypeCode, setNewTypeCode] = useState("");
+  const [typesExpanded, setTypesExpanded] = useState(true);
 
   const groupementOptions = [
     { value: "oui", label: "Oui", description: "DAO avec groupement d'entreprises" },
     { value: "non", label: "Non", description: "DAO sans groupement" }
   ];
 
-  const typeDaoOptions = [
-    { value: "AMI", label: "AMI", description: "Appel à manifestation d'intérêt" },
-    { value: "DP", label: "DP", description: "Dialogue compétitif" },
-    { value: "DC", label: "DC", description: "Demande de concurrence" },
-    { value: "AAO", label: "AAO", description: "Appel d'offres ouvert" }
-  ];
-
   useEffect(() => {
+    loadDaoTypes();
     loadDao();
     loadUsers();
   }, [daoId]);
@@ -94,16 +92,57 @@ export default function EditDaoPage() {
       }
       
       setDao(daoData);
-      setDateDepot(daoData.date_depot || "");
+      console.log("=== PRÉ-REMPLISSAGE DES CHAMPS ===");
+      console.log("date_depot:", daoData.date_depot);
+      console.log("objet:", daoData.objet);
+      console.log("description:", daoData.description);
+      console.log("reference:", daoData.reference);
+      console.log("autorite:", daoData.autorite);
+      console.log("chef_id:", daoData.chef_id);
+      console.log("membres:", daoData.membres, "type:", typeof daoData.membres, "isArray:", Array.isArray(daoData.membres));
+      console.log("groupement:", daoData.groupement);
+      console.log("nom_partenaire:", daoData.nom_partenaire);
+      console.log("type_dao:", daoData.type_dao);
+      console.log("statut:", daoData.statut);
+      
+      // Conversion correcte de la date
+      const formattedDate = daoData.date_depot ? 
+        new Date(daoData.date_depot).toISOString().split('T')[0] : "";
+      
+      // Conversion des membres en tableau de strings
+      let membresArray: string[] = [];
+      if (daoData.membres) {
+        if (typeof daoData.membres === 'string') {
+          // Si c'est une chaîne comme "{41, 79}"
+          const cleaned = daoData.membres.replace(/[{}]/g, '');
+          membresArray = cleaned.split(',').map(m => m.trim()).filter(m => m);
+        } else if (Array.isArray(daoData.membres)) {
+          // Si c'est déjà un tableau
+          membresArray = daoData.membres.map(m => m.toString());
+        }
+      }
+      
+      console.log("membresArray après conversion:", membresArray);
+      
+      setDateDepot(formattedDate);
       setObjet(daoData.objet || "");
       setDescription(daoData.description || "");
       setReference(daoData.reference || "");
       setAutorite(daoData.autorite || "");
       setChefEquipe(daoData.chef_id?.toString() || "");
-      setMembres(daoData.membres || []);
+      setMembres(membresArray);
       setGroupement(daoData.groupement || "");
       setNomPartenaire(daoData.nom_partenaire || "");
       setTypeDao(daoData.type_dao || "");
+      
+      console.log("=== CHAMPS PRÉ-REMPLIS AVEC SUCCÈS ===");
+      console.log("État dateDepot:", formattedDate);
+      console.log("État objet:", daoData.objet);
+      console.log("État reference:", daoData.reference);
+      console.log("État description:", daoData.description);
+      console.log("État typeDao:", daoData.type_dao);
+      console.log("État chefEquipe:", daoData.chef_id);
+      console.log("État membres:", membresArray);
       
       console.log("DAO chargé avec succès");
     } catch (err) {
@@ -132,8 +171,8 @@ export default function EditDaoPage() {
         }
       };
 
+      // Pour les membres d'équipe : tous les utilisateurs peuvent être membres
       const membersList = usersData
-        .filter((u: any) => Number(u.role_id || u.role) === 4)
         .map((u: any) => ({
           id: u.id,
           username: u.username || u.email || `user-${u.id}`,
@@ -156,6 +195,68 @@ export default function EditDaoPage() {
       setTeamLeaders(teamLeadersList);
     } catch (err) {
       console.error("Erreur lors du chargement des utilisateurs:", err);
+    }
+  }
+
+  async function loadDaoTypes() {
+    try {
+      const res = await fetch("/api/dao-types");
+      if (!res.ok) {
+        console.error("Erreur lors de la récupération des types de DAO:", await res.text());
+        return;
+      }
+      const data = await res.json();
+      if (data.success && data.data) {
+        const types = data.data.map((type: any) => ({
+          value: type.code,
+          label: type.libelle,
+          description: type.description || ""
+        }));
+        setTypeDaoOptions(types);
+      }
+    } catch (err) {
+      console.error("Erreur lors du chargement des types de DAO:", err);
+    }
+  }
+
+  async function addNewType() {
+    try {
+      if (!newTypeCode) {
+        setError("Le code du type est requis");
+        return;
+      }
+
+      const res = await fetch("/api/dao-types", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          code: newTypeCode.toUpperCase(),
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        setError(errorData.message || "Erreur lors de la création du type");
+        return;
+      }
+
+      // Réinitialiser le formulaire
+      setNewTypeCode("");
+      setShowAddTypeModal(false);
+      setError(null);
+
+      // Recharger les types
+      await loadDaoTypes();
+      
+      // Sélectionner automatiquement le nouveau type
+      setTypeDao(newTypeCode.toUpperCase());
+      
+      alert("Type de DAO créé avec succès");
+    } catch (err) {
+      console.error("Error creating DAO type:", err);
+      setError("Erreur réseau lors de la création du type");
     }
   }
 
@@ -338,44 +439,68 @@ export default function EditDaoPage() {
             <div className="mb-3">
               <label className="form-label">Type de DAO *</label>
               
-              <div className="border p-3 bg-white rounded-lg">
-                {/* Options de type de DAO */}
-                {typeDaoOptions.map((option) => (
-                  <div key={option.value} className="mb-2 last:mb-0">
-                    <label
-                      className="form-check d-flex align-items-start cursor-pointer p-2 rounded hover:bg-gray-50"
-                      style={{
-                        gap: "12px",
-                        fontSize: "0.95rem",
-                      }}
-                    >
-                      <input
-                        className="form-check-input mt-1"
-                        type="radio"
-                        name="typeDao"
-                        value={option.value}
-                        checked={typeDao === option.value}
-                        onChange={() => setTypeDao(option.value)}
-                        style={{
-                          width: 18,
-                          height: 18,
-                          minWidth: 18,
-                          minHeight: 18,
-                          margin: 0,
-                        }}
-                      />
-                      <div className="flex-1">
-                        <div className="form-check-label fw-medium">
-                          {option.label}
-                        </div>
-                        <div className="text-muted small">
-                          {option.description}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                ))}
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center p-1"
+                  onClick={() => setTypesExpanded(!typesExpanded)}
+                  style={{ width: "28px", height: "28px" }}
+                  title={typesExpanded ? "Replier les types" : "Déplier les types"}
+                >
+                  <i className={`mdi mdi-chevron-${typesExpanded ? 'up' : 'down'}`}></i>
+                </button>
+                <span className="text-muted small">Types disponibles</span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary d-flex align-items-center justify-content-center p-1"
+                  onClick={() => setShowAddTypeModal(true)}
+                  title="Ajouter un nouveau type de DAO"
+                  style={{ width: "28px", height: "28px" }}
+                >
+                  <i className="mdi mdi-plus"></i>
+                </button>
               </div>
+              
+              {typesExpanded && (
+                <div className="border p-3 bg-white rounded-lg">
+                  {/* Options de type de DAO */}
+                  {typeDaoOptions.map((option) => (
+                    <div key={option.value} className="mb-2 last:mb-0">
+                      <label
+                        className="form-check d-flex align-items-start cursor-pointer p-2 rounded hover:bg-gray-50"
+                        style={{
+                          gap: "12px",
+                          fontSize: "0.95rem",
+                        }}
+                      >
+                        <input
+                          className="form-check-input mt-1"
+                          type="radio"
+                          name="typeDao"
+                          value={option.value}
+                          checked={typeDao === option.value}
+                          onChange={() => setTypeDao(option.value)}
+                          style={{
+                            width: 18,
+                            height: 18,
+                            minWidth: 18,
+                            minHeight: 18,
+                            margin: 0,
+                          }}
+                        />
+                        <div className="flex-1">
+                          <div className="form-check-label fw-medium">
+                            {option.label}
+                          </div>
+                          <div className="text-muted small">
+                            {option.description}
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="mb-3">
@@ -597,6 +722,65 @@ export default function EditDaoPage() {
           </form>
         </div>
       </div>
+
+      {/* Modal pour ajouter un nouveau type de DAO */}
+      {showAddTypeModal && (
+        <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Ajouter un nouveau type de DAO</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => {
+                    setShowAddTypeModal(false);
+                    setNewTypeCode("");
+                    setError(null);
+                  }}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label">Code du type de DAO *</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newTypeCode}
+                    onChange={(e) => setNewTypeCode(e.target.value)}
+                    placeholder="Ex: NOUVEAU"
+                    maxLength={20}
+                    required
+                  />
+                  <div className="form-text">
+                    Lettres majuscules et chiffres uniquement
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setShowAddTypeModal(false);
+                    setNewTypeCode("");
+                    setError(null);
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={addNewType}
+                >
+                  Créer le type
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

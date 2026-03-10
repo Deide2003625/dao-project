@@ -12,6 +12,8 @@ interface DaoItem {
   date_depot: string | null;
   statut: string;
   chef_projet?: string;
+  progression?: number;
+  type_dao?: string;
 }
 
 export default function DashboardChefEquipe() {
@@ -21,6 +23,56 @@ export default function DashboardChefEquipe() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "enCours" | "aRisque">("all");
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Fonction pour rafraîchir la progression des DAOs
+  const refreshProgression = async () => {
+    setRefreshing(true);
+    try {
+      const storedUser = localStorage.getItem("user");
+      if (!storedUser) return;
+
+      const user = JSON.parse(storedUser);
+      const chefId = user?.id;
+      
+      if (!chefId) return;
+
+      const res = await fetch(`/api/dao?chefId=${chefId}`);
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const list: DaoItem[] = data?.data || [];
+      
+      // Récupérer la progression pour chaque DAO
+      const daosWithProgress = await Promise.all(
+        list.map(async (dao) => {
+          try {
+            const tasksRes = await fetch(`/api/tasks?daoId=${dao.id}`);
+            if (tasksRes.ok) {
+              const tasksData = await tasksRes.json();
+              const tasks = tasksData.data || [];
+              
+              // Calculer la progression moyenne
+              if (tasks.length > 0) {
+                const totalProgress = tasks.reduce((sum: number, task: any) => sum + (task.progress || 0), 0);
+                const averageProgress = Math.round(totalProgress / tasks.length);
+                return { ...dao, progression: averageProgress };
+              }
+            }
+          } catch (error) {
+            console.error(`Erreur lors du chargement des tâches pour DAO ${dao.id}:`, error);
+          }
+          return { ...dao, progression: 0 };
+        })
+      );
+      
+      setDaos(daosWithProgress);
+    } catch (error) {
+      console.error("Erreur lors du rafraîchissement de la progression:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     try {
@@ -52,7 +104,31 @@ export default function DashboardChefEquipe() {
 
           const data = await res.json();
           const list: DaoItem[] = data?.data || [];
-          setDaos(list);
+          
+          // Récupérer la progression pour chaque DAO
+          const daosWithProgress = await Promise.all(
+            list.map(async (dao) => {
+              try {
+                const tasksRes = await fetch(`/api/tasks?daoId=${dao.id}`);
+                if (tasksRes.ok) {
+                  const tasksData = await tasksRes.json();
+                  const tasks = tasksData.data || [];
+                  
+                  // Calculer la progression moyenne
+                  if (tasks.length > 0) {
+                    const totalProgress = tasks.reduce((sum: number, task: any) => sum + (task.progress || 0), 0);
+                    const averageProgress = Math.round(totalProgress / tasks.length);
+                    return { ...dao, progression: averageProgress };
+                  }
+                }
+              } catch (error) {
+                console.error(`Erreur lors du chargement des tâches pour DAO ${dao.id}:`, error);
+              }
+              return { ...dao, progression: 0 };
+            })
+          );
+          
+          setDaos(daosWithProgress);
           setLoading(false);
         } catch (err) {
           console.error("Erreur chargement DAO chef projet", err);
@@ -65,6 +141,15 @@ export default function DashboardChefEquipe() {
       setError("Erreur interne lors de la récupération de l'utilisateur");
       setLoading(false);
     }
+  }, []);
+
+  // Rafraîchir la progression toutes les 30 secondes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshProgression();
+    }, 30000); // 30 secondes
+
+    return () => clearInterval(interval);
   }, []);
 
   const filteredDaos = daos.filter((dao) => {
@@ -113,6 +198,19 @@ export default function DashboardChefEquipe() {
                       ? "En cours seulement"
                       : "À risque seulement"}
                 </button>
+                <button
+                  className={`px-3 py-2 rounded text-sm transition-colors ${
+                    refreshing 
+                      ? 'bg-gray-400 text-white cursor-not-allowed' 
+                      : 'bg-green-600 text-white hover:bg-green-700'
+                  }`}
+                  type="button"
+                  onClick={refreshProgression}
+                  disabled={refreshing}
+                  title={refreshing ? "Rafraîchissement en cours..." : "Rafraîchir la progression"}
+                >
+                  {refreshing ? '⏳' : '🔄'}
+                </button>
               </div>
             </div>
           </div>
@@ -153,6 +251,11 @@ export default function DashboardChefEquipe() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h4 className="font-semibold text-lg">N° {dao.numero}</h4>
+                      {dao.type_dao && (
+                        <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded mb-2">
+                          {dao.type_dao}
+                        </span>
+                      )}
                       <p className="mt-1 text-sm text-gray-600 line-clamp-2">
                         {dao.objet || dao.reference}
                       </p>
@@ -182,11 +285,20 @@ export default function DashboardChefEquipe() {
 
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Progress</span>
-                      <span className="font-medium">0%</span>
+                      <span className="font-medium">{dao.progression || 0}%</span>
                     </div>
 
                     <div className="w-full bg-gray-100 h-2 rounded-full">
-                      <div className="h-2 rounded-full bg-gray-300" style={{ width: "0%" }} />
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          (dao.progression || 0) === 100 
+                            ? 'bg-green-500' 
+                            : (dao.progression || 0) > 0 
+                              ? 'bg-blue-500' 
+                              : 'bg-gray-300'
+                        }`} 
+                        style={{ width: `${dao.progression || 0}%` }} 
+                      />
                     </div>
 
                     <div className="pt-1 text-gray-600">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Archive, Edit, Trash2 } from "lucide-react";
 
 interface Dao {
   id: number;
@@ -13,6 +14,7 @@ interface Dao {
   chef_projet?: string;
   chef_id?: number;
   team_id?: string;
+  progression?: number; // Ajout du champ progression
 }
 
 export default function AllDaoPage() {
@@ -74,29 +76,87 @@ export default function AllDaoPage() {
     loadDaos();
   }, []);
 
-  async function loadDaos() {
+  const loadDaos = async () => {
     try {
       setLoading(true);
-      setError("");
+      const res = await fetch("/api/dao");
+      if (!res.ok) throw new Error("Erreur lors du chargement des DAOs");
 
-      const daoRes = await fetch("/api/dao", { cache: "no-store" });
-      const daoJson = await daoRes.json().catch(() => ({}));
+      const data = await res.json();
+      if (data.success) {
+        // Filtrer les DAOs archivés et récupérer leur progression
+        const activeDaos = data.data.filter((dao: any) => dao.statut !== 'ARCHIVE');
+        
+        // Récupérer les DAOs avec leur progression
+        const daosWithProgress = await Promise.all(
+          activeDaos.map(async (dao: any) => {
+            // Récupérer les tâches de ce DAO pour calculer la progression
+            try {
+              const tasksRes = await fetch(`/api/tasks?daoId=${dao.id}`);
+              if (tasksRes.ok) {
+                const tasksData = await tasksRes.json();
+                if (tasksData.success && Array.isArray(tasksData.data)) {
+                  const tasks = tasksData.data;
+                  if (tasks.length > 0) {
+                    const totalProgress = tasks.reduce((sum: number, task: any) => sum + (task.progress || 0), 0);
+                    const avgProgress = Math.round(totalProgress / tasks.length);
+                    return { ...dao, progression: avgProgress };
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(`Erreur lors du chargement des tâches du DAO ${dao.id}:`, error);
+            }
+            return { ...dao, progression: 0 };
+          })
+        );
 
-      if (!daoRes.ok) {
-        console.error("API /api/dao error:", daoJson);
-        setDaos([]);
-        setError(daoJson?.message || "Erreur lors du chargement des DAO");
+        setDaos(daosWithProgress);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function archiveDao(daoId: number) {
+    try {
+      const res = await fetch(`/api/dao/${daoId}/archive`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        alert(`Erreur lors de l'archivage: ${errorData.message || "Erreur serveur"}`);
         return;
       }
 
-      const allDaos = Array.isArray(daoJson?.data) ? (daoJson.data as Dao[]) : [];
-      setDaos(allDaos);
+      alert("DAO archivé avec succès");
+      loadDaos(); // Recharger la liste
     } catch (err) {
-      console.error("Error fetching DAOs:", err);
-      setDaos([]);
-      setError("Erreur réseau lors du chargement des données");
-    } finally {
-      setLoading(false);
+      console.error("Error archiving DAO:", err);
+      alert("Erreur réseau lors de l'archivage du DAO");
+    }
+  }
+
+  async function deleteDao(daoId: number) {
+    try {
+      const res = await fetch(`/api/dao/${daoId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        alert(`Erreur lors de la suppression: ${errorData.message || "Erreur serveur"}`);
+        return;
+      }
+
+      alert("DAO supprimé avec succès");
+      loadDaos(); // Recharger la liste
+    } catch (err) {
+      console.error("Error deleting DAO:", err);
+      alert("Erreur réseau lors de la suppression du DAO");
     }
   }
 
@@ -259,19 +319,67 @@ export default function AllDaoPage() {
                     <div className="mt-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Progression</span>
-                        <span className="font-medium">0%</span>
+                        <span className="font-medium">{dao.progression || 0}%</span>
                       </div>
                       <div className="w-full bg-gray-100 h-2 rounded mt-2">
                         <div
-                          className="h-2 bg-blue-600 rounded"
-                          style={{ width: "0%" }}
+                          className={`h-2 rounded ${
+                            (dao.progression || 0) === 100 
+                              ? 'bg-green-600' 
+                              : (dao.progression || 0) > 0 
+                                ? 'bg-blue-600' 
+                                : 'bg-gray-400'
+                          }`}
+                          style={{ width: `${dao.progression || 0}%` }}
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-4 flex justify-end">
-                    <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                  <div className="mt-4 flex justify-between items-center">
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/dash/admin/EditDao/${dao.id}`);
+                        }}
+                        className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                        title="Modifier"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`Êtes-vous sûr de vouloir archiver le DAO ${dao.numero} ?`)) {
+                            archiveDao(dao.id);
+                          }
+                        }}
+                        className="p-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
+                        title="Archiver"
+                      >
+                        <Archive size={16} />
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`Êtes-vous sûr de vouloir supprimer le DAO ${dao.numero} ?`)) {
+                            deleteDao(dao.id);
+                          }
+                        }}
+                        className="p-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                        title="Supprimer"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/dash/admin/details/${dao.id}`);
+                      }}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
                       Voir détails →
                     </button>
                   </div>

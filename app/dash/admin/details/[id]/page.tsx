@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Download,
   AtSign,
+  Archive,
 } from "lucide-react";
 import Link from "next/link";
 import "@/styles/print-enhanced.css";
@@ -438,19 +439,40 @@ export default function DaoDetailsPage({ params }: { params: Promise<{ id: strin
                 <div className="text-center">
                   <div className="text-sm text-gray-600 mb-1">Statut</div>
                   <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full ${
-                    dao.statut === 'aRisque' 
+                    dao.statut === 'A_RISQUE' || dao.statut === 'aRisque'
                       ? 'bg-red-100 text-red-800' 
-                      : 'bg-green-100 text-green-800'
+                      : dao.statut === 'TERMINEE'
+                        ? 'bg-green-100 text-green-800'
+                        : dao.statut === 'EN_COURS' || dao.statut === 'enCours'
+                          ? 'bg-blue-100 text-blue-800'
+                          : dao.statut === 'ARCHIVE'
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-gray-100 text-gray-800'
                   }`}>
-                    {dao.statut === 'aRisque' ? (
+                    {dao.statut === 'A_RISQUE' || dao.statut === 'aRisque' ? (
                       <>
                         <AlertCircle className="w-3 h-3" />
                         À risque
                       </>
-                    ) : (
+                    ) : dao.statut === 'TERMINEE' ? (
+                      <>
+                        <CheckCircle className="w-3 h-3" />
+                        Terminée
+                      </>
+                    ) : dao.statut === 'EN_COURS' || dao.statut === 'enCours' ? (
                       <>
                         <CheckCircle className="w-3 h-3" />
                         En cours
+                      </>
+                    ) : dao.statut === 'ARCHIVE' ? (
+                      <>
+                        <Archive className="w-3 h-3" />
+                        Archivé
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-3 h-3" />
+                        En attente
                       </>
                     )}
                   </span>

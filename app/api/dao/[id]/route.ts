@@ -57,35 +57,34 @@ export async function GET(
 
 
     const dao = (rows as any[])[0];
-
     
-
-    // Calculer le statut basé sur la date de dépôt
-
-    if (dao.date_depot) {
-
-      const dateDepot = new Date(dao.date_depot);
-
-      const today = new Date();
-
-      const diffTime = today.getTime() - dateDepot.getTime();
-
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      
-
-      // Si déposé il y a 3 jours ou plus, statut = aRisque
-
-      // Sinon, statut = enCours
-
-      dao.statut = diffDays >= 3 ? 'aRisque' : 'enCours';
-
-    } else {
-
-      dao.statut = 'enCours'; // Par défaut si pas de date
-
+    // Récupérer les membres de l'équipe
+    const [memberRows] = await connection.execute(`
+      SELECT u.id, u.username, u.email
+      FROM team_members tm
+      JOIN users u ON tm.user_id = u.id
+      WHERE tm.team_id = ?
+    `, [dao.team_id]);
+    
+    dao.membres = (memberRows as any[]).map(m => m.id.toString());
+    
+    // Garder le statut réel de la base de données, ne pas l'écraser
+    // Le statut est maintenant géré automatiquement par la progression des tâches
+    if (!dao.statut || dao.statut === '') {
+      // Si le statut est NULL ou vide, utiliser une logique par défaut basée sur la date
+      if (dao.date_depot) {
+        const dateDepot = new Date(dao.date_depot);
+        const today = new Date();
+        const diffTime = today.getTime() - dateDepot.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        // Logique par défaut seulement si le statut n'est pas défini
+        dao.statut = diffDays >= 3 ? 'A_RISQUE' : 'EN_COURS';
+      } else {
+        dao.statut = 'EN_COURS'; // Par défaut si pas de date
+      }
     }
-
+    // Sinon, garder le statut réel de la base de données (TERMINEE, EN_COURS, etc.)
 
 
     return NextResponse.json(dao);

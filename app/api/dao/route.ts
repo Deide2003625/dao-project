@@ -26,6 +26,7 @@ async function ensureTables(connection: any) {
       chef_id BIGINT UNSIGNED,
       team_id VARCHAR(100),
       statut ENUM('aRisque', 'enCours') DEFAULT 'enCours',
+      type_dao VARCHAR(20) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
@@ -34,6 +35,15 @@ async function ensureTables(connection: any) {
   try {
     await connection.execute(`
       ALTER TABLE daos ADD COLUMN statut ENUM('aRisque', 'enCours') DEFAULT 'enCours'
+    `);
+  } catch (err) {
+    // Colonne existe déjà, ignorer l'erreur
+  }
+
+  // Ajouter la colonne type_dao si elle n'existe pas
+  try {
+    await connection.execute(`
+      ALTER TABLE daos ADD COLUMN type_dao VARCHAR(20) NULL
     `);
   } catch (err) {
     // Colonne existe déjà, ignorer l'erreur
@@ -52,6 +62,27 @@ async function ensureTables(connection: any) {
       year INT PRIMARY KEY,
       seq INT NOT NULL DEFAULT 0
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  // Table pour les types de DAO
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS dao_types (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      code VARCHAR(20) UNIQUE NOT NULL,
+      libelle VARCHAR(100) NOT NULL,
+      description TEXT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_dao_types_code (code)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  // Insérer les types de DAO par défaut s'ils n'existent pas
+  await connection.execute(`
+    INSERT IGNORE INTO dao_types (code, libelle, description) VALUES
+    ('AMI', 'AMI', 'Appel à manifestation d''intérêt'),
+    ('DP', 'DP', 'Dialogue compétitif'),
+    ('DC', 'DC', 'Demande de concurrence'),
+    ('AAO', 'AAO', 'Appel d''offres ouvert')
   `);
 }
 
@@ -102,6 +133,7 @@ export async function GET(req: NextRequest) {
         d.chef_id,
         d.groupement,
         d.nom_partenaire,
+        d.type_dao,
         u.username as chef_projet
       FROM daos d
       LEFT JOIN users u ON d.chef_id = u.id
@@ -118,24 +150,29 @@ export async function GET(req: NextRequest) {
 
     const [rows]: any = await connection.execute(query, params);
 
-    // Calculer le statut pour chaque DAO basé sur la date de dépôt
+    // Garder le statut réel de la base de données, ne pas l'écraser
+    // Le statut est maintenant géré automatiquement par la progression des tâches
     const daosWithStatus = rows.map((dao: any) => {
-      // Créer une copie pour ne pas modifier l'original
-      const updatedDao = { ...dao };
-      
-      if (updatedDao.date_depot) {
-        const dateDepot = new Date(updatedDao.date_depot);
-        const today = new Date();
-        const diffTime = today.getTime() - dateDepot.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      // Si le statut est NULL ou vide, utiliser une logique par défaut
+      if (!dao.statut || dao.statut === '') {
+        const updatedDao = { ...dao };
         
-        // Si déposé il y a 3 jours ou plus, statut = aRisque
-        // Sinon, statut = enCours
-        updatedDao.statut = diffDays >= 3 ? 'aRisque' : 'enCours';
-      } else {
-        updatedDao.statut = 'enCours'; // Par défaut si pas de date
+        if (updatedDao.date_depot) {
+          const dateDepot = new Date(updatedDao.date_depot);
+          const today = new Date();
+          const diffTime = today.getTime() - dateDepot.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          // Logique par défaut seulement si le statut n'est pas défini
+          updatedDao.statut = diffDays >= 3 ? 'A_RISQUE' : 'EN_COURS';
+        } else {
+          updatedDao.statut = 'EN_COURS';
+        }
+        return updatedDao;
       }
-      return updatedDao;
+      
+      // Sinon, garder le statut réel de la base de données (y compris ARCHIVE)
+      return dao;
     });
 
     return NextResponse.json({ success: true, data: daosWithStatus });
@@ -161,6 +198,7 @@ export async function POST(req: NextRequest) {
       membres,
       groupement,
       nomPartenaire,
+      typeDao,
     } = body;
 
     const year = new Date().getFullYear();
@@ -215,16 +253,8 @@ export async function POST(req: NextRequest) {
 
     // Vérification du rôle ChefProjet supprimée pour permettre à n'importe quel utilisateur d'être chef d'équipe
 
-    // Members must have member role (role_id 4 = MembreEquipe)
-    for (const m of membres || []) {
-      const userRole = String(idToRole[Number(m)]);
-      if (userRole !== "4") {
-        return NextResponse.json(
-          { success: false, message: `L'utilisateur ${m} n'a pas le rôle MembreEquipe` },
-          { status: 400 },
-        );
-      }
-    }
+    // Members can be any user (no role restriction)
+    // La vérification de rôle est supprimée pour permettre à tous les utilisateurs d'être membres
 
     // Créer une équipe unique
     const teamId = crypto.randomUUID();
@@ -262,8 +292,8 @@ export async function POST(req: NextRequest) {
     // Insérer DAO
     const [insertRes]: any = await connection.execute(
       `
-      INSERT INTO daos (numero, date_depot, objet, description, reference, autorite, statut, chef_id, team_id, groupement, nom_partenaire)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO daos (numero, date_depot, objet, description, reference, autorite, statut, chef_id, team_id, groupement, nom_partenaire, type_dao)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       [
         generatedNumero,
@@ -277,6 +307,7 @@ export async function POST(req: NextRequest) {
         teamId,
         groupement || null,
         groupement === "oui" ? nomPartenaire : null,
+        typeDao || null,
       ],
     );
 

@@ -104,7 +104,7 @@ export default function Page() {
     // ≥ 5 jours (ou 4) => En cours (jaune)
     if (diffDays >= 5 || diffDays === 4) {
       return {
-        label: "EN COURS",
+        label: "En cours",
         className: "badge bg-warning text-dark",
       };
     }
@@ -360,7 +360,7 @@ export default function Page() {
                       <th>Chef Projet</th>
                       <th>Groupement</th>
                       <th>Statut</th>
-                      <th>Actions</th>
+                     
                     </tr>
                   </thead>
                   <tbody>
@@ -404,23 +404,7 @@ export default function Page() {
                               return <span className={s.className}>{s.label}</span>;
                             })()}
                           </td>
-                          <td>
-                            <Link 
-                              href={`/dash/admin/EditDao/${dao.id}`}
-                              className="btn btn-sm btn-warning mr-2"
-                              title="Modifier le DAO"
-                            >
-                              <i className="mdi mdi-pencil"></i>
-                            </Link>
-                            <button
-                              className="btn btn-sm btn-danger"
-                              onClick={() => handleDeleteDao(dao.id)}
-                              disabled={loading}
-                              title="Supprimer le DAO"
-                            >
-                              <i className="mdi mdi-delete"></i>
-                            </button>
-                          </td>
+                          
                         </tr>
                       ))
                     )}

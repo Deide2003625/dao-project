@@ -67,6 +67,12 @@ export default function Sidebar() {
               </a>
             </li>
             <li className="nav-item">
+              <a className="nav-link" href="/dash/admin/MyTasks/">
+                <i className="mdi mdi-clipboard-check menu-icon"></i>
+                <span className="menu-title">Mes tâches</span>
+              </a>
+            </li>
+            <li className="nav-item">
               <a className="nav-link" href="/dash/admin/History/">
                 <i className="mdi mdi-history menu-icon"></i>
                 <span className="menu-title">Historique</span>
@@ -77,16 +83,26 @@ export default function Sidebar() {
 
         {/* CHEF DE PROJET */}
         {roleId === 3 && (
-          <li className="nav-item">
-            <a className="nav-link" href="/dash/ChefProjet/MyDao/">
-              <i className="mdi mdi-file-document-multiple menu-icon"></i>
-              <span className="menu-title">Mes DAO</span>
-            </a>
-            <a className="nav-link" href="/dash/ChefProjet/MesEquipes/">
-              <i className="mdi mdi-account-group menu-icon"></i>
-              <span className="menu-title">Mes equipes</span>
-            </a>
-          </li>
+          <>
+            <li className="nav-item">
+              <a className="nav-link" href="/dash/ChefProjet/MyDao/">
+                <i className="mdi mdi-file-document-multiple menu-icon"></i>
+                <span className="menu-title">Mes DAO</span>
+              </a>
+            </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/dash/ChefProjet/MesEquipes/">
+                <i className="mdi mdi-account-group menu-icon"></i>
+                <span className="menu-title">Mes equipes</span>
+              </a>
+            </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/dash/admin/MyTasks/">
+                <i className="mdi mdi-clipboard-check menu-icon"></i>
+                <span className="menu-title">Mes tâches</span>
+              </a>
+            </li>
+          </>
         )}
 
         {/* DirecteurGeneral */}

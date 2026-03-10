@@ -189,7 +189,7 @@ export default function HistoryPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {filteredDaos.map((dao) => (
                 <article
-                  key={dao.id}
+                  key={dao.id} 
                   onClick={() => router.push(`/dash/admin/details/${dao.id}`)}
                   className="bg-white p-4 rounded shadow cursor-pointer hover:shadow-md transition-shadow"
                 >
