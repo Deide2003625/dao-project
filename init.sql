@@ -153,6 +153,14 @@ CREATE TABLE `dao_sequences` (
   PRIMARY KEY (`year`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+CREATE TABLE `dao_types` (
+  `id` int(11) NOT NULL,
+  `code` varchar(20) NOT NULL,
+  `libelle` varchar(100) NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 CREATE TABLE `dao_members` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `dao_id` int DEFAULT NULL,
