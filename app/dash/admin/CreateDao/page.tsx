@@ -118,10 +118,11 @@ export default function NewDaoPage() {
         const getRoleName = (roleId: string | number): string => {
           const id = String(roleId);
           switch (id) {
-            case '1': return 'Admin';
+            case '1': return 'Directeur';
             case '2': return 'Admin';
             case '3': return 'ChefProjet';
             case '4': return 'MembreEquipe';
+            case '5': return 'Lecteur';
             default: return 'Utilisateur';
           }
         };
@@ -150,6 +151,15 @@ export default function NewDaoPage() {
         });
         
         const membersList = usersData
+          .filter((u: any) => {
+            const roleId = Number(u.role_id || u.role);
+            // Exclure les rôles lecteur (5) et directeur (1)
+            const isExcluded = roleId === 1 || roleId === 5;
+            if (isExcluded) {
+              console.log(`Utilisateur exclu: ${u.username} (ID: ${u.id}, Rôle: ${roleId} - ${getRoleName(roleId)})`);
+            }
+            return !isExcluded;
+          })
           .map((u: any) => {
             const roleData = {
               id: u.id,

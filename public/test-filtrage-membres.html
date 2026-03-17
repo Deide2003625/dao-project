@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Filtrage Membres Équipe</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .user-card { 
+            margin: 10px 0; 
+            padding: 10px; 
+            border: 1px solid #ddd; 
+            border-radius: 5px; 
+            background: white;
+        }
+        .included { border-left: 4px solid #28a745; }
+        .excluded { border-left: 4px solid #dc3545; opacity: 0.7; }
+        .role-badge { 
+            display: inline-block; 
+            padding: 2px 6px; 
+            border-radius: 3px; 
+            font-size: 11px; 
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        .role-admin { background: #17a2b8; color: white; }
+        .role-chef { background: #ffc107; color: #212529; }
+        .role-membre { background: #28a745; color: white; }
+        .role-directeur { background: #6f42c1; color: white; }
+        .role-lecteur { background: #6c757d; color: white; }
+        button { margin: 5px; padding: 10px; }
+        .result { margin: 10px 0; padding: 10px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .stats { 
+            display: flex; 
+            gap: 20px; 
+            margin: 15px 0; 
+            padding: 10px; 
+            background: #f8f9fa; 
+            border-radius: 5px; 
+        }
+        .stat-item { text-align: center; }
+        .stat-number { font-size: 24px; font-weight: bold; }
+        .stat-label { font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>Test Filtrage Membres Équipe - Création DAO</h1>
+    
+    <div class="test-section">
+        <h3>Test API Utilisateurs</h3>
+        <button onclick="testUsersAPI()">Tester API /api/users</button>
+        <div id="result-users" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Simulation du Filtrage</h3>
+        <div id="filtering-result"></div>
+    </div>
+
+    <script>
+        function getRoleName(roleId) {
+            switch(String(roleId)) {
+                case '1': return 'Directeur';
+                case '2': return 'Admin';
+                case '3': return 'ChefProjet';
+                case '4': return 'MembreEquipe';
+                case '5': return 'Lecteur';
+                default: return 'Utilisateur';
+            }
+        }
+        
+        function getRoleClass(roleId) {
+            switch(String(roleId)) {
+                case '1': return 'role-directeur';
+                case '2': return 'role-admin';
+                case '3': return 'role-chef';
+                case '4': return 'role-membre';
+                case '5': return 'role-lecteur';
+                default: return '';
+            }
+        }
+        
+        function filterMembersList(usersData) {
+            console.log("=== Simulation du filtrage ===");
+            console.log("Utilisateurs totaux:", usersData.length);
+            
+            const excludedUsers = [];
+            const includedUsers = [];
+            
+            usersData.forEach(u => {
+                const roleId = Number(u.role_id || u.role);
+                const isExcluded = roleId === 1 || roleId === 5; // Directeur (1) ou Lecteur (5)
+                
+                if (isExcluded) {
+                    excludedUsers.push(u);
+                    console.log(`Utilisateur exclu: ${u.username} (ID: ${u.id}, Rôle: ${roleId} - ${getRoleName(roleId)})`);
+                } else {
+                    includedUsers.push(u);
+                }
+            });
+            
+            return { excludedUsers, includedUsers };
+        }
+        
+        async function testUsersAPI() {
+            const resultDiv = document.getElementById('result-users');
+            const filterDiv = document.getElementById('filtering-result');
+            
+            resultDiv.innerHTML = 'Test en cours...';
+            filterDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/users');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const users = data.data || [];
+                    
+                    let html = `<div class="success">✅ API utilisateurs fonctionne!</div>`;
+                    html += `<p>Nombre total d'utilisateurs: ${users.length}</p>`;
+                    
+                    // Simulation du filtrage
+                    const { excludedUsers, includedUsers } = filterMembersList(users);
+                    
+                    // Statistiques
+                    html += `
+                        <div class="stats">
+                            <div class="stat-item">
+                                <div class="stat-number">${users.length}</div>
+                                <div class="stat-label">Total</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number">${includedUsers.length}</div>
+                                <div class="stat-label">Inclus</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number">${excludedUsers.length}</div>
+                                <div class="stat-label">Exclus</div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    resultDiv.innerHTML = html;
+                    
+                    // Affichage détaillé du filtrage
+                    let filterHtml = '<h4>Résultat du filtrage:</h4>';
+                    
+                    if (includedUsers.length > 0) {
+                        filterHtml += '<h5 style="color: #28a745;">✅ Utilisateurs inclus (membres d\'équipe possibles):</h5>';
+                        includedUsers.forEach(user => {
+                            filterHtml += `
+                                <div class="user-card included">
+                                    <strong>${user.username}</strong>
+                                    <span class="role-badge ${getRoleClass(user.role_id || user.role)}">
+                                        ${getRoleName(user.role_id || user.role)}
+                                    </span>
+                                    <br>
+                                    <small>ID: ${user.id} | Email: ${user.email}</small>
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    if (excludedUsers.length > 0) {
+                        filterHtml += '<h5 style="color: #dc3545;">❌ Utilisateurs exclus (directeurs et lecteurs):</h5>';
+                        excludedUsers.forEach(user => {
+                            filterHtml += `
+                                <div class="user-card excluded">
+                                    <strong>${user.username}</strong>
+                                    <span class="role-badge ${getRoleClass(user.role_id || user.role)}">
+                                        ${getRoleName(user.role_id || user.role)}
+                                    </span>
+                                    <br>
+                                    <small>ID: ${user.id} | Email: ${user.email}</small>
+                                    <br>
+                                    <small style="color: #dc3545;">Raison: ${getRoleName(user.role_id || user.role)} - Non autorisé comme membre d'équipe</small>
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    filterDiv.innerHTML = filterHtml;
+                    
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Erreur: ${data.message || 'Erreur inconnue'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">💥 Erreur réseau: ${error.message}</div>`;
+            }
+        }
+        
+        // Test automatique au chargement
+        window.onload = function() {
+            console.log('Page de test de filtrage chargée.');
+        };
+    </script>
+</body>
+</html>
