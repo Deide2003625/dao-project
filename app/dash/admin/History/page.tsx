@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 interface Dao {
   id: number;
@@ -41,10 +43,194 @@ export default function HistoryPage() {
 
   const getCurrentYearMonths = () => {
     const currentYear = new Date().getFullYear();
-    return months.map(month => ({
+    return months.map((month) => ({
       ...month,
-      label: month.value ? `${month.label} ${currentYear}` : month.label
+      label: month.value ? `${month.label} ${currentYear}` : month.label,
     }));
+  };
+
+  const handlePrintPdf = async () => {
+    try {
+      // Afficher un indicateur de chargement
+      const loadingIndicator = document.createElement("div");
+      loadingIndicator.innerHTML = "Génération du rapport des DAO terminés...";
+      loadingIndicator.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        z-index: 9999;
+        font-size: 16px;
+      `;
+      document.body.appendChild(loadingIndicator);
+
+      // Créer un conteneur temporaire pour le PDF
+      const pdfContainer = document.createElement("div");
+      pdfContainer.style.cssText = `
+        position: absolute;
+        left: -9999px;
+        top: 0;
+        width: 210mm;
+        min-height: 297mm;
+        background: white;
+        padding: 15mm;
+        font-family: "Roboto", Arial, sans-serif;
+        box-sizing: border-box;
+        font-size: 12px;
+        line-height: 1.4;
+        overflow: hidden;
+      `;
+
+      // En-tête avec bleu marin et logo
+      pdfContainer.innerHTML = `
+        <div style="background: #1e3a8a; color: white; text-align: center; padding: 20px 10px; margin: -15mm -15mm 15mm -15mm;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div style="text-align: left;">
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <div style="width: 70px; height: 45px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.15);">
+                  <img src="/images/logo.png" alt="2SND Technologies" style="width: 100%; height: 100%; object-fit: contain;" />
+                </div>
+                <div>
+                  <div style="font-size: 16px; font-weight: bold; opacity: 0.95; line-height: 1.1;">2SND Technologies</div>
+                  <div style="font-size: 11px; opacity: 0.8; margin-top: 1px;">Plateforme DAO</div>
+                </div>
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 11px; opacity: 0.8;">${new Date().toLocaleDateString("fr-FR", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}</div>
+            </div>
+          </div>
+          <h3 style="margin: 0; font-size: 20px; font-weight: bold; letter-spacing: 0.5px;">Rapport des DAO Terminés</h3>
+        </div>
+
+        <!-- Tableau des DAO -->
+        <div style="margin-bottom: 20px;">
+          <h4 style="color: #1e3a8a; margin: 0 0 15px 0; font-size: 14px; font-weight: bold; border-bottom: 2px solid #1e3a8a; padding-bottom: 5px;">DÉTAILS DES DAO TERMINÉS</h4>
+          <div style="border: 1px solid #1e3a8a;">
+            <table style="width: 100%; border-collapse: collapse; margin: 0; font-size: 11px;">
+              <thead>
+                <tr style="background: #1e3a8a; color: white;">
+                  <th style="padding: 8px; text-align: left; font-weight: bold; border-right: 1px solid #fff;">Nom</th>
+                  <th style="padding: 8px; text-align: left; font-weight: bold; border-right: 1px solid #fff;">Type de DAO</th>
+                  <th style="padding: 8px; text-align: left; font-weight: bold; border-right: 1px solid #fff;">Référence</th>
+                  <th style="padding: 8px; text-align: left; font-weight: bold; border-right: 1px solid #fff;">Autorité contractante</th>
+                  <th style="padding: 8px; text-align: left; font-weight: bold; border-right: 1px solid #fff;">Chef Projet</th>
+                  <th style="padding: 8px; text-align: left; font-weight: bold; border-right: 1px solid #fff;">Groupement</th>
+                  <th style="padding: 8px; text-align: center; font-weight: bold;">Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filteredDaos.map((dao, index) => {
+                  const rowColor = index % 2 === 0 ? "#f8fafc" : "white";
+
+                  return `
+                    <tr style="background: ${rowColor}; border-bottom: 1px solid #e2e8f0;">
+                      <td style="padding: 8px; font-weight: bold; border-right: 1px solid #e2e8f0;">${dao.numero}</td>
+                      <td style="padding: 8px; border-right: 1px solid #e2e8f0;">AMI</td>
+                      <td style="padding: 8px; border-right: 1px solid #e2e8f0;">${dao.reference}</td>
+                      <td style="padding: 8px; border-right: 1px solid #e2e8f0;">${dao.autorite || "N/A"}</td>
+                      <td style="padding: 8px; border-right: 1px solid #e2e8f0;">${dao.chef_projet || "N/A"}</td>
+                      <td style="padding: 8px; border-right: 1px solid #e2e8f0;">-</td>
+                      <td style="padding: 8px; text-align: center;">
+                        <span style="background: #dbeafe; color: #1e3a8a; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;">
+                          TERMINÉE
+                        </span>
+                      </td>
+                    </tr>
+                  `;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Pied de page -->
+        <div style="text-align: center; font-size: 11px; color: #666; margin-top: 30px; border-top: 1px solid #1e3a8a; padding-top: 15px;">
+          <p style="margin-bottom: 5px; font-weight: bold; color: #1e3a8a;">Total: ${filteredDaos.length} DAO${filteredDaos.length > 1 ? "s" : ""} terminé${filteredDaos.length > 1 ? "s" : ""}</p>
+          <p style="margin-bottom: 3px;">Rapport généré automatiquement via la plateforme 2SND Technologies DAO</p>
+          <p style="font-size: 10px; color: #888;">${new Date().toLocaleDateString("fr-FR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}</p>
+        </div>
+      `;
+
+      document.body.appendChild(pdfContainer);
+
+      // Capturer le conteneur avec html2canvas
+      const canvas = await html2canvas(pdfContainer, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: "#ffffff",
+        logging: false,
+        width: pdfContainer.scrollWidth,
+        height: pdfContainer.scrollHeight,
+        windowWidth: pdfContainer.scrollWidth,
+        windowHeight: pdfContainer.scrollHeight,
+      });
+
+      // Créer le PDF
+      const imgData = canvas.toDataURL("image/jpeg", 0.8);
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      const imgWidth = pdfWidth - 10;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 5;
+
+      pdf.addImage(imgData, "JPEG", 5, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + 5;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 5, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      // Sauvegarder le PDF
+      pdf.save(`dao-termines-report-${new Date().toISOString().split("T")[0]}.pdf`);
+
+      // Nettoyer
+      document.body.removeChild(pdfContainer);
+      document.body.removeChild(loadingIndicator);
+
+      console.log("PDF des DAO terminés généré avec succès");
+    } catch (error) {
+      console.error("Erreur lors de la génération du PDF:", error);
+
+      // Nettoyer en cas d'erreur
+      const loadingIndicator = document.querySelector("[style*='position: fixed']");
+      if (loadingIndicator) {
+        document.body.removeChild(loadingIndicator);
+      }
+
+      const pdfContainer = document.querySelector("[style*='position: absolute']");
+      if (pdfContainer) {
+        document.body.removeChild(pdfContainer);
+      }
+    }
   };
 
   useEffect(() => {
@@ -146,6 +332,15 @@ export default function HistoryPage() {
               <h3 className="text-xl font-bold text-gray-900">Historique des DAO terminés</h3>
 
               <div className="flex items-center gap-3">
+                <button
+                  onClick={handlePrintPdf}
+                  className="no-print px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Imprimer PDF
+                </button>
                 <input
                   placeholder="Rechercher (n°, objet, équipe...)"
                   className="px-3 py-2 border rounded w-72 text-sm"
@@ -170,8 +365,74 @@ export default function HistoryPage() {
       </header>
 
       <main className="p-6">
+        {/* Print-specific report layout */}
+        <div className="print-only hidden">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold mb-4">Rapport des DAO Terminés</h1>
+            <p className="text-sm text-gray-600">
+              Généré le {new Date().toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </p>
+          </div>
+
+          {filteredDaos.length > 0 && (
+            <table className="w-full border-collapse border border-gray-300 mb-6">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border border-gray-300 px-4 py-2 text-left">Nom</th>
+                  <th className="border border-gray-300 px-4 py-2 text-left">Type de DAO</th>
+                  <th className="border border-gray-300 px-4 py-2 text-left">Référence</th>
+                  <th className="border border-gray-300 px-4 py-2 text-left">Autorité contractante</th>
+                  <th className="border border-gray-300 px-4 py-2 text-left">Chef Projet</th>
+                  <th className="border border-gray-300 px-4 py-2 text-left">Groupement</th>
+                  <th className="border border-gray-300 px-4 py-2 text-left">Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDaos.map((dao) => (
+                  <tr key={dao.id}>
+                    <td className="border border-gray-300 px-4 py-2">{dao.numero}</td>
+                    <td className="border border-gray-300 px-4 py-2">AMI</td>
+                    <td className="border border-gray-300 px-4 py-2">{dao.reference}</td>
+                    <td className="border border-gray-300 px-4 py-2">{dao.autorite}</td>
+                    <td className="border border-gray-300 px-4 py-2">{dao.chef_projet || "N/A"}</td>
+                    <td className="border border-gray-300 px-4 py-2">-</td>
+                    <td className="border border-gray-300 px-4 py-2">
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                        TERMINÉE
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <div className="text-center mt-8 mb-4">
+            <p className="font-semibold">
+              Total: {filteredDaos.length} DAO{filteredDaos.length > 1 ? 's' : ''} terminé{filteredDaos.length > 1 ? 's' : ''}
+            </p>
+          </div>
+
+          <div className="text-center text-sm text-gray-600 mt-12">
+            <p>Rapport généré automatiquement via la plateforme 2SND Technologies DAO</p>
+            <p>{new Date().toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}</p>
+          </div>
+        </div>
+
         {/* DAO list */}
-        <section>
+        <section className="no-print">
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm text-gray-500">
               DAOs terminés uniquement
@@ -251,6 +512,31 @@ export default function HistoryPage() {
           )}
         </section>
       </main>
+
+      <style jsx>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          .print-only {
+            display: block !important;
+          }
+          body {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
+          table {
+            page-break-inside: auto;
+          }
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+        }
+        .print-only {
+          display: none;
+        }
+      `}</style>
     </div>
   );
 }
