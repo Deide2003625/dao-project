@@ -337,14 +337,19 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - name: Create .env.local from existing .env secret
+        # ── Comment configurer ce secret ──────────────────────────────
+        # 1. Copiez le contenu COMPLET de votre fichier .env Docker
+        # 2. Settings → Secrets and variables → Actions → New repository secret
+        # 3. Nom : ENV_FILE  |  Valeur : collez le contenu du .env
+        # C'est tout – pas besoin de créer un secret par variable.
+        # ──────────────────────────────────────────────────────────────
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
         run: |
-          # ── Comment configurer ce secret ──────────────────────────────
-          # 1. Copiez le contenu COMPLET de votre fichier .env Docker
-          # 2. Settings → Secrets and variables → Actions → New repository secret
-          # 3. Nom : ENV_FILE  |  Valeur : collez le contenu du .env
-          # C'est tout – pas besoin de créer un secret par variable.
-          # ──────────────────────────────────────────────────────────────
-          printf '%s' "${{ secrets.ENV_FILE }}" > .env.local
+          # La valeur est passée via une variable d'environnement,
+          # jamais injectée directement dans le script shell.
+          # Cela évite toute erreur de syntaxe avec (, ), !, &, etc.
+          printf '%s' "$ENV_FILE_CONTENT" > .env.local
           echo "✅ .env.local créé depuis le secret ENV_FILE"
 
       - name: Fix next.config.js – remove unsupported eslint key
