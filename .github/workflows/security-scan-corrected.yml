@@ -344,7 +344,7 @@ jobs:
           # 3. Nom : ENV_FILE  |  Valeur : collez le contenu du .env
           # C'est tout – pas besoin de créer un secret par variable.
           # ──────────────────────────────────────────────────────────────
-          echo "${{ secrets.ENV_FILE }}" > .env.local
+          printf '%s' "${{ secrets.ENV_FILE }}" > .env.local
           echo "✅ .env.local créé depuis le secret ENV_FILE"
 
       - name: Fix next.config.js – remove unsupported eslint key
