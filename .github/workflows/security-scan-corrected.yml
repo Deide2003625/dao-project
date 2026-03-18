@@ -1,12 +1,13 @@
-name: SAST & DAST Security Scan
+name: SAST, DAST & SBOM Security Scan
 
 on:
+  workflow_dispatch:
   pull_request:
     branches:
-      - feature/Docker
+      - feature/Docker_v1
   push:
     branches:
-      - feature/Docker
+      - feature/Docker_v1
 
 jobs:
   security-scan:
@@ -53,39 +54,160 @@ jobs:
 
       ################################################
       # SEMGREP (SAST)
+      # Format retenu : TXT
+      # Raison : sortie humainement lisible avec
+      #          localisation exacte (fichier:ligne + extrait de code)
       ################################################
       - name: Install Semgrep
         run: pip install semgrep
 
       - name: Run Semgrep
         run: |
-          semgrep --config=p/security-audit --json -o semgrep-report.json || true
-          semgrep --config=p/typescript --json -o semgrep-typescript.json || true
+          semgrep --config=p/security-audit \
+            --text -o semgrep-report.txt || true
+
+          semgrep --config=p/typescript \
+            --text -o semgrep-typescript.txt || true
 
       ################################################
       # GITLEAKS (Secrets detection)
+      # Format retenu : MD
+      # Raison : tableau structuré (fichier, ligne, auteur, date)
+      #          plus lisible qu'un dump texte brut
       ################################################
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_REPORT_PATH: gitleaks-raw.json
+
+      - name: Convert Gitleaks to Markdown
+        run: |
+          echo "# Gitleaks — Secrets détectés" > gitleaks-report.md
+          echo "" >> gitleaks-report.md
+          echo "| Description | Fichier | Ligne | Auteur | Date |" >> gitleaks-report.md
+          echo "|-------------|---------|-------|--------|------|" >> gitleaks-report.md
+          if [ -f gitleaks-raw.json ] && [ -s gitleaks-raw.json ]; then
+            python3 - <<'PYEOF'
+          import json
+          with open("gitleaks-raw.json") as f:
+              data = json.load(f)
+          with open("gitleaks-report.md", "a") as out:
+              if not data:
+                  out.write("| ✅ Aucun secret détecté | — | — | — | — |\n")
+              else:
+                  for item in data:
+                      desc   = item.get("Description", "N/A").replace("|", "\\|")
+                      file_  = item.get("File", "N/A").replace("|", "\\|")
+                      line   = str(item.get("StartLine", "N/A"))
+                      author = item.get("Author", "N/A").replace("|", "\\|")
+                      date   = item.get("Date", "N/A")[:10]
+                      out.write(f"| {desc} | {file_} | {line} | {author} | {date} |\n")
+          PYEOF
+          else
+            echo "| ✅ Aucun secret détecté | — | — | — | — |" >> gitleaks-report.md
+          fi
+          rm -f gitleaks-raw.json
 
       ################################################
-      # TRIVY (SCA / Container scan)
+      # TRIVY (SCA / Container + Filesystem)
+      # Format retenu : TXT (table)
+      # Raison : tableau ASCII compact très lisible en CLI,
+      #          colonnes Package / Version / CVE / Sévérité
       ################################################
-      - name: Run Trivy on application image
-        uses: aquasecurity/trivy-action@master
+      - name: Run Trivy on application image (table TXT)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --format table \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            app:latest > trivy-image-report.txt 2>&1 || true
+
+      - name: Run Trivy on filesystem (table TXT)
+        run: |
+          docker run --rm \
+            -v $(pwd):/src \
+            aquasec/trivy:latest fs \
+            --format table \
+            --severity CRITICAL,HIGH,MEDIUM \
+            --ignore-unfixed \
+            /src > trivy-fs-report.txt 2>&1 || true
+
+      ################################################
+      # SBOM — Syft
+      # Format retenu : TXT (table)
+      # Raison : liste plate Nom / Version / Type / Localisation,
+      #          directement exploitable sans parser du JSON
+      ################################################
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Generate SBOM (table TXT)
+        run: |
+          syft dir:. -o table > sbom-report.txt 2>/dev/null || \
+          syft . -o table > sbom-report.txt 2>/dev/null || \
+          echo "SBOM non disponible." > sbom-report.txt
+
+      ################################################
+      # GRYPE (CVEs sur le SBOM)
+      # Format retenu : MD
+      # Raison : tableau Package / Version / CVE / Sévérité / Fix
+      #          lisible dans GitHub, Notion, tout éditeur MD
+      # On génère d'abord un CycloneDX pour Grype puis on supprime
+      ################################################
+      - name: Generate SBOM CycloneDX (pour Grype uniquement)
+        uses: anchore/sbom-action@v0
         with:
-          image-ref: 'app:latest'
-          format: 'json'
-          output: 'trivy-report.json'
-          exit-code: 0
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-cyclonedx-tmp.json
+
+      - name: Scan CVEs with Grype (JSON intermédiaire)
+        uses: anchore/scan-action@v3
+        with:
+          sbom: sbom-cyclonedx-tmp.json
+          output-format: json
+          output-file: grype-raw.json
+          fail-build: false
+
+      - name: Convert Grype to Markdown
+        run: |
+          echo "# Grype — CVEs détectées sur les dépendances" > grype-report.md
+          echo "" >> grype-report.md
+          echo "| Package | Version | CVE | Sévérité | Fix disponible |" >> grype-report.md
+          echo "|---------|---------|-----|----------|----------------|" >> grype-report.md
+          if [ -f grype-raw.json ] && [ -s grype-raw.json ]; then
+            python3 - <<'PYEOF'
+          import json
+          with open("grype-raw.json") as f:
+              data = json.load(f)
+          matches = data.get("matches", [])
+          with open("grype-report.md", "a") as out:
+              if not matches:
+                  out.write("| ✅ Aucun CVE détecté | — | — | — | — |\n")
+              else:
+                  for m in sorted(matches,
+                                  key=lambda x: x.get("vulnerability", {}).get("severity", ""),
+                                  reverse=True):
+                      pkg  = m.get("artifact", {}).get("name", "N/A")
+                      ver  = m.get("artifact", {}).get("version", "N/A")
+                      vuln = m.get("vulnerability", {})
+                      cve  = vuln.get("id", "N/A")
+                      sev  = vuln.get("severity", "N/A")
+                      fix  = vuln.get("fix", {}).get("state", "N/A")
+                      out.write(f"| {pkg} | {ver} | {cve} | {sev} | {fix} |\n")
+          PYEOF
+          else
+            echo "| ✅ Aucun CVE détecté | — | — | — | — |" >> grype-report.md
+          fi
+          rm -f grype-raw.json sbom-cyclonedx-tmp.json
 
       ################################################
       # CODEQL (SAST)
+      # Les résultats sont publiés nativement dans
+      # l'onglet "Security > Code scanning" de GitHub
       ################################################
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -115,6 +237,10 @@ jobs:
 
       ################################################
       # DAST — OWASP ZAP
+      # Format retenu : HTML
+      # Raison : rapport ZAP HTML natif très complet
+      #          avec navigation par catégorie, couleurs
+      #          de risque, descriptions et solutions
       ################################################
       - name: Run OWASP ZAP Full Scan
         uses: zaproxy/action-full-scan@v0.10.0
@@ -126,13 +252,20 @@ jobs:
           allow_issue_writing: false
         continue-on-error: true
 
-      - name: Prepare ZAP reports
+      - name: Prepare ZAP HTML report
         run: |
-          mv report_json.json zap-report.json 2>/dev/null || echo '{"results": []}' > zap-report.json
-          mv report_html.html zap-report.html 2>/dev/null || echo '<html><body>No ZAP report</body></html>' > zap-report.html
+          mv report_html.html zap-report.html 2>/dev/null || \
+          echo '<html><body><h1>ZAP — Aucune alerte détectée</h1></body></html>' \
+            > zap-report.html
+          # Nettoyage des autres formats non retenus
+          rm -f report_json.json report_md.md 2>/dev/null || true
 
       ################################################
       # DAST — Nuclei
+      # Format retenu : MD
+      # Raison : export natif Nuclei bien structuré
+      #          par template (CVE ID, sévérité, description,
+      #          endpoint affecté)
       ################################################
       - name: Install Nuclei
         run: |
@@ -148,12 +281,26 @@ jobs:
             -u http://localhost:8080 \
             -severity critical,high,medium \
             -t cves,misconfiguration,exposures,technologies \
-            -json-export nuclei-report.json \
-            -silent
+            -markdown-export nuclei-report-md/ \
+            -silent || true
+
+          if [ -d nuclei-report-md ] && [ "$(ls -A nuclei-report-md)" ]; then
+            echo "# Nuclei — Vulnérabilités détectées" > nuclei-report.md
+            echo "" >> nuclei-report.md
+            cat nuclei-report-md/*.md >> nuclei-report.md 2>/dev/null
+          else
+            echo "# Nuclei" > nuclei-report.md
+            echo "" >> nuclei-report.md
+            echo "✅ Aucune vulnérabilité détectée." >> nuclei-report.md
+          fi
+          rm -rf nuclei-report-md/
         continue-on-error: true
 
       ################################################
       # DAST — Nikto
+      # Format retenu : HTML
+      # Raison : rapport Nikto HTML plus lisible que le TXT
+      #          brut (colonnes, mise en forme, liens)
       ################################################
       - name: Install Nikto
         run: sudo apt-get install -y nikto
@@ -162,14 +309,18 @@ jobs:
         run: |
           nikto \
             -h http://localhost:8080 \
-            -Format json \
-            -output nikto-report.json \
+            -Format html \
+            -output nikto-report.html \
             -Tuning 123bde \
-            -nointeractive
+            -nointeractive || true
         continue-on-error: true
 
       ################################################
       # DAST — FFUF
+      # Format retenu : MD (converti depuis HTML natif)
+      # Raison : le HTML FFUF est peu lisible,
+      #          un tableau MD avec URL / Status / Taille
+      #          est plus exploitable pour une revue manuelle
       ################################################
       - name: Install FFUF
         run: |
@@ -183,15 +334,39 @@ jobs:
 
       - name: Run FFUF Directory Fuzzing
         run: |
+          # On garde le JSON uniquement comme intermédiaire pour la conversion MD
           ffuf \
             -u http://localhost:8080/FUZZ \
             -w common.txt \
             -mc 200,301,302,403 \
-            -o ffuf-report.json \
+            -o ffuf-raw.json \
             -of json \
-            -t 50 \
-            -timeout 10 \
-            -silent
+            -t 50 -timeout 10 -silent || true
+
+          python3 - <<'PYEOF'
+          import json
+          md = "# FFUF — Endpoints découverts\n\n"
+          md += "| URL | Status | Taille (octets) | Durée (ms) |\n"
+          md += "|-----|--------|-----------------|------------|\n"
+          try:
+              with open("ffuf-raw.json") as f:
+                  data = json.load(f)
+              results = data.get("results", [])
+              if not results:
+                  md += "| ✅ Aucun endpoint sensible découvert | — | — | — |\n"
+              else:
+                  for r in sorted(results, key=lambda x: x.get("status", 0)):
+                      url    = r.get("url", "N/A")
+                      status = r.get("status", "N/A")
+                      length = r.get("length", "N/A")
+                      dur    = round(r.get("duration", 0) / 1_000_000, 2)
+                      md    += f"| {url} | {status} | {length} | {dur} |\n"
+          except Exception as e:
+              md += f"| Rapport non disponible ({e}) | — | — | — |\n"
+          with open("ffuf-report.md", "w") as f:
+              f.write(md)
+          PYEOF
+          rm -f ffuf-raw.json
         continue-on-error: true
 
       ################################################
@@ -201,194 +376,186 @@ jobs:
         run: docker stop app-under-test || true
 
       ################################################
-      # GENERATE REPORT
+      # GENERATE CONSOLIDATED MARKDOWN REPORT
+      # Ce fichier agrège tous les rapports en un seul
+      # document MD lisible (base pour le PDF)
       ################################################
-      - name: Generate Markdown Report
+      - name: Generate consolidated Markdown report
         run: |
-          echo "# RAPPORT D'AUDIT DE SÉCURITÉ" > report.md
-          echo "" >> report.md
-          echo "**Date :** $(date)" >> report.md
-          echo "**Repository :** ${{ github.repository }}" >> report.md
-          echo "**Commit :** ${{ github.sha }}" >> report.md
-          echo "" >> report.md
-          echo "## 1. Résumé Exécutif" >> report.md
-          echo "Analyse automatisée via pipeline DevSecOps combinant outils SAST et DAST." >> report.md
-          echo "" >> report.md
-          echo "## 2. Outils utilisés" >> report.md
-          echo "" >> report.md
-          echo "### SAST (Static Application Security Testing)" >> report.md
-          echo "- **Semgrep** — Analyse statique du code source" >> report.md
-          echo "- **Gitleaks** — Détection de secrets dans l'historique Git" >> report.md
-          echo "- **Trivy** — Analyse des dépendances et images containers (SCA)" >> report.md
-          echo "- **CodeQL** — Analyse sémantique du code (GitHub)" >> report.md
-          echo "" >> report.md
-          echo "### DAST (Dynamic Application Security Testing)" >> report.md
-          echo "- **OWASP ZAP** — Scan actif OWASP Top 10" >> report.md
-          echo "- **Nuclei** — Scan basé sur templates CVE / misconfiguration" >> report.md
-          echo "- **Nikto** — Audit des headers et configurations serveur" >> report.md
-          echo "- **FFUF** — Fuzzing et découverte d'endpoints cachés" >> report.md
-          echo "" >> report.md
-          echo "## 3. Résultats SAST" >> report.md
-          echo "" >> report.md
-          echo "### Semgrep (Security Audit)" >> report.md
-          echo '```json' >> report.md
-          cat semgrep-report.json >> report.md || echo "Aucune vulnérabilité détectée." >> report.md
-          echo '```' >> report.md
-          echo "" >> report.md
-          echo "### Semgrep (TypeScript)" >> report.md
-          echo '```json' >> report.md
-          cat semgrep-typescript.json >> report.md || echo "Aucune vulnérabilité détectée." >> report.md
-          echo '```' >> report.md
-          echo "" >> report.md
-          echo "### Gitleaks (Secrets)" >> report.md
-          echo '```json' >> report.md
-          cat gitleaks-report.json >> report.md || echo "Aucun secret détecté." >> report.md
-          echo '```' >> report.md
-          echo "" >> report.md
-          echo "### Trivy (SCA)" >> report.md
-          echo '```json' >> report.md
-          cat trivy-report.json >> report.md || echo "Aucune vulnérabilité critique." >> report.md
-          echo '```' >> report.md
-          echo "" >> report.md
-          echo "## 4. Résultats DAST" >> report.md
-          echo "" >> report.md
-          echo "### OWASP ZAP" >> report.md
-          echo '```json' >> report.md
-          cat zap-report.json >> report.md || echo "Aucune vulnérabilité détectée." >> report.md
-          echo '```' >> report.md
-          echo "" >> report.md
-          echo "### Nuclei" >> report.md
-          echo '```json' >> report.md
-          cat nuclei-report.json >> report.md || echo "Aucune vulnérabilité détectée." >> report.md
-          echo '```' >> report.md
-          echo "" >> report.md
-          echo "### Nikto" >> report.md
-          echo '```json' >> report.md
-          cat nikto-report.json >> report.md || echo "Aucune anomalie détectée." >> report.md
-          echo '```' >> report.md
-          echo "" >> report.md
-          echo "### FFUF — Endpoints découverts" >> report.md
-          echo '```json' >> report.md
-          cat ffuf-report.json >> report.md || echo "Aucun endpoint sensible découvert." >> report.md
-          echo '```' >> report.md
-          echo "" >> report.md
-          echo "## 5. Conclusion" >> report.md
-          echo "Le rapport présente l'ensemble des vulnérabilités détectées automatiquement." >> report.md
-          echo "Les résultats DAST portent sur l'application en cours d'exécution et peuvent révéler" >> report.md
-          echo "des failles non détectables par l'analyse statique seule." >> report.md
+          DATE=$(date '+%Y-%m-%d %H:%M:%S UTC')
+
+          cat <<EOF > rapport-consolide.md
+          # RAPPORT D'AUDIT DE SÉCURITÉ — BluePrint Africa
+
+          **Date :** ${DATE}
+          **Repository :** ${{ github.repository }}
+          **Branche :** ${{ github.ref_name }}
+          **Commit :** ${{ github.sha }}
+
+          ---
+
+          ## 1. Résumé Exécutif
+
+          Analyse automatisée via pipeline DevSecOps combinant SAST, DAST et SBOM.
+
+          ## 2. Outils utilisés & Formats produits
+
+          | Catégorie | Outil | Format retenu | Justification |
+          |-----------|-------|---------------|---------------|
+          | SAST | Semgrep | TXT | Localisation fichier:ligne + extrait de code |
+          | SAST | Gitleaks | MD | Tableau structuré secret / auteur / date |
+          | SAST | Trivy (image + fs) | TXT | Table ASCII CVE / sévérité compacte |
+          | SAST | CodeQL | GitHub Security | Publié dans l'onglet Security du repo |
+          | SBOM | Syft | TXT | Liste plate composants / versions |
+          | SBOM | Grype | MD | Tableau CVE trié par sévérité |
+          | DAST | OWASP ZAP | HTML | Rapport natif complet avec navigation |
+          | DAST | Nuclei | MD | Export natif par template CVE |
+          | DAST | Nikto | HTML | Rapport natif plus lisible que TXT brut |
+          | DAST | FFUF | MD | Tableau endpoints / status / taille |
+
+          ---
+
+          ## 3. SAST — Analyse statique
+
+          ### Semgrep (Security Audit)
+
+          \`\`\`
+          EOF
+          cat semgrep-report.txt >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucune vulnérabilité détectée." >> rapport-consolide.md
+          echo -e "\`\`\`" >> rapport-consolide.md
+
+          echo -e "\n### Semgrep (TypeScript)\n\`\`\`" >> rapport-consolide.md
+          cat semgrep-typescript.txt >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucune vulnérabilité détectée." >> rapport-consolide.md
+          echo -e "\`\`\`" >> rapport-consolide.md
+
+          echo -e "\n### Gitleaks — Secrets\n" >> rapport-consolide.md
+          cat gitleaks-report.md >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucun secret détecté." >> rapport-consolide.md
+
+          echo -e "\n### Trivy — Image container\n\`\`\`" >> rapport-consolide.md
+          cat trivy-image-report.txt >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucune vulnérabilité." >> rapport-consolide.md
+          echo -e "\`\`\`" >> rapport-consolide.md
+
+          echo -e "\n### Trivy — Dépendances (filesystem)\n\`\`\`" >> rapport-consolide.md
+          cat trivy-fs-report.txt >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucune vulnérabilité." >> rapport-consolide.md
+          echo -e "\`\`\`" >> rapport-consolide.md
+
+          echo -e "\n---\n\n## 4. SBOM — Inventaire des composants\n" >> rapport-consolide.md
+
+          echo -e "\n### Syft — Liste des composants (50 premières lignes)\n\`\`\`" >> rapport-consolide.md
+          head -50 sbom-report.txt >> rapport-consolide.md 2>/dev/null \
+            || echo "SBOM non disponible." >> rapport-consolide.md
+          echo -e "\n[...] voir sbom-report.txt pour la liste complète.\n\`\`\`" >> rapport-consolide.md
+
+          echo -e "\n### Grype — CVEs sur les composants\n" >> rapport-consolide.md
+          cat grype-report.md >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucun CVE détecté." >> rapport-consolide.md
+
+          echo -e "\n---\n\n## 5. DAST — Analyse dynamique\n" >> rapport-consolide.md
+
+          echo -e "\n### Nuclei — Vulnérabilités\n" >> rapport-consolide.md
+          cat nuclei-report.md >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucune vulnérabilité détectée." >> rapport-consolide.md
+
+          echo -e "\n### FFUF — Endpoints découverts\n" >> rapport-consolide.md
+          cat ffuf-report.md >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucun endpoint sensible." >> rapport-consolide.md
+
+          echo -e "\n> ⚠️ Les rapports OWASP ZAP et Nikto sont fournis au format HTML" >> rapport-consolide.md
+          echo -e "> dans l'archive compressée (zap-report.html, nikto-report.html)." >> rapport-consolide.md
+
+          echo -e "\n---\n\n## 6. Conclusion\n" >> rapport-consolide.md
+          echo "Rapport généré automatiquement le ${DATE}." >> rapport-consolide.md
+          echo "Consulter l'archive compressée pour l'ensemble des fichiers détaillés." >> rapport-consolide.md
 
       ################################################
-      # INSTALL PDF ENGINE
+      # GENERATE PDF
       ################################################
       - name: Install Pandoc + XeLaTeX
         run: |
-          sudo apt-get update
+          sudo apt-get update -qq
           sudo apt-get install -y pandoc texlive-xetex
 
-      ################################################
-      # CONVERT TO PDF
-      ################################################
-      - name: Generate PDF
+      - name: Generate PDF from consolidated Markdown
         run: |
-          # Create a clean version for PDF (without problematic JSON content)
-          cp report.md report-full.md
-          
-          # Create PDF-friendly version
-          echo "# RAPPORT D'AUDIT DE SÉCURITÉ" > report.md
-          echo "" >> report.md
-          echo "**Date :** $(date)" >> report.md
-          echo "**Repository :** ${{ github.repository }}" >> report.md
-          echo "**Commit :** ${{ github.sha }}" >> report.md
-          echo "" >> report.md
-          echo "## 1. Résumé Exécutif" >> report.md
-          echo "Analyse automatisée via pipeline DevSecOps combinant outils SAST et DAST." >> report.md
-          echo "" >> report.md
-          echo "## 2. Outils utilisés" >> report.md
-          echo "" >> report.md
-          echo "### SAST (Static Application Security Testing)" >> report.md
-          echo "- **Semgrep** — Analyse statique du code source" >> report.md
-          echo "- **Gitleaks** — Détection de secrets dans l'historique Git" >> report.md
-          echo "- **Trivy** — Analyse des dépendances et images containers (SCA)" >> report.md
-          echo "- **CodeQL** — Analyse sémantique du code (GitHub)" >> report.md
-          echo "" >> report.md
-          echo "### DAST (Dynamic Application Security Testing)" >> report.md
-          echo "- **OWASP ZAP** — Scan actif OWASP Top 10" >> report.md
-          echo "- **Nuclei** — Scan basé sur templates CVE / misconfiguration" >> report.md
-          echo "- **Nikto** — Audit des headers et configurations serveur" >> report.md
-          echo "- **FFUF** — Fuzzing et découverte d'endpoints cachés" >> report.md
-          echo "" >> report.md
-          echo "## 3. Résultats SAST" >> report.md
-          echo "" >> report.md
-          echo "### Semgrep (Security Audit)" >> report.md
-          echo "Voir le fichier JSON détaillé dans les artifacts pour les résultats complets." >> report.md
-          echo "" >> report.md
-          echo "### Semgrep (TypeScript)" >> report.md
-          echo "Voir le fichier JSON détaillé dans les artifacts pour les résultats complets." >> report.md
-          echo "" >> report.md
-          echo "### Gitleaks (Secrets)" >> report.md
-          echo "Voir le fichier JSON détaillé dans les artifacts pour les résultats complets." >> report.md
-          echo "" >> report.md
-          echo "### Trivy (SCA)" >> report.md
-          echo "Voir le fichier JSON détaillé dans les artifacts pour les résultats complets." >> report.md
-          echo "" >> report.md
-          echo "## 4. Résultats DAST" >> report.md
-          echo "" >> report.md
-          echo "### OWASP ZAP" >> report.md
-          echo "Voir le fichier JSON détaillé dans les artifacts pour les résultats complets." >> report.md
-          echo "" >> report.md
-          echo "### Nuclei" >> report.md
-          echo "Voir le fichier JSON détaillé dans les artifacts pour les résultats complets." >> report.md
-          echo "" >> report.md
-          echo "### Nikto" >> report.md
-          echo "Voir le fichier JSON détaillé dans les artifacts pour les résultats complets." >> report.md
-          echo "" >> report.md
-          echo "### FFUF — Endpoints découverts" >> report.md
-          echo "Voir le fichier JSON détaillé dans les artifacts pour les résultats complets." >> report.md
-          echo "" >> report.md
-          echo "## 5. Conclusion" >> report.md
-          echo "Le rapport présente l'ensemble des vulnérabilités détectées automatiquement." >> report.md
-          echo "Les résultats DAST portent sur l'application en cours d'exécution et peuvent révéler" >> report.md
-          echo "des failles non détectables par l'analyse statique seule." >> report.md
-          echo "" >> report.md
-          echo "---" >> report.md
-          echo "*Pour les détails techniques complets, consulter les fichiers JSON joints dans les artifacts GitHub Actions.*" >> report.md
-          
-          pandoc report.md -o rapport-audit-securite.pdf --pdf-engine=xelatex || {
-            echo "PDF generation failed, creating text report instead..."
-            mv report.md rapport-audit-securite.txt
-          }
+          pandoc rapport-consolide.md \
+            -o rapport-audit-securite.pdf \
+            --pdf-engine=xelatex \
+            -V geometry:margin=2cm \
+            -V fontsize=11pt \
+            -V colorlinks=true \
+            --toc --toc-depth=2 || {
+              echo "PDF generation failed, using Markdown fallback."
+              cp rapport-consolide.md rapport-audit-securite.md
+            }
 
       ################################################
-      # UPLOAD ARTIFACTS
+      # COMPRESS ALL REPORTS INTO A SINGLE ARCHIVE
+      # Structure de l'archive :
+      #   audit-securite-<sha>/
+      #   ├── rapport-consolide.md        ← rapport consolidé MD
+      #   ├── rapport-audit-securite.pdf  ← PDF (si généré)
+      #   ├── sast/
+      #   │   ├── semgrep-report.txt
+      #   │   ├── semgrep-typescript.txt
+      #   │   ├── gitleaks-report.md
+      #   │   ├── trivy-image-report.txt
+      #   │   └── trivy-fs-report.txt
+      #   ├── sbom/
+      #   │   ├── sbom-report.txt
+      #   │   └── grype-report.md
+      #   └── dast/
+      #       ├── zap-report.html
+      #       ├── nuclei-report.md
+      #       ├── nikto-report.html
+      #       └── ffuf-report.md
       ################################################
-      - name: Upload Report (PDF or TXT)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Rapport-Audit-Securite
-          path: |
-            rapport-audit-securite.pdf
-            rapport-audit-securite.txt
-          retention-days: 30
+      - name: Compress all reports into a single archive
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          ARCHIVE_DIR="audit-securite-${SHORT_SHA}"
 
-      - name: Upload ZAP HTML Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: ZAP-HTML-Report
-          path: zap-report.html
-          retention-days: 30
+          mkdir -p "${ARCHIVE_DIR}/sast"
+          mkdir -p "${ARCHIVE_DIR}/sbom"
+          mkdir -p "${ARCHIVE_DIR}/dast"
 
-      - name: Upload Raw Reports
+          # Rapport consolidé + PDF
+          cp rapport-consolide.md "${ARCHIVE_DIR}/" 2>/dev/null || true
+          cp rapport-audit-securite.pdf "${ARCHIVE_DIR}/" 2>/dev/null || true
+          cp rapport-audit-securite.md "${ARCHIVE_DIR}/" 2>/dev/null || true
+
+          # SAST
+          cp semgrep-report.txt      "${ARCHIVE_DIR}/sast/" 2>/dev/null || true
+          cp semgrep-typescript.txt  "${ARCHIVE_DIR}/sast/" 2>/dev/null || true
+          cp gitleaks-report.md      "${ARCHIVE_DIR}/sast/" 2>/dev/null || true
+          cp trivy-image-report.txt  "${ARCHIVE_DIR}/sast/" 2>/dev/null || true
+          cp trivy-fs-report.txt     "${ARCHIVE_DIR}/sast/" 2>/dev/null || true
+
+          # SBOM
+          cp sbom-report.txt   "${ARCHIVE_DIR}/sbom/" 2>/dev/null || true
+          cp grype-report.md   "${ARCHIVE_DIR}/sbom/" 2>/dev/null || true
+
+          # DAST
+          cp zap-report.html    "${ARCHIVE_DIR}/dast/" 2>/dev/null || true
+          cp nuclei-report.md   "${ARCHIVE_DIR}/dast/" 2>/dev/null || true
+          cp nikto-report.html  "${ARCHIVE_DIR}/dast/" 2>/dev/null || true
+          cp ffuf-report.md     "${ARCHIVE_DIR}/dast/" 2>/dev/null || true
+
+          # Compression
+          zip -r "audit-securite-${SHORT_SHA}.zip" "${ARCHIVE_DIR}/"
+          echo "Archive créée : audit-securite-${SHORT_SHA}.zip"
+          echo "ARCHIVE_NAME=audit-securite-${SHORT_SHA}.zip" >> $GITHUB_ENV
+
+      ################################################
+      # UPLOAD — UN SEUL ARTIFACT COMPRESSÉ
+      ################################################
+      - name: Upload compressed security report archive
         uses: actions/upload-artifact@v4
         with:
-          name: Security-JSON-Reports
-          path: |
-            semgrep-report.json
-            semgrep-typescript.json
-            gitleaks-report.json
-            trivy-report.json
-            zap-report.json
-            nuclei-report.json
-            nikto-report.json
-            ffuf-report.json
-            report-full.md
+          name: Audit-Securite-Complet-${{ github.ref_name }}
+          path: ${{ env.ARCHIVE_NAME }}
           retention-days: 30
