@@ -1,101 +1,68 @@
-# Fichiers et dossiers à exclure du build Docker
+# ══════════════════════════════════════════════════════════════
+# .dockerignore — Fichiers exclus du contexte de build Docker
+#
+# Ces fichiers ne seront jamais copiés dans l'image Docker.
+# Réduit la taille du contexte et évite les fuites de secrets.
+# ══════════════════════════════════════════════════════════════
 
-# Dépendances
-node_modules
+# Dépendances — seront réinstallées dans le conteneur
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Fichiers de build
-.next
-out
-build
-dist
+# Build Next.js — sera regénéré dans le conteneur
+.next/
+out/
 
-# Fichiers d'environnement (sécurité)
+# Fichiers d'environnement — ne jamais inclure dans l'image
+.env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.production
+.env.development
+.env.*.local
 
-# Fichiers système et IDE
-.git
+# Git
+.git/
 .gitignore
-README.md
-README-SEEDS.md
-guide.md
-compte-rendu-recette.md
+.gitattributes
 
-# Dossiers de configuration IDE
-.vscode
-.idea
-*.swp
-*.swo
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
 
 # Logs
-logs
+logs/
 *.log
 
-# Fichiers de cache
-.cache
-.parcel-cache
-.eslintcache
-
-# Fichiers de test et coverage
-coverage
-.nyc_output
-__tests__
+# Tests
+__tests__/
 *.test.js
 *.test.ts
-*.test.tsx
 *.spec.js
 *.spec.ts
-*.spec.tsx
+coverage/
+.nyc_output/
 
-# Documentation
-docs
-*.md
-
-# Scripts et outils
-scripts
-fix-font-paths.ps1
-
-# Fichiers temporaires
-.tmp
-.temp
-*.tmp
-*.temp
-
-# OS
+# IDE et outils
+.vscode/
+.idea/
+*.swp
+*.swo
 .DS_Store
 Thumbs.db
 
-# Docker (éviter la récursion)
-Dockerfile
-docker-compose*.yml
-.dockerignore
+# Documentation
+README*
+CHANGELOG*
+docs/
 
-# Fichiers de configuration locaux
-.eslintrc*
-.prettierrc*
-.editorconfig
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
 
-# Uploads et fichiers utilisateurs (à monter en volume)
-uploads
-public/uploads
-
-# Base de données locale (si présente)
-*.sql
-*.db
-*.sqlite
-
-# Certificats SSL locaux
-*.pem
-*.key
-*.crt
-
-# Backup et archives
-*.backup
-*.zip
-*.tar.gz
-*.rar
+# Données locales
+uploads/
+backups/

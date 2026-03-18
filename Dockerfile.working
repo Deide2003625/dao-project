@@ -1,37 +1,110 @@
-# Dockerfile fonctionnel pour Next.js
-FROM node:20-alpine
+# ══════════════════════════════════════════════════════════════
+# DOCKERFILE — Next.js Production (Multi-stage)
+#
+# Stage 1 : deps     → installation des dépendances
+# Stage 2 : builder  → build de l'application Next.js
+# Stage 3 : runner   → image finale légère (prod uniquement)
+#
+# Le port est configurable via la variable PORT
+# Valeur par défaut : 3000
+# Modifier dans .env → APP_PORT=XXXX
+# ══════════════════════════════════════════════════════════════
 
-# Variables d'environnement
+# ── Stage 1 : Installation des dépendances ───────────────────
+FROM node:20-alpine AS deps
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+
+# Installation complète (prod + dev) pour le stage builder
+# autoprefixer, postcss, tailwindcss sont maintenant dans
+# dependencies donc npm ci les installe sans flag spécial
+RUN npm ci && npm cache clean --force
+
+# Copie pour le stage builder
+RUN cp -r node_modules node_modules_all
+
+# Installation prod uniquement pour le stage runner
+RUN npm ci --only=production && npm cache clean --force
+
+
+# ── Stage 2 : Build de l'application ─────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# NODE_ENV=production — plus de warning Next.js
+# autoprefixer/postcss/tailwindcss sont dans dependencies
+# donc disponibles même en prod
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Répertoire de travail
-WORKDIR /app
+# ── Variables factices pour le build ─────────────────────────
+# /api/check-email et d'autres routes valident les variables
+# DB à l'import du module pendant "Collecting page data".
+# Ces valeurs placeholder satisfont la validation sans exposer
+# les vraies credentials.
+# Les vraies valeurs sont injectées au runtime via docker-compose.
+ARG DB_HOST=mysql
+ARG DB_PORT=3306
+ARG DB_USER=build_placeholder
+ARG DB_PASSWORD=build_placeholder
+ARG DB_NAME=dao
+ARG NEXTAUTH_URL=http://localhost:3000
+ARG NEXTAUTH_SECRET=build_placeholder_secret_32_chars_minimum_x
 
-# Copier les fichiers de dépendances
-COPY package*.json ./
+ENV DB_HOST=$DB_HOST
+ENV DB_PORT=$DB_PORT
+ENV DB_USER=$DB_USER
+ENV DB_PASSWORD=$DB_PASSWORD
+ENV DB_NAME=$DB_NAME
+ENV NEXTAUTH_URL=$NEXTAUTH_URL
+ENV NEXTAUTH_SECRET=$NEXTAUTH_SECRET
 
-# Installer toutes les dépendances
-RUN npm ci && npm cache clean --force
+# Dépendances complètes depuis stage 1
+COPY --from=deps /app/node_modules_all ./node_modules
 
-# Installer les dépendances de build manquantes
-RUN npm install --save-dev autoprefixer postcss
-
-# Copier tout le code source
+# Copier le code source
 COPY . .
 
-# Créer un utilisateur non-root pour la sécurité
+# Build Next.js
+RUN npm run build
+
+
+# ── Stage 3 : Image de production finale ─────────────────────
+FROM node:20-alpine AS runner
+
+ARG PORT=3000
+ENV PORT=$PORT
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+WORKDIR /app
+
+RUN apk add --no-cache curl
+
 RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 -G nodejs nextjs
+    adduser --system --uid 1001 --ingroup nodejs nextjs
 
-# Changer les permissions
-RUN chown -R nextjs:nodejs /app
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 
-# Changer vers l'utilisateur non-root
+# Dépendances prod uniquement — image légère
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+
+RUN mkdir -p /app/uploads /app/logs && \
+    chown -R nextjs:nodejs /app/uploads /app/logs
+
 USER nextjs
 
-# Exposer le port
-EXPOSE 3000
+EXPOSE $PORT
 
-# Démarrer l'application sans build (mode développement dans Docker)
-CMD ["npm", "run", "dev"]
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
+  CMD curl -f http://localhost:$PORT/api/health || exit 1
+
+CMD ["sh", "-c", "npm run start -- -p $PORT"]

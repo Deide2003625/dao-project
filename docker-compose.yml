@@ -1,36 +1,49 @@
+# ══════════════════════════════════════════════════════════════
+# CONFIGURATION DES PORTS — fichier .env
+#
+# Tous les ports sont configurables via le fichier .env
+# à la racine du projet. Ne jamais modifier ce fichier
+# directement pour changer les ports.
+#
+# Exemple de fichier .env :
+#   APP_PORT=3000
+#   MYSQL_PORT=3306
+#
+# Valeurs par défaut utilisées si .env absent ou variable non définie.
+# ══════════════════════════════════════════════════════════════
 
 services:
-  # Application Next.js
+
+  # ── Application Next.js ───────────────────────────────────
   app:
     build:
       context: .
       dockerfile: Dockerfile.working
       args:
         NODE_ENV: production
+        PORT: ${APP_PORT:-3000}        # Passe le port au build Docker
     container_name: dao-app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:3000"        # Défaut : 3000
     environment:
       - NODE_ENV=production
       - DB_HOST=mysql
       - DB_PORT=3306
-      - DB_USER=dao_user
-      - DB_PASSWORD=dao_secure_password_2024
-      - DB_NAME=dao_project
-      - NEXTAUTH_URL=http://localhost:3000
-      - NEXTAUTH_SECRET=your_super_secret_key_change_this_in_production
-      - EMAIL_HOST=smtp.gmail.com
-      - EMAIL_PORT=587
-      - EMAIL_USER=your_email@gmail.com
-      - EMAIL_PASSWORD=your_app_password
-      - EMAIL_FROM=noreply@dao-project.com
-      - EMAIL_FROM_NAME=DAO Project
+      - DB_USER=${MYSQL_USER:-dao_user}
+      - DB_PASSWORD=${MYSQL_PASSWORD:-dao_secure_password_2024}
+      - DB_NAME=${MYSQL_DATABASE:-dao}
+      - NEXTAUTH_URL=http://localhost:${APP_PORT:-3000}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your_super_secret_key_change_this_in_production}
+      - EMAIL_HOST=${EMAIL_HOST:-smtp.gmail.com}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_USER=${EMAIL_USER:-your_email@gmail.com}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD:-your_app_password}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@dao-project.com}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-DAO Project}
     depends_on:
       mysql:
         condition: service_healthy
-      redis:
-        condition: service_started
     volumes:
       - app_uploads:/app/uploads
       - app_logs:/app/logs
@@ -43,18 +56,18 @@ services:
       retries: 3
       start_period: 40s
 
-  # Base de données MySQL
+  # ── Base de données MySQL ──────────────────────────────────
   mysql:
     image: mysql:8.0
     container_name: dao-mysql
     restart: unless-stopped
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT:-3306}:3306"      # Défaut : 3306
     environment:
-      - MYSQL_ROOT_PASSWORD=root_secure_password_2024
-      - MYSQL_DATABASE=dao_project
-      - MYSQL_USER=dao_user
-      - MYSQL_PASSWORD=dao_secure_password_2024
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root_secure_password_2024}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-dao}
+      - MYSQL_USER=${MYSQL_USER:-dao_user}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-dao_secure_password_2024}
       - MYSQL_CHARACTER_SET_SERVER=utf8mb4
       - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
     volumes:
@@ -71,103 +84,32 @@ services:
       --slow-query-log-file=/var/log/mysql/slow.log
       --long-query-time=2
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "dao_user", "-pdao_secure_password_2024"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost",
+             "-u", "${MYSQL_USER:-dao_user}",
+             "-p${MYSQL_PASSWORD:-dao_secure_password_2024}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
 
-  # Redis pour le cache et les sessions
-  redis:
-    image: redis:7-alpine
-    container_name: dao-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-      - redis_config:/usr/local/etc/redis
-    networks:
-      - dao-network
-    command: >
-      redis-server
-      --appendonly yes
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      --save 900 1
-      --save 300 10
-      --save 60 10000
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
 
-  # Nginx reverse proxy
-  nginx:
-    image: nginx:alpine
-    container_name: dao-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - nginx_logs:/var/log/nginx
-      - ssl_certs:/etc/nginx/ssl
-    depends_on:
-      - app
-    networks:
-      - dao-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # PHPMyAdmin pour la gestion de la BDD (optionnel)
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin:latest
-    container_name: dao-phpmyadmin
-    restart: unless-stopped
-    ports:
-      - "8080:80"
-    environment:
-      - PMA_HOST=mysql
-      - PMA_USER=dao_user
-      - PMA_PASSWORD=dao_secure_password_2024
-      - MYSQL_ROOT_PASSWORD=root_secure_password_2024
-    depends_on:
-      - mysql
-    networks:
-      - dao-network
-    profiles:
-      - admin
-
-# Volumes persistants
+# ── Volumes persistants ────────────────────────────────────
 volumes:
   mysql_data:
     driver: local
   mysql_config:
     driver: local
-  redis_data:
-    driver: local
-  redis_config:
-    driver: local
   app_uploads:
     driver: local
   app_logs:
     driver: local
-  nginx_logs:
-    driver: local
-  ssl_certs:
-    driver: local
 
-# Réseau privé
+# ── Réseau privé ───────────────────────────────────────────
 networks:
   dao-network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: "${DOCKER_SUBNET:-172.25.0.0/16}"
+          gateway: "${DOCKER_GATEWAY:-172.25.0.1}"
