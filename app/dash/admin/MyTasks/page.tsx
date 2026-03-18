@@ -1,8 +1,8 @@
 "use client";
-
+ 
 import { useState, useEffect, useRef } from "react";
 import { CheckCircle, FileText, Search, ChevronDown, Minus, Plus, Send, X, AtSign, Trash2 } from "lucide-react";
-
+ 
 /* =======================
    TYPES
 ======================= */
@@ -21,7 +21,7 @@ interface Task {
   date_echeance?: string;
   priorite?: string;
 }
-
+ 
 interface Comment {
   id: number;
   task_id: number;
@@ -30,13 +30,13 @@ interface Comment {
   created_at: string;
   username?: string;
 }
-
+ 
 interface User {
   id: number;
   username: string;
   role: string;
 }
-
+ 
 /* =======================
    COMPONENT
 ======================= */
@@ -57,7 +57,7 @@ export default function MyTasks() {
   const [commentingTask, setCommentingTask] = useState<number | null>(null);
   const [mentionPosition, setMentionPosition] = useState<{top: number; left: number} | null>(null);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
-
+ 
   // Fetch current user
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -66,38 +66,38 @@ export default function MyTasks() {
       console.log('Current user:', user);
     }
   }, []);
-
+ 
   // Fetch tasks from API
   const fetchTasks = async () => {
     try {
       setLoading(true);
       setError(null);
-
+ 
       const storedUser = localStorage.getItem("user");
       if (!storedUser) {
         setError("Utilisateur non connecté");
         return;
       }
-
+ 
       const user = JSON.parse(storedUser);
       const userId = user.id;
-
+ 
       if (!userId) {
         setError("ID utilisateur invalide");
         return;
       }
-
+ 
       console.log('Fetching tasks for user:', userId);
-      
+     
       const response = await fetch(`/api/member-tasks?userId=${userId}`);
-      
+     
       if (!response.ok) {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
-
+ 
       const data = await response.json();
       console.log('Tasks response:', data);
-
+ 
       if (data.success && Array.isArray(data.data)) {
         setTasks(data.data);
         // Initialize progress state
@@ -116,11 +116,11 @@ export default function MyTasks() {
       setLoading(false);
     }
   };
-
+ 
   useEffect(() => {
     fetchTasks();
   }, []);
-
+ 
   // Fetch users for mentions
   useEffect(() => {
     const fetchUsers = async () => {
@@ -138,29 +138,29 @@ export default function MyTasks() {
         console.error('Erreur lors du chargement des utilisateurs:', error);
       }
     };
-
+ 
     fetchUsers();
   }, []);
-
+ 
   // Fetch comments for a task
   const fetchComments = async (taskId: number) => {
     console.log(`Fetching comments for task ${taskId}...`);
     try {
       const response = await fetch(`/api/messages?task_id=${taskId}`);
       console.log('Response status:', response.status);
-      
+     
       const responseText = await response.text();
       console.log('Response text:', responseText);
-      
+     
       if (!response.ok) {
         console.error('Response not ok:', response.status, responseText);
         return;
       }
-      
+     
       try {
         const data = JSON.parse(responseText);
         console.log('Comments data:', data);
-        
+       
         if (data.success && Array.isArray(data.data)) {
           setComments(prev => ({
             ...prev,
@@ -174,18 +174,18 @@ export default function MyTasks() {
       console.error('Error fetching comments:', error);
     }
   };
-
+ 
   // Handle task expansion
   const handleTaskExpand = (taskId: number) => {
     const newExpandedState = expandedTask === taskId ? null : taskId;
     setExpandedTask(newExpandedState);
-    
+   
     // Charger les commentaires si on ouvre la tâche
     if (newExpandedState === taskId && !comments[taskId]) {
       fetchComments(taskId);
     }
   };
-
+ 
   // Handle progress change
   const handleProgressChange = (taskId: number, delta: number) => {
     const currentProgress = taskProgress[taskId] || 0;
@@ -195,7 +195,7 @@ export default function MyTasks() {
       [taskId]: newProgress
     }));
   };
-
+ 
   // Handle progress input
   const handleProgressInput = (taskId: number, value: string) => {
     const numValue = parseInt(value) || 0;
@@ -205,15 +205,15 @@ export default function MyTasks() {
       [taskId]: clampedValue
     }));
   };
-
+ 
   // Save progress
   const saveProgress = (taskId: number) => {
     const newProgress = taskProgress[taskId] || 0;
-    
+   
     // Send update to API
     updateTaskProgress(taskId, newProgress);
   };
-
+ 
   // Update task progress in API
   const updateTaskProgress = async (taskId: number, progress: number) => {
     try {
@@ -224,22 +224,22 @@ export default function MyTasks() {
         },
         body: JSON.stringify({ progress }),
       });
-
+ 
       if (!response.ok) {
         const errorData = await response.json();
-        
+       
         // Vérifier si c'est une erreur de blocage
         if (response.status === 403 && errorData.details) {
           alert(`🚫 ${errorData.message}\n\n${errorData.details}\n\nTâche 1: ${errorData.firstTaskId} (${errorData.firstTaskProgress}%)\nTâche actuelle: ${errorData.currentTaskId}`);
           return;
         }
-        
+       
         throw new Error(errorData.message || 'Erreur lors de la mise à jour');
       }
-
+ 
       const data = await response.json();
       console.log('✅ Task progress updated:', data);
-      
+     
       // Refresh tasks to show updated progress
       fetchTasks();
     } catch (error) {
@@ -247,25 +247,25 @@ export default function MyTasks() {
       alert(`Erreur lors de la mise à jour de la progression: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     }
   };
-
+ 
   // Handle comment input
   const handleCommentInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setCommentText(value);
-    
+   
     // Check for @ symbol
     const cursorPos = e.target.selectionStart;
     const textBeforeCursor = value.substring(0, cursorPos);
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-    
+   
     if (lastAtIndex !== -1) {
       const mentionText = textBeforeCursor.substring(lastAtIndex + 1);
       const spaceIndex = mentionText.indexOf(' ');
-      
+     
       if (spaceIndex === -1) {
         setMentionFilter(mentionText);
         setShowMentionSuggestions(true);
-        
+       
         // Calculate position for dropdown
         if (commentInputRef.current) {
           const rect = commentInputRef.current.getBoundingClientRect();
@@ -281,7 +281,7 @@ export default function MyTasks() {
       setShowMentionSuggestions(false);
     }
   };
-
+ 
   // Handle mention selection
   const handleMentionSelect = (user: User) => {
     if (commentInputRef.current && commentingTask) {
@@ -289,10 +289,10 @@ export default function MyTasks() {
       const text = commentText;
       const textBeforeCursor = text.substring(0, cursorPos);
       const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-      
+     
       const newText = text.substring(0, lastAtIndex) + `@${user.username} ` + text.substring(cursorPos);
       setCommentText(newText);
-      
+     
       // Position cursor after the mention
       setTimeout(() => {
         if (commentInputRef.current) {
@@ -302,20 +302,20 @@ export default function MyTasks() {
         }
       }, 0);
     }
-    
+   
     setShowMentionSuggestions(false);
     setMentionFilter("");
   };
-
+ 
   // Add comment
   const addComment = async (taskId: number) => {
     if (!commentText.trim()) return;
-
+ 
     const storedUser = localStorage.getItem("user");
     if (!storedUser) return;
-
+ 
     const user = JSON.parse(storedUser);
-    
+   
     try {
       const response = await fetch('/api/messages', {
         method: 'POST',
@@ -324,18 +324,16 @@ export default function MyTasks() {
         },
         body: JSON.stringify({
           task_id: taskId,
+          user_id: user.id,
           content: commentText,
         }),
       });
-
+ 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Commentaire ajouté avec succès:', data.data);
-        
-        // Rafraîchir les commentaires pour cette tâche
-        if (commentingTask) {
-          await fetchComments(commentingTask);
-        }
+        console.log(' Commentaire ajouté avec succès:', data.data);
+       
+       
         setCommentText('');
         setShowMentionSuggestions(false);
       } else {
@@ -348,25 +346,25 @@ export default function MyTasks() {
       alert('Erreur lors de l\'ajout du commentaire');
     }
   };
-
+ 
   // Delete comment
   const deleteComment = async (taskId: number, commentId: number) => {
     try {
       const deleteUrl = `/api/messages/${commentId}`;
       console.log('URL de suppression:', deleteUrl);
-      
+     
       // Pour le test, on envoie pas de body
       const response = await fetch(deleteUrl, {
         method: 'DELETE',
       });
-
+ 
       if (response.ok) {
         console.log('Commentaire supprimé avec succès');
         await fetchComments(taskId);
       } else {
         const responseText = await response.text();
         console.log('Réponse du serveur (status non-ok):', response.status, responseText);
-        
+       
         // Si le status n'est pas ok mais la réponse est vide, on considère que ça a marché
         if (!responseText || responseText.trim() === '') {
           console.log('Réponse vide mais suppression probablement réussie');
@@ -377,31 +375,31 @@ export default function MyTasks() {
       console.error('Erreur lors de la suppression:', error);
     }
   };
-
+ 
   // Filter tasks
   const filteredTasks = tasks.filter(task =>
     task.titre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     task.dao_objet?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     task.dao_reference?.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
+ 
   // Get priority color
   const getPriorityColor = (priorite?: string) => {
    
   };
-
+ 
   // Get status color
   const getStatusColor = (statut?: string) => {
    
   };
-
+ 
   // Get progress bar color
   const getProgressColor = (progress: number) => {
     if (progress === 100) return 'bg-success';
     if (progress > 0) return 'bg-primary';
     return 'bg-secondary';
   };
-
+ 
   if (loading) {
     return (
       <div className="container-fluid py-4">
@@ -413,7 +411,7 @@ export default function MyTasks() {
       </div>
     );
   }
-
+ 
   if (error) {
     return (
       <div className="container-fluid py-4">
@@ -423,7 +421,7 @@ export default function MyTasks() {
       </div>
     );
   }
-
+ 
   return (
     <div className="container-fluid py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -445,7 +443,7 @@ export default function MyTasks() {
           />
         </div>
       </div>
-
+ 
       {filteredTasks.length === 0 ? (
         <div className="text-center py-5">
           <FileText size={48} className="text-muted mb-3" />
@@ -467,20 +465,8 @@ export default function MyTasks() {
                         <p className="card-text">{task.description}</p>
                       )}
                     </div>
-                    <button
-                      className="btn btn-sm btn-outline-secondary"
-                      onClick={() => handleTaskExpand(task.id)}
-                    >
-                      <ChevronDown 
-                        size={16} 
-                        style={{ 
-                          transform: expandedTask === task.id ? 'rotate(180deg)' : 'rotate(0deg)',
-                          transition: 'transform 0.2s'
-                        }} 
-                      />
-                    </button>
                   </div>
-
+ 
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <div className="d-flex align-items-center gap-2">
                       <span className={`badge ${getPriorityColor(task.priorite)}`}>
@@ -496,14 +482,14 @@ export default function MyTasks() {
                       </small>
                     )}
                   </div>
-
+ 
                   <div className="mb-3">
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <span className="small fw-bold">Progression</span>
                       <span className="small fw-bold">{taskProgress[task.id] || 0}%</span>
                     </div>
                     <div className="progress mb-2" style={{ height: '8px' }}>
-                      <div 
+                      <div
                         className={`progress-bar ${getProgressColor(taskProgress[task.id] || 0)}`}
                         style={{ width: `${taskProgress[task.id] || 0}%` }}
                       />
@@ -511,7 +497,7 @@ export default function MyTasks() {
                     {editingTask === task.id ? (
                       <div className="d-flex align-items-center gap-2">
                         <div className="input-group input-group-sm">
-                          <button 
+                          <button
                             className="btn btn-outline-secondary"
                             onClick={() => handleProgressChange(task.id, -10)}
                           >
@@ -526,7 +512,7 @@ export default function MyTasks() {
                             onChange={(e) => handleProgressInput(task.id, e.target.value)}
                             style={{ width: '60px' }}
                           />
-                          <button 
+                          <button
                             className="btn btn-outline-secondary"
                             onClick={() => handleProgressChange(task.id, 10)}
                           >
@@ -558,64 +544,15 @@ export default function MyTasks() {
                       </button>
                     )}
                   </div>
-
-                  {expandedTask === task.id && (
-                    <div className="border-top pt-3">
-                      <h6 className="mb-3">Commentaires</h6>
-                      
-                      {/* Add comment form */}
-                      <div className="mb-3">
-                        <div className="input-group">
-                          <textarea
-                            ref={commentInputRef}
-                            className="form-control"
-                            placeholder="Ajouter un commentaire..."
-                            value={commentText}
-                            onChange={handleCommentInputChange}
-                            rows={2}
-                          />
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => addComment(task.id)}
-                          >
-                            <Send size={16} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Comments list */}
-                      {comments[task.id]?.map((comment) => (
-                        <div key={comment.id} className="d-flex justify-content-between align-items-start mb-2 p-2 bg-light rounded">
-                          <div className="flex-grow-1">
-                            <div className="d-flex justify-content-between align-items-center mb-1">
-                              <strong className="small">{comment.username}</strong>
-                              <small className="text-muted">
-                                {new Date(comment.created_at).toLocaleString('fr-FR')}
-                              </small>
-                            </div>
-                            <p className="mb-0 small">{comment.content}</p>
-                          </div>
-                          <button
-                            className="btn btn-sm btn-outline-danger ms-2"
-                            onClick={() => deleteComment(task.id, comment.id)}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      ))}
-                      
-                      {!comments[task.id] || comments[task.id].length === 0 ? (
-                        <p className="text-muted small mb-0">Aucun commentaire</p>
-                      ) : null}
-                    </div>
-                  )}
+ 
+                 
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
-
+ 
       {/* Mention suggestions dropdown */}
       {showMentionSuggestions && mentionPosition && (
         <div
@@ -630,7 +567,7 @@ export default function MyTasks() {
         >
           <div className="card-body p-0">
             {users
-              .filter(user => 
+              .filter(user =>
                 user.username.toLowerCase().includes(mentionFilter.toLowerCase())
               )
               .map(user => (

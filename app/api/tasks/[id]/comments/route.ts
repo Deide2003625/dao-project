@@ -20,6 +20,22 @@ async function ensureCommentsTable(connection: any) {
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+
+  try {
+    await connection.execute(`
+      ALTER TABLE task_comments ADD COLUMN user_name VARCHAR(255) DEFAULT NULL
+    `);
+  } catch (err) {
+    // Colonne existante, ignorer
+  }
+
+  try {
+    await connection.execute(`
+      ALTER TABLE task_comments ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    `);
+  } catch (err) {
+    // Colonne existante, ignorer
+  }
 }
 
 // GET - Récupérer les commentaires d'une tâche

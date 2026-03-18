@@ -20,7 +20,7 @@
 # interne dans Docker (APP_PORT). Exemple : 4000:4000.
 # Vérifier les ports occupés avec : sudo ss -tlnp
 
-APP_PORT=3000               # Application Next.js   → http://localhost:3000
+APP_PORT=2005               # Application Next.js   → http://localhost:2005
 MYSQL_PORT=3306             # Base de données MySQL  → localhost:3306
 
 
@@ -40,12 +40,12 @@ DOCKER_GATEWAY=172.25.0.1
 
 DB_HOST=mysql
 DB_PORT=3306
-DB_NAME=dao
+DB_NAME=dao_project
 DB_USER=dao_user
 DB_PASSWORD=dao_secure_password_2024                    # A CHANGER
 
 MYSQL_ROOT_PASSWORD=root_secure_password_2024           # A CHANGER
-MYSQL_DATABASE=dao
+MYSQL_DATABASE=dao_project
 MYSQL_USER=dao_user
 MYSQL_PASSWORD=dao_secure_password_2024                 # A CHANGER
 
@@ -53,11 +53,11 @@ MYSQL_PASSWORD=dao_secure_password_2024                 # A CHANGER
 # ── APPLICATION Next.js ───────────────────────────────────────
 NODE_ENV=production
 APP_NAME=DAO Project
-APP_URL=http://localhost:3000
+APP_URL=http://localhost:2005
 APP_VERSION=1.0.0
 
 # SÉCURITÉ : Générer avec : openssl rand -base64 32
-NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_URL=http://localhost:2005
 NEXTAUTH_SECRET=CHANGEZ_CECI_PAR_UNE_VRAIE_CLE_SECRETE_DE_32_CARACTERES_MINIMUM  # A CHANGER
 
 # SÉCURITÉ : Générer avec : openssl rand -base64 32

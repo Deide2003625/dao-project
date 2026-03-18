@@ -12,6 +12,7 @@ async function ensureTaskTables(connection: any) {
       titre VARCHAR(255) NOT NULL,
       description TEXT,
       statut ENUM('a_faire', 'en_cours', 'termine') DEFAULT 'a_faire',
+      progress INT NOT NULL DEFAULT 0,
       date_creation DATE,
       date_echeance DATE,
       priorite ENUM('basse', 'moyenne', 'haute') DEFAULT 'moyenne',
@@ -25,19 +26,46 @@ async function ensureTaskTables(connection: any) {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
+  // S'assurer que la colonne progress existe
+  try {
+    await connection.execute(`
+      ALTER TABLE tasks ADD COLUMN progress INT NOT NULL DEFAULT 0
+    `);
+  } catch (err) {
+    // Colonne existante, ignorer
+  }
+
   await connection.execute(`
     CREATE TABLE IF NOT EXISTS task_comments (
       id INT AUTO_INCREMENT PRIMARY KEY,
       task_id INT NOT NULL,
       user_id BIGINT UNSIGNED NOT NULL,
+      user_name VARCHAR(255) DEFAULT NULL,
       text TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_task_comments_task (task_id),
       INDEX idx_task_comments_user (user_id),
       CONSTRAINT fk_task_comments_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
       CONSTRAINT fk_task_comments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+
+  try {
+    await connection.execute(`
+      ALTER TABLE task_comments ADD COLUMN user_name VARCHAR(255) DEFAULT NULL
+    `);
+  } catch (err) {
+    // Colonne existante, ignorer
+  }
+
+  try {
+    await connection.execute(`
+      ALTER TABLE task_comments ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    `);
+  } catch (err) {
+    // Colonne existante, ignorer
+  }
 }
 
 export async function GET(

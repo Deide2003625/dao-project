@@ -34,7 +34,7 @@ services:
       - DB_PORT=3306
       - DB_USER=${MYSQL_USER:-dao_user}
       - DB_PASSWORD=${MYSQL_PASSWORD:-dao_secure_password_2024}
-      - DB_NAME=${MYSQL_DATABASE:-dao}
+      - DB_NAME=${MYSQL_DATABASE:-dao_project}
       - NEXTAUTH_URL=http://localhost:${APP_PORT:-3000}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your_super_secret_key_change_this_in_production}
       - EMAIL_HOST=${EMAIL_HOST:-smtp.gmail.com}
@@ -69,7 +69,7 @@ services:
       - "${MYSQL_PORT:-3306}:3306"      # Défaut : 3306
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root_secure_password_2024}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-dao}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-dao_project}
       - MYSQL_USER=${MYSQL_USER:-dao_user}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-dao_secure_password_2024}
       - MYSQL_CHARACTER_SET_SERVER=utf8mb4
@@ -115,5 +115,5 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: "${DOCKER_SUBNET:-172.25.0.0/16}"
+        - subnet: "${DOCKER_SUBNET:-172.25.0.0/24}"
           gateway: "${DOCKER_GATEWAY:-172.25.0.1}"

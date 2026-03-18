@@ -8,13 +8,24 @@ async function ensureTables(connection: any) {
   await connection.execute(`
     CREATE TABLE IF NOT EXISTS dao_types (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      code VARCHAR(20) UNIQUE NOT NULL,
+      code VARCHAR(20) NOT NULL,
       libelle VARCHAR(100) NOT NULL,
       description TEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_dao_types_code (code),
       INDEX idx_dao_types_code (code)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+
+  // S'assurer que la colonne code est bien unique même si le schéma existait avant.
+  try {
+    await connection.execute(`
+      ALTER TABLE dao_types
+      ADD UNIQUE KEY uk_dao_types_code (code)
+    `);
+  } catch (err) {
+    // L'index existe déjà, donc on ignore l'erreur
+  }
 
   // Insérer les types de DAO par défaut s'ils n'existent pas
   await connection.execute(`

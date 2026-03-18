@@ -139,7 +139,7 @@ CREATE TABLE `daos` (
   `autorite` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `chef_id` bigint unsigned DEFAULT NULL,
   `team_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `statut` enum('aRisque','enCours') COLLATE utf8mb4_general_ci DEFAULT 'enCours',
+  `statut` enum('EN_ATTENTE','EN_COURS','A_RISQUE','TERMINEE','ARCHIVE') COLLATE utf8mb4_general_ci DEFAULT 'EN_ATTENTE',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `groupement` varchar(10000) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `nom_partenaire` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
@@ -154,11 +154,13 @@ CREATE TABLE `dao_sequences` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `dao_types` (
-  `id` int(11) NOT NULL,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
   `code` varchar(20) NOT NULL,
   `libelle` varchar(100) NOT NULL,
   `description` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_dao_types_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `dao_members` (

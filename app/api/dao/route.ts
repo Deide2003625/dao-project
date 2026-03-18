@@ -25,7 +25,7 @@ async function ensureTables(connection: any) {
       autorite VARCHAR(255),
       chef_id BIGINT UNSIGNED,
       team_id VARCHAR(100),
-      statut ENUM('aRisque', 'enCours') DEFAULT 'enCours',
+      statut ENUM('EN_ATTENTE', 'EN_COURS', 'A_RISQUE', 'TERMINEE', 'ARCHIVE') DEFAULT 'EN_ATTENTE',
       type_dao VARCHAR(20) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -34,7 +34,7 @@ async function ensureTables(connection: any) {
   // Ajouter la colonne statut si elle n'existe pas
   try {
     await connection.execute(`
-      ALTER TABLE daos ADD COLUMN statut ENUM('aRisque', 'enCours') DEFAULT 'enCours'
+      ALTER TABLE daos ADD COLUMN statut ENUM('EN_ATTENTE', 'EN_COURS', 'A_RISQUE', 'TERMINEE', 'ARCHIVE') DEFAULT 'EN_ATTENTE'
     `);
   } catch (err) {
     // Colonne existe déjà, ignorer l'erreur
@@ -47,6 +47,27 @@ async function ensureTables(connection: any) {
     `);
   } catch (err) {
     // Colonne existe déjà, ignorer l'erreur
+  }
+
+  // Corriger d'éventuelles valeurs de statut héritées de versions antérieures
+  try {
+    await connection.execute(`
+      UPDATE daos SET statut = 'EN_ATTENTE' WHERE statut IN ('enAttente', 'EN_ATTENTE', 'EN_ATTENTE');
+    `);
+    await connection.execute(`
+      UPDATE daos SET statut = 'EN_COURS' WHERE statut IN ('enCours', 'EN_COURS', 'EN_COURS');
+    `);
+    await connection.execute(`
+      UPDATE daos SET statut = 'A_RISQUE' WHERE statut IN ('aRisque', 'A_RISQUE', 'A_RISQUE');
+    `);
+    await connection.execute(`
+      UPDATE daos SET statut = 'TERMINEE' WHERE statut IN ('termine', 'TERMINEE', 'TERMINEE');
+    `);
+    await connection.execute(`
+      UPDATE daos SET statut = 'ARCHIVE' WHERE statut IN ('archive', 'ARCHIVE', 'ARCHIVE');
+    `);
+  } catch (err) {
+    console.warn('Mise à jour des statuts daos (normalisation) a échoué :', err);
   }
 
   await connection.execute(`
@@ -68,13 +89,23 @@ async function ensureTables(connection: any) {
   await connection.execute(`
     CREATE TABLE IF NOT EXISTS dao_types (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      code VARCHAR(20) UNIQUE NOT NULL,
+      code VARCHAR(20) NOT NULL,
       libelle VARCHAR(100) NOT NULL,
       description TEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_dao_types_code (code),
       INDEX idx_dao_types_code (code)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+
+  try {
+    await connection.execute(`
+      ALTER TABLE dao_types
+      ADD UNIQUE KEY uk_dao_types_code (code)
+    `);
+  } catch (err) {
+    // L'index existe déjà.
+  }
 
   // Insérer les types de DAO par défaut s'ils n'existent pas
   await connection.execute(`
@@ -218,14 +249,19 @@ export async function POST(req: NextRequest) {
 
     // Ajouter les colonnes groupement et nom_partenaire si elles n'existent pas
     try {
-      await connection.execute(`
-        ALTER TABLE daos 
-        ADD COLUMN IF NOT EXISTS groupement VARCHAR(20) NULL,
-        ADD COLUMN IF NOT EXISTS nom_partenaire VARCHAR(255) NULL
-      `);
+      const [existingColumns]: any = await connection.execute(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daos' AND COLUMN_NAME IN ('groupement','nom_partenaire')"
+      );
+
+      const existing = new Set((existingColumns || []).map((row: any) => row.COLUMN_NAME));
+      if (!existing.has('groupement')) {
+        await connection.execute("ALTER TABLE daos ADD COLUMN groupement VARCHAR(10000) NULL");
+      }
+      if (!existing.has('nom_partenaire')) {
+        await connection.execute("ALTER TABLE daos ADD COLUMN nom_partenaire VARCHAR(255) NULL");
+      }
     } catch (err) {
-      // Ignorer les erreurs de colonne existante
-      console.log("Mise à jour table daos (colonnes groupement/nom_partenaire可能 déjà existent):", err);
+      console.log("Mise à jour table daos (colonnes groupement/nom_partenaire):", err);
     }
 
     // Vérifier que le chef et les membres existent et ont les bons rôles
@@ -302,7 +338,7 @@ export async function POST(req: NextRequest) {
         description,
         reference,
         autorite,
-        'enCours',
+        'EN_COURS',
         Number(chefEquipe),
         teamId,
         groupement || null,
@@ -324,21 +360,41 @@ export async function POST(req: NextRequest) {
     // Créer automatiquement la première tâche assignée au chef de projet
     // Vérifier et mettre à jour la structure de la table tasks
     try {
-      await connection.execute(`
-        ALTER TABLE tasks 
-          ADD COLUMN IF NOT EXISTS titre VARCHAR(255) NOT NULL DEFAULT '',
-          ADD COLUMN IF NOT EXISTS description TEXT,
-          ADD COLUMN IF NOT EXISTS statut ENUM('a_faire', 'en_cours', 'termine') DEFAULT 'a_faire',
-          ADD COLUMN IF NOT EXISTS date_creation DATE,
-          ADD COLUMN IF NOT EXISTS date_echeance DATE,
-          ADD COLUMN IF NOT EXISTS priorite ENUM('basse', 'moyenne', 'haute') DEFAULT 'moyenne',
-          ADD COLUMN IF NOT EXISTS assigned_to BIGINT UNSIGNED,
-          ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      `);
+      const [existingTaskCols]: any = await connection.execute(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tasks' AND COLUMN_NAME IN ('titre','description','statut','date_creation','date_echeance','priorite','assigned_to','created_at','updated_at')"
+      );
+
+      const existing = new Set((existingTaskCols || []).map((row: any) => row.COLUMN_NAME));
+
+      if (!existing.has('titre')) {
+        await connection.execute("ALTER TABLE tasks ADD COLUMN titre VARCHAR(255) NOT NULL DEFAULT ''");
+      }
+      if (!existing.has('description')) {
+        await connection.execute("ALTER TABLE tasks ADD COLUMN description TEXT");
+      }
+      if (!existing.has('statut')) {
+        await connection.execute("ALTER TABLE tasks ADD COLUMN statut ENUM('a_faire', 'en_cours', 'termine') DEFAULT 'a_faire'");
+      }
+      if (!existing.has('date_creation')) {
+        await connection.execute("ALTER TABLE tasks ADD COLUMN date_creation DATE");
+      }
+      if (!existing.has('date_echeance')) {
+        await connection.execute("ALTER TABLE tasks ADD COLUMN date_echeance DATE");
+      }
+      if (!existing.has('priorite')) {
+        await connection.execute("ALTER TABLE tasks ADD COLUMN priorite ENUM('basse', 'moyenne', 'haute') DEFAULT 'moyenne'");
+      }
+      if (!existing.has('assigned_to')) {
+        await connection.execute("ALTER TABLE tasks ADD COLUMN assigned_to BIGINT UNSIGNED");
+      }
+      if (!existing.has('created_at')) {
+        await connection.execute("ALTER TABLE tasks ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+      }
+      if (!existing.has('updated_at')) {
+        await connection.execute("ALTER TABLE tasks ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+      }
     } catch (err) {
-      // Ignorer les erreurs de colonne existante
-      console.log("Mise à jour table tasks (colonnes可能 déjà existent):", err);
+      console.log("Mise à jour table tasks (colonnes) :", err);
     }
 
     await connection.execute(`

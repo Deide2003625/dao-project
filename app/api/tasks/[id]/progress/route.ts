@@ -108,7 +108,9 @@ export async function PUT(
       const firstTask = (firstTaskRows as any[])[0];
       
       // Si ce n'est pas la première tâche et que la première n'est pas terminée, bloquer
-      if (firstTask.id !== parseInt(id) && firstTask.progress < 100) {
+      // Bypass pour administration / correction possible avec override dans le corps.
+      const forceOverride = !!body?.override;
+      if (firstTask.id !== parseInt(id) && firstTask.progress < 100 && !forceOverride) {
         const errorMsg = `La progression est bloquée tant que la première tâche n'est pas terminée. Tâche actuelle: ${id}, Première tâche: ${firstTask.id} (Progression: ${firstTask.progress}%)`;
         console.error(`BLOCAGE: ${errorMsg}`);
         return NextResponse.json(
@@ -198,7 +200,7 @@ export async function PUT(
             } else if (averageProgress > 0) {
               newStatut = 'EN_COURS';
             } else {
-              newStatut = 'EN_ATTENTE';
+              newStatut = 'A_RISQUE';
             }
             
             console.log("Ancien statut:", currentDao[0]?.statut);
