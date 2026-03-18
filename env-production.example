@@ -16,7 +16,8 @@
 
 # ── PORTS HOST ────────────────────────────────────────────────
 # Modifier ces valeurs si les ports par défaut sont déjà utilisés
-# sur votre machine. Les ports internes des conteneurs ne changent pas.
+# sur votre machine. L'application utilise le même port externe et
+# interne dans Docker (APP_PORT). Exemple : 4000:4000.
 # Vérifier les ports occupés avec : sudo ss -tlnp
 
 APP_PORT=3000               # Application Next.js   → http://localhost:3000
