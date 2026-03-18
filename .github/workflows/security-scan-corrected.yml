@@ -1,664 +1,97 @@
-name: 🔐 Security Hardening — Fix ZAP Vulnerabilities
+name: Security Scan & Fix
 
 on:
   push:
-    branches: [main, develop, feature/Docker_v2]
+    branches: [main, feature/Docker_v2]
   pull_request:
-    branches: [main]
-  workflow_dispatch:
+    branches: [main, feature/Docker_v2]
 
 jobs:
-  # ─────────────────────────────────────────────
-  # JOB 1 : Patch automatique des headers HTTP
-  # ─────────────────────────────────────────────
-  security-headers:
-    name: 🛡️ Patch Security Headers (next.config.js)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: 🔧 Écrire le script de patch dans un fichier
-        run: |
-          cat > /tmp/patch-config.js << 'SCRIPT'
-          const fs = require('fs');
-          const path = require('path');
-
-          const configPath = path.join(process.cwd(), 'next.config.js');
-          const exists = fs.existsSync(configPath);
-
-          if (exists) {
-            const content = fs.readFileSync(configPath, 'utf8');
-            if (content.includes('async headers()')) {
-              console.log('headers() already present — skipping patch.');
-              process.exit(0);
-            }
-          }
-
-          const lines = [
-            '/** @type {import("next").NextConfig} */',
-            'const nextConfig = {',
-            '',
-            '  // FIX: Remove X-Powered-By header (Low — CWE-200)',
-            '  poweredByHeader: false,',
-            '',
-            '  // FIX: Path Traversal on _next/image (High — CWE-541)',
-            '  images: {',
-            '    remotePatterns: [',
-            '      {',
-            '        protocol: "https",',
-            '        hostname: process.env.NEXT_PUBLIC_DOMAIN || "localhost",',
-            '        pathname: "/images/**",',
-            '      },',
-            '    ],',
-            '    dangerouslyAllowSVG: false,',
-            '    contentDispositionType: "attachment",',
-            "    contentSecurityPolicy: \"default-src 'self'; script-src 'none'; sandbox;\",",
-            '  },',
-            '',
-            '  // FIX: Strip console logs in production (Info — CWE-615)',
-            '  compiler: {',
-            '    removeConsole: process.env.NODE_ENV === "production",',
-            '  },',
-            '',
-            '  async headers() {',
-            '    return [',
-            '      {',
-            '        source: "/(.*)",',
-            '        headers: [',
-            '          // FIX: Content Security Policy (Medium — CWE-693)',
-            '          {',
-            '            key: "Content-Security-Policy",',
-            '            value: [',
-            "              \"default-src 'self'\",",
-            "              \"script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com\",",
-            "              \"style-src 'self' 'unsafe-inline' fonts.googleapis.com\",",
-            '              "font-src \'self\' fonts.gstatic.com",',
-            '              "img-src \'self\' data: blob:",',
-            '              "connect-src \'self\'",',
-            '              "frame-ancestors \'none\'",',
-            '              "base-uri \'self\'",',
-            '              "form-action \'self\'",',
-            '            ].join("; "),',
-            '          },',
-            '          // FIX: Anti-clickjacking (Medium — CWE-1021)',
-            '          { key: "X-Frame-Options", value: "DENY" },',
-            '          // FIX: MIME sniffing (Low — CWE-693)',
-            '          { key: "X-Content-Type-Options", value: "nosniff" },',
-            '          // FIX: CORP (Low — CWE-346)',
-            '          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },',
-            '          // FIX: COOP (Low — CWE-346)',
-            '          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },',
-            '          // FIX: COEP (Low — CWE-693)',
-            '          { key: "Cross-Origin-Embedder-Policy", value: "unsafe-none" },',
-            '          // FIX: Permissions Policy (Low — CWE-693)',
-            '          {',
-            '            key: "Permissions-Policy",',
-            '            value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)",',
-            '          },',
-            '          // Bonus: Referrer-Policy',
-            '          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },',
-            '        ],',
-            '      },',
-            '    ];',
-            '  },',
-            '};',
-            '',
-            'module.exports = nextConfig;',
-          ];
-
-          fs.writeFileSync(configPath, lines.join('\n'), 'utf8');
-          console.log('next.config.js patched successfully.');
-          SCRIPT
-
-      - name: 🔧 Appliquer le patch
-        run: node /tmp/patch-config.js
-
-      - name: Upload patched config
-        uses: actions/upload-artifact@v4
-        with:
-          name: patched-next-config
-          path: next.config.js
-
-  # ─────────────────────────────────────────────
-  # JOB 2 : Fix Path Traversal (HIGH - CWE-541)
-  # ─────────────────────────────────────────────
-  fix-path-traversal:
-    name: 🔴 Fix Path Traversal — _next/image (HIGH)
+  security:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Build Docker image
+        run: docker build -t app:${{ github.sha }} .
+
+      - name: Scan Docker with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: 🔧 Créer src/middleware/imagePathGuard.ts
-        run: |
-          mkdir -p src/middleware
-          cat > src/middleware/imagePathGuard.ts << 'GUARD'
-          /**
-           * FIX: Path Traversal on /_next/image (High — CWE-541 / WASC-33)
-           * Validates the "url" parameter to block access to arbitrary server files.
-           */
-          import { NextResponse } from 'next/server';
-          import type { NextRequest } from 'next/server';
-
-          const ALLOWED_PREFIXES = ['/images/', '/public/', '/assets/', '/static/'];
-
-          const ALLOWED_DOMAINS = (process.env.NEXT_PUBLIC_ALLOWED_IMAGE_DOMAINS || '')
-            .split(',')
-            .map((d) => d.trim())
-            .filter(Boolean);
-
-          const DANGEROUS_PATTERNS = [
-            '../', '..\\', '%2e%2e', '%2f', '%5c',
-            '..%2f', '..%5c', '%252e%252e', '/etc/', '/proc/',
-          ];
-
-          export function validateImageUrl(urlParam: string | null): boolean {
-            if (!urlParam) return false;
-            const decoded = decodeURIComponent(urlParam).toLowerCase();
-            for (const p of DANGEROUS_PATTERNS) {
-              if (decoded.includes(p.toLowerCase())) {
-                console.warn('[Security] Path traversal blocked:', urlParam);
-                return false;
-              }
-            }
-            if (urlParam.startsWith('/')) {
-              return ALLOWED_PREFIXES.some((prefix) => urlParam.startsWith(prefix));
-            }
-            try {
-              const parsed = new URL(urlParam);
-              return ALLOWED_DOMAINS.includes(parsed.hostname);
-            } catch {
-              return false;
-            }
-          }
-
-          export function imageGuardMiddleware(request: NextRequest) {
-            if (request.nextUrl.pathname === '/_next/image') {
-              const urlParam = request.nextUrl.searchParams.get('url');
-              if (!validateImageUrl(urlParam)) {
-                return NextResponse.json({ error: 'Invalid image URL' }, { status: 400 });
-              }
-            }
-            return NextResponse.next();
-          }
-          GUARD
-          echo "imagePathGuard.ts created."
-
-      - name: 🔧 Créer src/middleware.ts
-        run: |
-          cat > src/middleware.ts << 'MIDDLEWARE'
-          import { NextResponse } from 'next/server';
-          import type { NextRequest } from 'next/server';
-          import { imageGuardMiddleware } from './middleware/imagePathGuard';
-
-          export function middleware(request: NextRequest) {
-            const guard = imageGuardMiddleware(request);
-            if (guard.status === 400) return guard;
-            return NextResponse.next();
-          }
-
-          export const config = {
-            matcher: ['/_next/image', '/api/:path*'],
-          };
-          MIDDLEWARE
-          echo "middleware.ts created."
-
-      - name: Upload middleware
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-middleware
-          path: |
-            src/middleware.ts
-            src/middleware/imagePathGuard.ts
-
-  # ─────────────────────────────────────────────
-  # JOB 3 : Fix JS dangereux + DOMPurify
-  # ─────────────────────────────────────────────
-  fix-dangerous-js:
-    name: 🟡 Fix Dangerous JS Functions (Low — CWE-79)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: 🔍 Scanner les fonctions dangereuses
-        run: |
-          echo "=== innerHTML ==="
-          grep -rn "innerHTML\s*=" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" src/ || echo "none found"
-          echo "=== eval() ==="
-          grep -rn "\beval\s*(" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" src/ || echo "none found"
-          echo "=== document.write ==="
-          grep -rn "document\.write\s*(" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" src/ || echo "none found"
-          echo "=== Suspicious comments ==="
-          grep -rn "TODO\|FIXME\|password\|secret\|admin\|hack\|debug" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" src/ || echo "none found"
-
-      - name: Install DOMPurify
-        run: npm install dompurify @types/dompurify --save
-
-      - name: 🔧 Créer src/utils/safedom.ts
-        run: |
-          mkdir -p src/utils
-          cat > src/utils/safedom.ts << 'SAFEDOM'
-          /**
-           * FIX: Dangerous JS Functions (Low — CWE-79)
-           * Safe replacements for innerHTML, eval, document.write.
-           */
-          import DOMPurify from 'dompurify';
-
-          const ALLOWED_TAGS = ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'li', 'span'];
-          const ALLOWED_ATTR = ['href', 'title', 'target', 'rel', 'class'];
-
-          export function setInnerHTML(element: Element, html: string): void {
-            element.innerHTML = DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR });
-          }
-
-          export function setTextContent(element: Element, text: string): void {
-            element.textContent = text;
-          }
-
-          export function safeJsonParse<T = unknown>(jsonString: string): T | null {
-            try {
-              return JSON.parse(jsonString) as T;
-            } catch (e) {
-              console.error('[Security] Invalid JSON rejected:', e);
-              return null;
-            }
-          }
-          SAFEDOM
-          echo "safedom.ts created."
-
-      - name: Upload utils
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-utils
-          path: src/utils/safedom.ts
-
-  # ─────────────────────────────────────────────
-  # JOB 4 : Fix SRI (Sub Resource Integrity)
-  # ─────────────────────────────────────────────
-  fix-sri:
-    name: 🟠 Fix Sub Resource Integrity (Medium — CWE-353)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 🔧 Générer les hashes SRI
-        run: |
-          echo "=== Génération des hashes SRI ==="
-          gen_sri() {
-            local url=$1 name=$2
-            hash=$(curl -sL "$url" | openssl dgst -sha384 -binary | openssl base64 -A 2>/dev/null)
-            [ -n "$hash" ] && echo "[$name] sha384-$hash" || echo "[$name] ERROR"
-          }
-          gen_sri "https://code.jquery.com/jquery-3.7.1.min.js" "jQuery 3.7.1"
-
-      - name: 🔧 Créer src/components/ExternalScript.tsx
-        run: |
-          mkdir -p src/components
-          cat > src/components/ExternalScript.tsx << 'SRI'
-          /**
-           * FIX: Sub Resource Integrity Missing (Medium — CWE-353)
-           * Always use this component instead of raw <script> for external resources.
-           *
-           * Regenerate hashes with:
-           *   curl -sL <URL> | openssl dgst -sha384 -binary | openssl base64 -A
-           */
-          interface ExternalScriptProps {
-            src: string;
-            integrity: string;
-            crossOrigin?: 'anonymous' | 'use-credentials';
-            async?: boolean;
-          }
-
-          export function ExternalScript({
-            src,
-            integrity,
-            crossOrigin = 'anonymous',
-            async = true,
-          }: ExternalScriptProps) {
-            return (
-              <script src={src} integrity={integrity} crossOrigin={crossOrigin} async={async} />
-            );
-          }
-
-          export const EXTERNAL_RESOURCES = {
-            jquery: {
-              src: 'https://code.jquery.com/jquery-3.7.1.min.js',
-              integrity: 'sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs',
-            },
-            bootstrapJs: {
-              src: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js',
-              integrity: 'sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz',
-            },
-          } as const;
-          SRI
-          echo "ExternalScript.tsx created."
-
-      - name: Upload SRI component
-        uses: actions/upload-artifact@v4
-        with:
-          name: sri-component
-          path: src/components/ExternalScript.tsx
-
-  # ─────────────────────────────────────────────
-  # JOB 5 : Fix Full Path Disclosure
-  # ─────────────────────────────────────────────
-  fix-error-handling:
-    name: 🟡 Fix Full Path Disclosure + Error Handling (CWE-200)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 🔧 Créer src/lib/errorHandler.ts
-        run: |
-          mkdir -p src/lib
-          cat > src/lib/errorHandler.ts << 'ERRHANDLER'
-          /**
-           * FIX: Full Path Disclosure (Low — CWE-200)
-           * Hides system paths and stack traces in production responses.
-           */
-          const IS_PROD = process.env.NODE_ENV === 'production';
-
-          export interface SafeError {
-            message: string;
-            code?: string;
-            statusCode: number;
-          }
-
-          const ERROR_MAP: Record<string, { status: number; message: string }> = {
-            ENOENT:       { status: 404, message: 'Resource not found.' },
-            EACCES:       { status: 403, message: 'Access denied.' },
-            ECONNREFUSED: { status: 503, message: 'Service temporarily unavailable.' },
-            ETIMEDOUT:    { status: 504, message: 'Request timed out.' },
-          };
-
-          export function sanitizeError(error: unknown): SafeError {
-            if (error instanceof Error) {
-              for (const [key, val] of Object.entries(ERROR_MAP)) {
-                if (error.message.includes(key)) {
-                  return { message: IS_PROD ? val.message : error.message, statusCode: val.status };
-                }
-              }
-              return {
-                message: IS_PROD ? 'An internal error occurred.' : error.message,
-                code: IS_PROD ? undefined : error.name,
-                statusCode: 500,
-              };
-            }
-            return { message: IS_PROD ? 'An internal error occurred.' : String(error), statusCode: 500 };
-          }
-
-          export function apiErrorResponse(error: unknown) {
-            const safe = sanitizeError(error);
-            console.error('[API Error]', IS_PROD ? safe.message : error);
-            return Response.json(
-              { error: safe.message, ...(safe.code ? { code: safe.code } : {}) },
-              { status: safe.statusCode }
-            );
-          }
-          ERRHANDLER
-          echo "errorHandler.ts created."
-
-      - name: 🔧 Créer src/app/error.tsx
-        run: |
-          mkdir -p src/app
-          cat > src/app/error.tsx << 'ERRPAGE'
-          'use client';
-          /**
-           * FIX: Full Path Disclosure — custom error page that reveals nothing to the client.
-           */
-          export default function Error({
-            error,
-            reset,
-          }: {
-            error: Error & { digest?: string };
-            reset: () => void;
-          }) {
-            const isDev = process.env.NODE_ENV !== 'production';
-            return (
-              <div style={{ padding: '2rem', textAlign: 'center' }}>
-                <h2>An error occurred</h2>
-                {isDev && (
-                  <details style={{ marginTop: '1rem', textAlign: 'left' }}>
-                    <summary>Details (dev only)</summary>
-                    <pre>{error.message}</pre>
-                  </details>
-                )}
-                <button onClick={reset} style={{ marginTop: '1rem' }}>
-                  Try again
-                </button>
-              </div>
-            );
-          }
-          ERRPAGE
-          echo "error.tsx created."
-
-      - name: Upload error handler
-        uses: actions/upload-artifact@v4
-        with:
-          name: error-handler
-          path: |
-            src/lib/errorHandler.ts
-            src/app/error.tsx
-
-  # ─────────────────────────────────────────────
-  # JOB 6 : Fix Sensitive URL + Big Redirect
-  # ─────────────────────────────────────────────
-  fix-sensitive-url:
-    name: 🔵 Fix Sensitive Info in URL + Big Redirect (CWE-598 / CWE-201)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 🔧 Créer src/lib/authHelper.ts
-        run: |
-          mkdir -p src/lib
-          cat > src/lib/authHelper.ts << 'AUTHHELPER'
-          /**
-           * FIX: Sensitive Information in URL (Info — CWE-598)
-           * Never pass email/password/token as GET query parameters.
-           *
-           * FIX: Big Redirect (Low — CWE-201)
-           * safeRedirect() enforces a whitelist of allowed paths.
-           */
-          export interface LoginCredentials {
-            email: string;
-            password: string;
-          }
-
-          /** Secure login — credentials in POST body, never in URL */
-          export async function secureLogin(credentials: LoginCredentials) {
-            const response = await fetch('/api/auth/login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(credentials),
-              credentials: 'same-origin',
-            });
-            if (!response.ok) {
-              const err = await response.json().catch(() => ({}));
-              throw new Error((err as { message?: string }).message || 'Login failed');
-            }
-            return response.json();
-          }
-
-          const ALLOWED_PATHS = ['/', '/dashboard', '/login', '/home', '/profile'];
-
-          /** Safe redirect — blocks open-redirect attacks */
-          export function safeRedirect(url: string): string {
-            const base = process.env.NEXT_PUBLIC_BASE_URL || '';
-            const allowed =
-              ALLOWED_PATHS.some((p) => url === p || url.startsWith(p + '/')) ||
-              (base !== '' && url.startsWith(base));
-            if (!allowed) {
-              console.warn('[Security] Redirect blocked:', url);
-              return '/';
-            }
-            return url;
-          }
-          AUTHHELPER
-          echo "authHelper.ts created."
-
-      - name: Upload auth helper
-        uses: actions/upload-artifact@v4
-        with:
-          name: auth-helper
-          path: src/lib/authHelper.ts
-
-  # ─────────────────────────────────────────────
-  # JOB 7 : Validation finale
-  # ─────────────────────────────────────────────
-  security-validation:
-    name: 🔍 Validation — Header check + ZAP re-scan
-    runs-on: ubuntu-latest
-    needs:
-      - security-headers
-      - fix-path-traversal
-      - fix-dangerous-js
-      - fix-sri
-      - fix-error-handling
-      - fix-sensitive-url
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
-
-      - name: Appliquer next.config.js patché
-        run: |
-          if [ -f ./artifacts/patched-next-config/next.config.js ]; then
-            cp ./artifacts/patched-next-config/next.config.js ./next.config.js
-            echo "next.config.js applied."
-          fi
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-        env:
-          NODE_ENV: production
-          NEXT_PUBLIC_DOMAIN: localhost
-
-      - name: Start application
-        run: |
-          npm run start &
-          sleep 12
-        env:
-          NODE_ENV: production
-          PORT: 3000
-
-      - name: 🔍 Vérification des headers
-        run: |
-          BASE="http://localhost:3000"
-          check() {
-            local label=$1 header=$2 expected=$3
-            value=$(curl -sI "$BASE" | grep -i "^${header}:" | head -1 | sed 's/^[^:]*: //' | tr -d '\r\n')
-            if echo "$value" | grep -qi "$expected"; then
-              echo "PASS  $label"
-            else
-              echo "FAIL  $label — got: '$value'"
-            fi
-          }
-          check "CSP"             "content-security-policy"      "default-src"
-          check "X-Frame-Options" "x-frame-options"              "DENY"
-          check "XCTO"            "x-content-type-options"       "nosniff"
-          check "CORP"            "cross-origin-resource-policy" "same-origin"
-          check "COOP"            "cross-origin-opener-policy"   "same-origin"
-          check "Permissions"     "permissions-policy"           "camera"
-          check "Referrer"        "referrer-policy"              "strict-origin"
-
-          powered=$(curl -sI "$BASE" | grep -i "x-powered-by" || true)
-          [ -z "$powered" ] && echo "PASS  X-Powered-By removed" || echo "FAIL  X-Powered-By: $powered"
-
-          pt_code=$(curl -so /dev/null -w "%{http_code}" "$BASE/_next/image?url=../../etc/passwd&w=100&q=75")
-          { [ "$pt_code" = "400" ] || [ "$pt_code" = "403" ]; } \
-            && echo "PASS  Path Traversal blocked (HTTP $pt_code)" \
-            || echo "FAIL  Path Traversal not blocked (HTTP $pt_code)"
-
-      - name: 🔍 ZAP Baseline re-scan
-        uses: zaproxy/action-baseline@v0.12.0
-        with:
-          target: 'http://localhost:3000'
-          rules_file_name: '.zap/rules.tsv'
-          cmd_options: '-a -j'
-          fail_action: false
+          image-ref: 'app:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
         continue-on-error: true
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run app in Docker for ZAP
+        run: |
+          docker run -d -p 8080:3000 --name app-scan app:${{ github.sha }}
+          sleep 10
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline-scan@v0.8.0
+        with:
+          target: 'http://localhost:8080'
+          docker_name: 'owasp/zap2docker-stable'
+          report_html_name: 'zap-report.html'
+          report_json_name: 'zap-report.json'
+          fail_action: true  # Bloque si HIGH/Medium
 
       - name: Upload ZAP report
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: zap-rescan-report
-          path: report_html.html
+          name: zap-report
+          path: zap-report.*
 
-  # ─────────────────────────────────────────────
-  # JOB 8 : Rapport de synthèse
-  # ─────────────────────────────────────────────
-  summary-report:
-    name: 📋 Rapport de synthèse
-    runs-on: ubuntu-latest
-    needs: security-validation
-    if: always()
-    steps:
-      - name: Générer le résumé
+      - name: Fix security headers (Next.js + Helmet)
         run: |
-          {
-            echo "## 🔐 Rapport de remédiation — ZAP Vulnerabilities"
-            echo ""
-            echo "| Sévérité | Vulnérabilité | CWE | Statut |"
-            echo "|----------|--------------|-----|--------|"
-            echo "| 🔴 HIGH   | Path Traversal / Source Code Disclosure | CWE-541 | ✅ Corrigé |"
-            echo "| 🟠 MEDIUM | Content Security Policy Not Set | CWE-693 | ✅ Corrigé |"
-            echo "| 🟠 MEDIUM | Anti-clickjacking Header Missing | CWE-1021 | ✅ Corrigé |"
-            echo "| 🟠 MEDIUM | Sub Resource Integrity Missing | CWE-353 | ✅ Corrigé |"
-            echo "| 🟠 MEDIUM | Directory Browsing | CWE-548 | ⚠️ Manuel (Nginx/Apache) |"
-            echo "| 🟡 LOW    | COEP Header Missing | CWE-693 | ✅ Corrigé |"
-            echo "| 🟡 LOW    | COOP Header Missing | CWE-346 | ✅ Corrigé |"
-            echo "| 🟡 LOW    | CORP Header Missing | CWE-346 | ✅ Corrigé |"
-            echo "| 🟡 LOW    | Dangerous JS Functions | CWE-79 | ✅ Corrigé |"
-            echo "| 🟡 LOW    | Full Path Disclosure | CWE-200 | ✅ Corrigé |"
-            echo "| 🟡 LOW    | Permissions Policy Missing | CWE-693 | ✅ Corrigé |"
-            echo "| 🟡 LOW    | X-Powered-By Header Leak | CWE-200 | ✅ Corrigé |"
-            echo "| 🟡 LOW    | X-Content-Type-Options Missing | CWE-693 | ✅ Corrigé |"
-            echo "| 🟡 LOW    | Big Redirect (Info Leak) | CWE-201 | ✅ Corrigé |"
-            echo "| 🔵 INFO   | Sensitive Information in URL | CWE-598 | ✅ Corrigé |"
-            echo "| 🔵 INFO   | Suspicious Comments in JS | CWE-615 | ✅ Corrigé |"
-            echo ""
-            echo "### ⚠️ Action manuelle requise"
-            echo "- **Directory Browsing** : ajouter \`autoindex off;\` dans Nginx ou \`Options -Indexes\` dans Apache"
-            echo "- **SRI hashes** : régénérer les hashes si vous mettez à jour les versions CDN"
-            echo "- **CSP** : tester d'abord en mode \`Content-Security-Policy-Report-Only\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+          # Ajoute helmet dans package.json si absent
+          npm install helmet --save
+          # Exemple middleware next.config.js ou custom server pour CSP, X-Frame-Options, etc.
+          cat >> next.config.js << EOF
+          /** @type {import('next').NextConfig} */
+          const nextConfig = {
+            async headers() {
+              return [
+                {
+                  source: '/:path*',
+                  headers: [
+                    { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-eval'" },
+                    { key: 'X-Frame-Options', value: 'DENY' },
+                    { key: 'X-Content-Type-Options', value: 'nosniff' },
+                    { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+                    { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+                    { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+                    { key: 'Permissions-Policy', value: '' },
+                    { key: 'X-Powered-By', value: 'hidden' },  # Cache via server
+                  ]
+                }
+              ]
+            },
+          }
+          module.exports = nextConfig
+          EOF
+          # Fix Path Traversal: valide input dans /next/image (ajoute dans code app si src connu)
+          echo "Validez params image (whitelist: faces/, logo/) et supprimez .. dans routes."
+
+      - name: Rebuild & Re-scan after fixes
+        run: |
+          docker build -t app:fix-${{ github.sha }} .
+          docker stop app-scan; docker rm app-scan
+          docker run -d -p 8080:3000 --name app-scan app:fix-${{ github.sha }}
+          sleep 10
+          # Re-ZAP
+          zaproxy/action-baseline-scan@v0.8.0 avec target http://localhost:8080
+
+      - name: Push fixed image if PR
+        if: github.event_name == 'pull_request'
+        run: |
+          echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          docker tag app:fix-${{ github.sha }} votre-repo/app:fix-${{ github.sha }}
+          docker push votre-repo/app:fix-${{ github.sha }}
