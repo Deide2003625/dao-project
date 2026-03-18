@@ -373,21 +373,35 @@ jobs:
       - name: Start app
         run: |
           npm start &
-          sleep 15
-          curl -f http://localhost:8080 || curl -f http://localhost:3000
+          echo "Attente demarrage application..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080 > /dev/null 2>&1; then
+              echo "Application disponible sur :8080"
+              break
+            fi
+            echo "  tentative $i/30..."
+            sleep 2
+          done
+
       - name: Fix ZAP workspace permissions
+        run: chmod 777 ${{ github.workspace }}
+
+      - name: Get runner IP for ZAP Docker container
+        id: runner-ip
         run: |
-          # Le conteneur ZAP tourne en tant qu'utilisateur non-root
-          # et n'a pas le droit d'écrire dans le workspace par défaut.
-          chmod 777 ${{ github.workspace }}
+          # "localhost" dans le conteneur ZAP pointe vers le conteneur lui-meme,
+          # pas vers le runner. On recupere l'IP reelle du runner.
+          IP=$(ip route get 1 | awk '{print $7; exit}')
+          echo "ip=$IP" >> $GITHUB_OUTPUT
+          echo "IP du runner : $IP"
 
       - name: Run ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
         with:
-          target: 'http://localhost:8080'
+          target: "http://${{ steps.runner-ip.outputs.ip }}:8080"
           fail_action: false
           allow_issue_writing: false
-          cmd_options: '-I'   # -I = ignore warnings, ne fait pas échouer le job
+          cmd_options: '-I'
 
       - name: Upload ZAP report
         uses: actions/upload-artifact@v4
