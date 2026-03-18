@@ -2,6 +2,7 @@
 const path = require("path");
 
 const nextConfig = {
+  poweredByHeader: false,
   // Configuration de Turbopack
   experimental: {
     serverActions: {
