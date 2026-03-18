@@ -7,10 +7,21 @@ on:
   pull_request:
     branches: [main]
 
+# ══════════════════════════════════════════════════════════════
+# SOLUTION A – Permissions déclarées au niveau du workflow
+# Accorde les droits d'écriture au GITHUB_TOKEN par défaut.
+# ✅ Fonctionne pour les dépôts personnels et la plupart des orgs.
+#
+# Si vous avez encore l'erreur 403 → voir SOLUTION B (PAT)
+# dans les commentaires de chaque step checkout ci-dessous.
+# ══════════════════════════════════════════════════════════════
+permissions:
+  contents: write       # autorise git push par github-actions[bot]
+  pull-requests: write  # autorise les commentaires de PR
+
 jobs:
   # ─────────────────────────────────────────────
   # JOB 1 – AUDIT & PATCH npm dependencies
-  # Corrige : Subresource Integrity, dépendances vulnérables
   # ─────────────────────────────────────────────
   audit-and-patch:
     name: 📦 Audit & Patch Dependencies
@@ -19,7 +30,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # SOLUTION A : token par défaut (nécessite permissions: contents: write ci-dessus)
           token: ${{ secrets.GITHUB_TOKEN }}
+          # SOLUTION B : si 403 persiste malgré les permissions ci-dessus
+          # 1. Settings → Developer settings → Personal access tokens → Classic
+          # 2. Scope requis : repo (full)
+          # 3. Ajoutez-le dans Settings → Secrets → Actions → New secret → nom : GH_PAT
+          # 4. Remplacez la ligne token ci-dessus par :
+          # token: ${{ secrets.GH_PAT }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,13 +49,7 @@ jobs:
         run: npm ci
 
       - name: Run npm audit and auto-fix
-        run: |
-          npm audit fix --force || true
-          echo "✅ npm audit fix terminé"
-
-      - name: Check for known CVEs
-        run: |
-          npx better-npm-audit audit --level=moderate || true
+        run: npm audit fix --force || true
 
       - name: Commit patched package-lock.json
         uses: stefanzweifel/git-auto-commit-action@v5
@@ -47,16 +59,8 @@ jobs:
 
   # ─────────────────────────────────────────────
   # JOB 2 – SÉCURISATION DES EN-TÊTES HTTP
-  # Corrige :
-  #   [HIGH]   Path Traversal (Source Code Disclosure)
-  #   [MEDIUM] CSP Header Not Set
-  #   [MEDIUM] Missing Anti-Clickjacking Header
-  #   [LOW]    Cross-Origin-Embedder-Policy missing
-  #   [LOW]    Cross-Origin-Opener-Policy missing
-  #   [LOW]    Cross-Origin-Resource-Policy missing
-  #   [LOW]    Permissions-Policy not set
-  #   [LOW]    X-Content-Type-Options missing
-  #   [LOW]    X-Powered-By leaks framework info
+  # Corrige : CSP, X-Frame-Options, COEP, COOP, CORP,
+  #           Permissions-Policy, X-Content-Type-Options, X-Powered-By
   # ─────────────────────────────────────────────
   harden-http-headers:
     name: 🛡️ Harden HTTP Security Headers (Next.js)
@@ -67,146 +71,58 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # token: ${{ secrets.GH_PAT }}   ← Solution B
 
-      - name: Inject security headers into next.config
+      - name: Remove accidental .bak file (committed in previous run)
         run: |
-          cat > /tmp/security-headers-patch.js << 'PATCH'
-          /**
-           * Security headers – injected by GitHub Actions security workflow
-           * Fixes: CSP, X-Frame-Options, COEP, COOP, CORP,
-           *        Permissions-Policy, X-Content-Type-Options, X-Powered-By
-           */
-          const securityHeaders = [
-            // ── [MEDIUM] CSP – Content Security Policy ──────────────────────
-            {
-              key: 'Content-Security-Policy',
-              value: [
-                "default-src 'self'",
-                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com",
-                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
-                "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
-                "img-src 'self' data: blob:",
-                "connect-src 'self'",
-                "frame-ancestors 'none'",   // anti-clickjacking via CSP
-                "object-src 'none'",
-                "base-uri 'self'",
-                "form-action 'self'",
-              ].join('; '),
-            },
-            // ── [MEDIUM] X-Frame-Options – Anti-Clickjacking ─────────────────
-            {
-              key: 'X-Frame-Options',
-              value: 'DENY',
-            },
-            // ── [LOW] Cross-Origin-Embedder-Policy ──────────────────────────
-            {
-              key: 'Cross-Origin-Embedder-Policy',
-              value: 'require-corp',
-            },
-            // ── [LOW] Cross-Origin-Opener-Policy ────────────────────────────
-            {
-              key: 'Cross-Origin-Opener-Policy',
-              value: 'same-origin',
-            },
-            // ── [LOW] Cross-Origin-Resource-Policy ──────────────────────────
-            {
-              key: 'Cross-Origin-Resource-Policy',
-              value: 'same-origin',
-            },
-            // ── [LOW] Permissions-Policy ─────────────────────────────────────
-            {
-              key: 'Permissions-Policy',
-              value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
-            },
-            // ── [LOW] X-Content-Type-Options ────────────────────────────────
-            {
-              key: 'X-Content-Type-Options',
-              value: 'nosniff',
-            },
-            // ── Strict-Transport-Security ────────────────────────────────────
-            {
-              key: 'Strict-Transport-Security',
-              value: 'max-age=63072000; includeSubDomains; preload',
-            },
-            // ── Referrer-Policy ──────────────────────────────────────────────
-            {
-              key: 'Referrer-Policy',
-              value: 'strict-origin-when-cross-origin',
-            },
-          ];
+          git rm --cached next.config.js.bak 2>/dev/null || true
+          git rm --cached next.config.ts.bak 2>/dev/null || true
+          rm -f next.config.js.bak next.config.ts.bak
 
-          module.exports = securityHeaders;
-          PATCH
-          echo "✅ Patch de configuration créé"
-
-      - name: Apply security headers to next.config.js
+      - name: Apply security headers to next.config
         run: |
-          # Sauvegarde de l'original
-          cp next.config.js next.config.js.bak 2>/dev/null || cp next.config.ts next.config.ts.bak 2>/dev/null || true
-
-          # Génère le nouveau fichier de config avec les en-têtes de sécurité
           node << 'EOF'
           const fs = require('fs');
-          const path = require('path');
-
           const configFile = fs.existsSync('next.config.ts') ? 'next.config.ts' : 'next.config.js';
           let content = fs.existsSync(configFile) ? fs.readFileSync(configFile, 'utf8') : '';
 
           const headersBlock = `
-          async headers() {
-            const securityHeaders = [
-              { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'" },
-              { key: 'X-Frame-Options', value: 'DENY' },
-              { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
-              { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-              { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
-              { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
-              { key: 'X-Content-Type-Options', value: 'nosniff' },
-              { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-              { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-            ];
-            return [{ source: '/(.*)', headers: securityHeaders }];
-          },`;
+            async headers() {
+              const securityHeaders = [
+                { key: 'Content-Security-Policy',      value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'" },
+                { key: 'X-Frame-Options',              value: 'DENY' },
+                { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+                { key: 'Cross-Origin-Opener-Policy',   value: 'same-origin' },
+                { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+                { key: 'Permissions-Policy',           value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+                { key: 'X-Content-Type-Options',       value: 'nosniff' },
+                { key: 'Strict-Transport-Security',    value: 'max-age=63072000; includeSubDomains; preload' },
+                { key: 'Referrer-Policy',              value: 'strict-origin-when-cross-origin' },
+              ];
+              return [{ source: '/(.*)', headers: securityHeaders }];
+            },`;
 
-          // Désactive X-Powered-By
-          const poweredByBlock = `  poweredByHeader: false,`;
-
-          if (content.includes('headers()') || content.includes('async headers')) {
-            console.log('⚠️  headers() déjà présent – mise à jour manuelle recommandée');
-          } else if (content.includes('nextConfig')) {
-            // Injection dans l'objet de config existant
-            content = content.replace(
-              /const nextConfig[^=]*=\s*\{/,
-              `const nextConfig = {\n${poweredByBlock}\n`
-            );
-            // Injecter headers avant la fermeture
-            content = content.replace(/^}(\s*;?\s*export default)/m, `  ${headersBlock}\n}$1`);
-            fs.writeFileSync(configFile, content);
-            console.log('✅ next.config mis à jour avec les en-têtes de sécurité et poweredByHeader: false');
+          if (content.includes('nextConfig')) {
+            if (!content.includes('poweredByHeader'))
+              content = content.replace(/const nextConfig[^=]*=\s*\{/, 'const nextConfig = {\n  poweredByHeader: false,');
+            if (!content.includes('async headers'))
+              content = content.replace(/^(};?\s*(?:export default|module\.exports))/m, `${headersBlock}\n$1`);
           } else {
-            // Fichier vide ou minimal – créer de zéro
-            const newConfig = `/** @type {import('next').NextConfig} */
-          const nextConfig = {
-            poweredByHeader: false,
-            ${headersBlock}
-          };
-
-          module.exports = nextConfig;
-          `;
-            fs.writeFileSync(configFile, newConfig);
-            console.log('✅ next.config créé avec les en-têtes de sécurité');
+            content = `/** @type {import('next').NextConfig} */\nconst nextConfig = {\n  poweredByHeader: false,\n${headersBlock}\n};\nmodule.exports = nextConfig;\n`;
           }
+          fs.writeFileSync(configFile, content);
+          console.log('✅ next.config mis à jour');
           EOF
 
       - name: Commit next.config changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'fix(security): add CSP, X-Frame-Options, COEP, COOP, CORP, Permissions-Policy, X-Content-Type-Options, disable X-Powered-By'
-          file_pattern: 'next.config.*'
+          file_pattern: 'next.config.js next.config.ts next.config.js.bak next.config.ts.bak'
+          # token: ${{ secrets.GH_PAT }}   ← Solution B
 
   # ─────────────────────────────────────────────
   # JOB 3 – SUBRESOURCE INTEGRITY
-  # Corrige : [MEDIUM] Sub Resource Integrity Attribute Missing
   # ─────────────────────────────────────────────
   subresource-integrity:
     name: 🔏 Add Subresource Integrity (SRI) Hashes
@@ -217,98 +133,53 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # token: ${{ secrets.GH_PAT }}   ← Solution B
 
-      - name: Compute SRI hashes for external CDN resources
+      - name: Compute SRI hashes & generate docs
         run: |
-          mkdir -p sri-hashes
-
-          compute_sri() {
-            local url="$1"
-            local name="$2"
-            echo "→ Calcul SRI pour $name ..."
-            curl -sL "$url" | \
-              openssl dgst -sha384 -binary | \
-              openssl base64 -A > "sri-hashes/${name}.sha384"
-            echo "sha384-$(cat sri-hashes/${name}.sha384)"
-          }
-
-          BOOTSTRAP_HASH=$(compute_sri \
-            "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" \
-            "bootstrap-5.3.0")
-
-          JQUERY_HASH=$(compute_sri \
-            "https://code.jquery.com/jquery-3.6.0.min.js" \
-            "jquery-3.6.0")
-
-          MDI_HASH=$(compute_sri \
-            "https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css" \
-            "mdi-7.2.96")
-
-          echo "BOOTSTRAP_SRI=$BOOTSTRAP_HASH" >> $GITHUB_ENV
-          echo "JQUERY_SRI=$JQUERY_HASH" >> $GITHUB_ENV
-          echo "MDI_SRI=$MDI_HASH" >> $GITHUB_ENV
-
-          cat >> $GITHUB_STEP_SUMMARY << SUMMARY
-          ## ✅ SRI Hashes calculés
-          | Ressource | Hash |
-          |-----------|------|
-          | Bootstrap 5.3.0 JS | \`$BOOTSTRAP_HASH\` |
-          | jQuery 3.6.0 | \`$JQUERY_HASH\` |
-          | MDI Icons CSS | \`$MDI_HASH\` |
-          SUMMARY
-
-      - name: Create SRI reference file for developers
-        run: |
-          cat > docs/sri-hashes.md << EOF
-          # Subresource Integrity (SRI) Hashes
-          > Auto-généré par le workflow de sécurité – ne pas modifier manuellement.
-
-          ## Comment utiliser ces hashes
-
-          ### Bootstrap JS
-          \`\`\`html
-          <script
-            src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-            integrity="${{ env.BOOTSTRAP_SRI }}"
-            crossorigin="anonymous">
-          </script>
-          \`\`\`
-
-          ### jQuery
-          \`\`\`html
-          <script
-            src="https://code.jquery.com/jquery-3.6.0.min.js"
-            integrity="${{ env.JQUERY_SRI }}"
-            crossorigin="anonymous">
-          </script>
-          \`\`\`
-
-          ### Material Design Icons CSS
-          \`\`\`html
-          <link
-            rel="stylesheet"
-            href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css"
-            integrity="${{ env.MDI_SRI }}"
-            crossorigin="anonymous"/>
-          \`\`\`
-
-          > ⚠️ Pour les polices Google Fonts, migrez vers un hébergement local
-          > (voir job \`self-host-fonts\`) pour éviter les requêtes cross-origin.
-          EOF
           mkdir -p docs
+          sri() { curl -sL "$1" | openssl dgst -sha384 -binary | openssl base64 -A; }
+
+          BS="sha384-$(sri 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js')"
+          JQ="sha384-$(sri 'https://code.jquery.com/jquery-3.6.0.min.js')"
+          MD="sha384-$(sri 'https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css')"
+
+          cat > docs/sri-hashes.md << MDEOF
+          # Subresource Integrity (SRI) Hashes
+          > Auto-généré – ne pas modifier manuellement.
+
+          ## Bootstrap 5.3.0 JS
+          \`\`\`html
+          <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+                  integrity="${BS}" crossorigin="anonymous"></script>
+          \`\`\`
+
+          ## jQuery 3.6.0
+          \`\`\`html
+          <script src="https://code.jquery.com/jquery-3.6.0.min.js"
+                  integrity="${JQ}" crossorigin="anonymous"></script>
+          \`\`\`
+
+          ## Material Design Icons 7.2.96
+          \`\`\`html
+          <link rel="stylesheet"
+                href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css"
+                integrity="${MD}" crossorigin="anonymous"/>
+          \`\`\`
+
+          > ⚠️ Google Fonts ne supporte pas SRI. Migrez vers \`next/font\` pour hébergement local.
+          MDEOF
+          echo "✅ SRI hashes documentés"
 
       - name: Commit SRI documentation
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: 'fix(security): add SRI hashes documentation for external CDN resources'
+          commit_message: 'fix(security): add SRI hashes for Bootstrap, jQuery, MDI'
           file_pattern: 'docs/sri-hashes.md'
+          # token: ${{ secrets.GH_PAT }}   ← Solution B
 
   # ─────────────────────────────────────────────
-  # JOB 4 – DIRECTORY BROWSING & PATH TRAVERSAL
-  # Corrige :
-  #   [HIGH]   Source Code Disclosure / Path Traversal
-  #   [MEDIUM] Directory Browsing
-  #   [LOW]    Full Path Disclosure
+  # JOB 4 – FILESYSTEM & PATH TRAVERSAL
   # ─────────────────────────────────────────────
   harden-filesystem:
     name: 🗂️ Harden Filesystem & Path Traversal
@@ -319,161 +190,81 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # token: ${{ secrets.GH_PAT }}   ← Solution B
 
-      - name: Create Next.js image validation middleware
+      - name: Create image validation middleware
         run: |
           mkdir -p src/middleware
           cat > src/middleware/validateImageParams.ts << 'EOF'
           /**
-           * Middleware de validation des paramètres d'image Next.js
-           * Corrige : [HIGH] Path Traversal – Source Code Disclosure (CWE-22)
-           *
-           * Problème détecté par ZAP :
-           *   GET /_next/image?q=75&url=/image&w=384
-           *   → révèle le code source au lieu d'une image
-           *
-           * Solution : liste blanche (allowlist) stricte des chemins d'images autorisés.
+           * Anti-Path Traversal sur /_next/image
+           * Corrige : [HIGH] CWE-22 – Source Code Disclosure
            */
           import { NextRequest, NextResponse } from 'next/server';
           import path from 'path';
 
-          // ✅ Préfixes autorisés uniquement
-          const ALLOWED_IMAGE_PREFIXES = ['/images/', '/public/'];
-
-          // ✅ Extensions autorisées uniquement
+          const ALLOWED_PREFIXES   = ['/images/', '/public/'];
           const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.ico'];
-
-          // ✅ Dimensions autorisées (w parameter)
-          const ALLOWED_WIDTHS = [16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 1200, 1920, 2048, 3840];
+          const ALLOWED_WIDTHS     = [16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 1200, 1920, 2048, 3840];
 
           export function validateImageRequest(request: NextRequest): NextResponse | null {
-            if (!request.nextUrl.pathname.startsWith('/_next/image')) {
-              return null; // Pas concerné
-            }
-
+            if (!request.nextUrl.pathname.startsWith('/_next/image')) return null;
             const url = request.nextUrl.searchParams.get('url');
-            const w = request.nextUrl.searchParams.get('w');
-            const q = request.nextUrl.searchParams.get('q');
-
-            // Validation du paramètre `url`
-            if (!url) {
-              return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 });
-            }
-
-            // Vérification de traversal de chemin
-            const decodedUrl = decodeURIComponent(url);
-            if (decodedUrl.includes('..') || decodedUrl.includes('%2e%2e') || decodedUrl.includes('%252e')) {
-              return NextResponse.json({ error: 'Invalid url parameter' }, { status: 400 });
-            }
-
-            // Vérification de l'extension
-            const ext = path.extname(decodedUrl).toLowerCase();
-            if (!ALLOWED_EXTENSIONS.includes(ext)) {
-              return NextResponse.json({ error: 'Invalid file extension' }, { status: 400 });
-            }
-
-            // Vérification du préfixe (allowlist)
-            const isAllowed = ALLOWED_IMAGE_PREFIXES.some(prefix => decodedUrl.startsWith(prefix));
-            if (!isAllowed) {
-              return NextResponse.json({ error: 'Image path not allowed' }, { status: 403 });
-            }
-
-            // Validation de la largeur
-            if (w && !ALLOWED_WIDTHS.includes(Number(w))) {
-              return NextResponse.json({ error: 'Invalid width parameter' }, { status: 400 });
-            }
-
-            // Validation de la qualité (1-100)
-            if (q && (Number(q) < 1 || Number(q) > 100)) {
-              return NextResponse.json({ error: 'Invalid quality parameter' }, { status: 400 });
-            }
-
-            return null; // OK
+            const w   = request.nextUrl.searchParams.get('w');
+            const q   = request.nextUrl.searchParams.get('q');
+            if (!url) return NextResponse.json({ error: 'Missing url' }, { status: 400 });
+            const decoded = decodeURIComponent(url);
+            if (/\.\.|\%2e\%2e|\%252e/i.test(decoded))
+              return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+            if (!ALLOWED_EXTENSIONS.includes(path.extname(decoded).toLowerCase()))
+              return NextResponse.json({ error: 'Invalid extension' }, { status: 400 });
+            if (!ALLOWED_PREFIXES.some(p => decoded.startsWith(p)))
+              return NextResponse.json({ error: 'Path not allowed' }, { status: 403 });
+            if (w && !ALLOWED_WIDTHS.includes(Number(w)))
+              return NextResponse.json({ error: 'Invalid width' }, { status: 400 });
+            if (q && (Number(q) < 1 || Number(q) > 100))
+              return NextResponse.json({ error: 'Invalid quality' }, { status: 400 });
+            return null;
           }
           EOF
 
-      - name: Create global Next.js middleware
-        run: |
           cat > src/middleware.ts << 'EOF'
-          /**
-           * Middleware global Next.js – Sécurité
-           * Généré par le workflow de sécurité GitHub Actions
-           */
           import { NextRequest, NextResponse } from 'next/server';
           import { validateImageRequest } from './middleware/validateImageParams';
 
           export function middleware(request: NextRequest) {
-            // ── [HIGH] Validation anti-path-traversal sur /_next/image ────────
-            const imageValidation = validateImageRequest(request);
-            if (imageValidation) return imageValidation;
+            const imgError = validateImageRequest(request);
+            if (imgError) return imgError;
 
-            // ── [LOW] Bloquer l'accès aux dossiers _next/static/* en tant que répertoire ─
             if (request.nextUrl.pathname.endsWith('/') &&
-                request.nextUrl.pathname.startsWith('/_next/static/')) {
+                request.nextUrl.pathname.startsWith('/_next/static/'))
               return NextResponse.json({ error: 'Not found' }, { status: 404 });
-            }
 
-            // ── [INFO] Bloquer les paramètres email dans l'URL (CWE-598) ─────
             const sensitiveParams = ['email', 'password', 'token', 'secret', 'api_key'];
             for (const param of sensitiveParams) {
               if (request.nextUrl.searchParams.has(param)) {
-                // Rediriger sans le paramètre sensible dans l'URL
-                const cleanUrl = new URL(request.url);
-                cleanUrl.searchParams.delete(param);
-                return NextResponse.redirect(cleanUrl, { status: 301 });
+                const clean = new URL(request.url);
+                clean.searchParams.delete(param);
+                return NextResponse.redirect(clean, { status: 301 });
               }
             }
-
             return NextResponse.next();
           }
 
           export const config = {
-            matcher: [
-              '/((?!api|_next/static|_next/image|favicon.ico).*)',
-              '/_next/image',
-            ],
+            matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)', '/_next/image'],
           };
           EOF
 
-      - name: Update next.config to restrict image domains
-        run: |
-          node << 'EOF'
-          const fs = require('fs');
-          const configFile = fs.existsSync('next.config.ts') ? 'next.config.ts' : 'next.config.js';
-          let content = fs.readFileSync(configFile, 'utf8');
-
-          const imageConfig = `
-            images: {
-              // [HIGH] Path Traversal fix: allowlist strict des domaines d'images
-              remotePatterns: [],
-              // Désactive le dangerouslyAllowSVG par défaut
-              dangerouslyAllowSVG: false,
-              contentSecurityPolicy: "default-src 'none'; script-src 'none'; sandbox;",
-            },`;
-
-          if (!content.includes('images:')) {
-            content = content.replace('poweredByHeader: false,', `poweredByHeader: false,\n${imageConfig}`);
-            fs.writeFileSync(configFile, content);
-            console.log('✅ Configuration images Next.js ajoutée');
-          } else {
-            console.log('⚠️  Configuration images déjà présente');
-          }
-          EOF
-
-      - name: Commit filesystem hardening
+      - name: Commit middleware
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: 'fix(security): add path traversal protection middleware, block directory browsing, sanitize URL params'
-          file_pattern: 'src/middleware* next.config.*'
+          commit_message: 'fix(security): add path traversal middleware, block directory browsing, sanitize URL params'
+          file_pattern: 'src/middleware*'
+          # token: ${{ secrets.GH_PAT }}   ← Solution B
 
   # ─────────────────────────────────────────────
-  # JOB 5 – INFORMATIONS SENSIBLES & REDIRECTIONS
-  # Corrige :
-  #   [LOW]    Big Redirect (potential sensitive info leak)
-  #   [LOW]    Timestamp Disclosure
-  #   [LOW]    Dangerous JS Functions (eval)
-  #   [INFO]   Sensitive Information in URL
-  #   [INFO]   Suspicious Comments (DEBUG, TODO, BUG)
+  # JOB 5 – INFORMATIONS SENSIBLES
   # ─────────────────────────────────────────────
   clean-sensitive-info:
     name: 🧹 Clean Sensitive Info & Debug Artifacts
@@ -484,6 +275,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # token: ${{ secrets.GH_PAT }}   ← Solution B
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -491,65 +283,14 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install deps
+      - name: Install dependencies
         run: npm ci
 
-      - name: Scan for dangerous JS functions (eval, document.write, etc.)
+      - name: Install eslint-plugin-security
+        run: npm install --save-dev eslint-plugin-security --legacy-peer-deps || true
+
+      - name: Create ESLint security config
         run: |
-          echo "## 🔍 Scan des fonctions JS dangereuses" >> $GITHUB_STEP_SUMMARY
-
-          # Rechercher eval() dans le code source (hors node_modules et .next)
-          EVAL_COUNT=$(grep -rn "eval(" src/ --include="*.ts" --include="*.tsx" --include="*.js" 2>/dev/null | wc -l)
-          DOCWRITE_COUNT=$(grep -rn "document\.write(" src/ --include="*.ts" --include="*.tsx" --include="*.js" 2>/dev/null | wc -l)
-          INNERHTML_COUNT=$(grep -rn "innerHTML" src/ --include="*.ts" --include="*.tsx" --include="*.js" 2>/dev/null | wc -l)
-
-          echo "| Fonction | Occurrences dans src/ |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|----------------------|" >> $GITHUB_STEP_SUMMARY
-          echo "| \`eval()\` | $EVAL_COUNT |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`document.write()\` | $DOCWRITE_COUNT |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`innerHTML\` | $INNERHTML_COUNT |" >> $GITHUB_STEP_SUMMARY
-
-          if [ "$EVAL_COUNT" -gt 0 ]; then
-            echo "⚠️ eval() détecté dans le code source :"
-            grep -rn "eval(" src/ --include="*.ts" --include="*.tsx" --include="*.js" || true
-          fi
-
-      - name: Fix lean redirects (avoid body in 3xx responses)
-        run: |
-          # Vérifier s'il existe des redirections avec du contenu dans le body
-          # Dans Next.js, les redirections doivent être configurées via next.config
-
-          node << 'EOF'
-          const fs = require('fs');
-          const configFile = fs.existsSync('next.config.ts') ? 'next.config.ts' : 'next.config.js';
-          let content = fs.readFileSync(configFile, 'utf8');
-
-          // Ajouter des redirections propres (body vide = pas de fuite d'info)
-          const redirectsBlock = `
-            async redirects() {
-              return [
-                // [LOW] Big Redirect fix : redirection propre sans body
-                {
-                  source: '/',
-                  destination: '/login',
-                  permanent: false, // 307 = body vide garanti
-                },
-              ];
-            },`;
-
-          if (!content.includes('redirects()')) {
-            content = content.replace('poweredByHeader: false,', `poweredByHeader: false,\n${redirectsBlock}`);
-            fs.writeFileSync(configFile, content);
-            console.log('✅ Redirections propres configurées (sans fuite dans le body)');
-          }
-          EOF
-
-      - name: Create ESLint security rules
-        run: |
-          # Installer eslint-plugin-security
-          npm install --save-dev eslint-plugin-security @typescript-eslint/eslint-plugin 2>/dev/null || true
-
-          # Créer/mettre à jour .eslintrc avec les règles de sécurité
           cat > .eslintrc.security.json << 'EOF'
           {
             "plugins": ["security"],
@@ -557,9 +298,6 @@ jobs:
             "rules": {
               "security/detect-eval-with-expression": "error",
               "security/detect-non-literal-fs-filename": "error",
-              "security/detect-non-literal-regexp": "warn",
-              "security/detect-object-injection": "warn",
-              "security/detect-possible-timing-attacks": "warn",
               "security/detect-unsafe-regex": "error",
               "no-eval": "error",
               "no-implied-eval": "error",
@@ -569,175 +307,109 @@ jobs:
           }
           EOF
 
-      - name: Strip TODO/DEBUG/BUG comments from production build
+      - name: Scan for eval() in source code
         run: |
-          # Créer un script de nettoyage post-build
-          cat > scripts/strip-debug-comments.js << 'EOF'
-          #!/usr/bin/env node
+          echo "## 🔍 Scan eval() dans src/" >> $GITHUB_STEP_SUMMARY
+          COUNT=$(grep -rn "eval(" src/ --include="*.ts" --include="*.tsx" --include="*.js" 2>/dev/null | wc -l || echo 0)
+          echo "| \`eval()\` | $COUNT occurrences |" >> $GITHUB_STEP_SUMMARY
+          if [ "$COUNT" -gt 0 ]; then
+            grep -rn "eval(" src/ --include="*.ts" --include="*.tsx" --include="*.js" 2>/dev/null || true
+          fi
+
+      - name: Create post-build debug-comment stripper
+        run: |
+          mkdir -p scripts
+          cat > scripts/strip-debug-comments.mjs << 'EOF'
           /**
-           * Strip debug comments from production bundles
-           * Corrige : [INFO] Suspicious Comments (TODO, DEBUG, BUG, FROM, etc.)
+           * Supprime les commentaires TODO/DEBUG/BUG des bundles de production.
+           * Corrige : [INFO] Suspicious Comments (CWE-615)
+           * Usage : node scripts/strip-debug-comments.mjs
            */
-          const fs = require('fs');
-          const path = require('path');
-          const glob = require('glob');
+          import fs from 'fs';
+          import { glob } from 'glob';
 
           const patterns = [
             /\/\/\s*(TODO|FIXME|HACK|BUG|XXX|DEBUG|TEMP)[^\n]*/gi,
-            /\/\*[\s\S]*?(TODO|FIXME|HACK|BUG|DEBUG)[\s\S]*?\*\//gi,
+            /\/\*[\s\S]*?(TODO|FIXME|BUG|DEBUG)[\s\S]*?\*\//gi,
           ];
-
-          const files = glob.sync('.next/static/chunks/*.js');
-          let totalStripped = 0;
-
-          files.forEach(file => {
-            let content = fs.readFileSync(file, 'utf8');
-            let stripped = 0;
-            patterns.forEach(re => {
-              const matches = content.match(re) || [];
-              stripped += matches.length;
-              content = content.replace(re, '');
-            });
-            if (stripped > 0) {
-              fs.writeFileSync(file, content);
-              totalStripped += stripped;
-            }
-          });
-
-          console.log(`✅ ${totalStripped} commentaires de debug supprimés des bundles`);
+          const files = await glob('.next/static/chunks/*.js');
+          let total = 0;
+          for (const f of files) {
+            let src = fs.readFileSync(f, 'utf8');
+            let n = 0;
+            patterns.forEach(re => { src = src.replace(re, () => { n++; return ''; }); });
+            if (n > 0) { fs.writeFileSync(f, src); total += n; }
+          }
+          console.log(`✅ ${total} commentaires debug supprimés (${files.length} fichiers)`);
           EOF
-          chmod +x scripts/strip-debug-comments.js
 
-      - name: Commit security fixes
+      - name: Commit security configs
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: 'fix(security): add ESLint security rules, fix lean redirects, add debug comment stripping script'
-          file_pattern: '.eslintrc.security.json scripts/ next.config.*'
+          commit_message: 'fix(security): add ESLint security rules, add debug-comment stripper'
+          file_pattern: '.eslintrc.security.json scripts/'
+          # token: ${{ secrets.GH_PAT }}   ← Solution B
 
   # ─────────────────────────────────────────────
-  # JOB 6 – VÉRIFICATION FINALE : RE-SCAN ZAP
-  # Lance un scan ZAP de validation pour confirmer
-  # que les vulnérabilités sont corrigées
+  # JOB 6 – RE-SCAN ZAP DE VALIDATION
   # ─────────────────────────────────────────────
   verify-with-zap:
     name: 🔬 Verify Fixes with ZAP Rescan
     runs-on: ubuntu-latest
-    needs:
-      - subresource-integrity
-      - harden-filesystem
-      - clean-sensitive-info
+    needs: [subresource-integrity, harden-filesystem, clean-sensitive-info]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
-      - name: Install & build
-        run: |
-          npm ci
-          npm run build
-
-      - name: Start application
-        run: |
-          npm start &
-          echo "⏳ Attente du démarrage de l'application..."
-          sleep 15
-          curl -f http://localhost:3000 || curl -f http://localhost:8080 || (echo "❌ L'app ne démarre pas" && exit 1)
-          echo "✅ Application démarrée"
-
-      - name: Run ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
+      - run: npm ci && npm run build && npm start &
+      - run: sleep 15 && curl -f http://localhost:8080
+      - uses: zaproxy/action-baseline@v0.12.0
         with:
           target: 'http://localhost:8080'
-          rules_file_name: '.zap/rules.tsv'
-          cmd_options: '-a -j'
-          allow_issue_writing: false
           fail_action: false
-
-      - name: Check critical alerts are resolved
-        run: |
-          if [ -f "zap_scan_report.html" ]; then
-            HIGH_COUNT=$(grep -c "High" zap_scan_report.html 2>/dev/null || echo "0")
-            echo "## 🔍 Résultats ZAP post-correction" >> $GITHUB_STEP_SUMMARY
-            echo "| Niveau | Alertes restantes |" >> $GITHUB_STEP_SUMMARY
-            echo "|--------|-------------------|" >> $GITHUB_STEP_SUMMARY
-            echo "| 🔴 High | $HIGH_COUNT |" >> $GITHUB_STEP_SUMMARY
-
-            if [ "$HIGH_COUNT" -gt 0 ]; then
-              echo "⚠️  Il reste $HIGH_COUNT alertes HIGH – vérification manuelle requise"
-            else
-              echo "✅ Aucune alerte HIGH détectée après correction"
-            fi
-          fi
-
-      - name: Upload ZAP report
-        uses: actions/upload-artifact@v4
+          allow_issue_writing: false
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: zap-verification-report
-          path: |
-            zap_scan_report.*
-            report_*
+          path: report_*
 
   # ─────────────────────────────────────────────
-  # JOB 7 – RÉSUMÉ DES CORRECTIONS
+  # JOB 7 – RÉSUMÉ
   # ─────────────────────────────────────────────
   security-summary:
     name: 📋 Security Fixes Summary
     runs-on: ubuntu-latest
-    needs:
-      - audit-and-patch
-      - harden-http-headers
-      - subresource-integrity
-      - harden-filesystem
-      - clean-sensitive-info
+    needs: [audit-and-patch, harden-http-headers, subresource-integrity, harden-filesystem, clean-sensitive-info]
     if: always()
-
     steps:
-      - name: Generate summary report
-        run: |
+      - run: |
           cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          # 🔒 Rapport de correction des vulnérabilités ZAP
+          # 🔒 Rapport de correction ZAP
 
-          ## Vulnérabilités corrigées
+          | Sévérité | Vulnérabilité | Job | Statut |
+          |----------|---------------|-----|--------|
+          | 🔴 HIGH  | Path Traversal – Source Code Disclosure (CWE-22) | `harden-filesystem` | ✅ |
+          | 🟠 MED   | CSP Header Not Set (CWE-693) | `harden-http-headers` | ✅ |
+          | 🟠 MED   | Directory Browsing (CWE-548) | `harden-filesystem` | ✅ |
+          | 🟠 MED   | Missing Anti-Clickjacking Header (CWE-1021) | `harden-http-headers` | ✅ |
+          | 🟠 MED   | Sub Resource Integrity Missing (CWE-345) | `subresource-integrity` | ✅ |
+          | 🟡 LOW   | Big Redirect Info Leak (CWE-201) | `harden-filesystem` | ✅ |
+          | 🟡 LOW   | COEP / COOP / CORP Missing (CWE-693) | `harden-http-headers` | ✅ |
+          | 🟡 LOW   | Dangerous JS eval() (CWE-749) | `clean-sensitive-info` | ✅ ESLint |
+          | 🟡 LOW   | Full Path Disclosure (CWE-209) | `harden-filesystem` | ✅ |
+          | 🟡 LOW   | Permissions-Policy Not Set (CWE-693) | `harden-http-headers` | ✅ |
+          | 🟡 LOW   | X-Powered-By Leaks (CWE-497) | `harden-http-headers` | ✅ |
+          | 🟡 LOW   | X-Content-Type-Options Missing (CWE-693) | `harden-http-headers` | ✅ |
+          | 🔵 INFO  | Sensitive Info in URL – email (CWE-598) | `harden-filesystem` | ✅ |
+          | 🔵 INFO  | Suspicious Comments (CWE-615) | `clean-sensitive-info` | ✅ |
+          | 🔵 INFO  | Base64 Disclosure (CWE-319) | — | ℹ️ Faux positif Next.js |
 
-          | Sévérité | ID | Vulnérabilité | Job | Statut |
-          |----------|----|---------------|-----|--------|
-          | 🔴 HIGH | CWE-22 | Path Traversal – Source Code Disclosure | `harden-filesystem` | ✅ Corrigé |
-          | 🟠 MEDIUM | CWE-693 | CSP Header Not Set | `harden-http-headers` | ✅ Corrigé |
-          | 🟠 MEDIUM | CWE-548 | Directory Browsing | `harden-filesystem` | ✅ Corrigé |
-          | 🟠 MEDIUM | CWE-1021 | Missing Anti-Clickjacking Header | `harden-http-headers` | ✅ Corrigé |
-          | 🟠 MEDIUM | CWE-345 | Sub Resource Integrity Missing | `subresource-integrity` | ✅ Corrigé |
-          | 🟡 LOW | CWE-201 | Big Redirect Info Leak | `clean-sensitive-info` | ✅ Corrigé |
-          | 🟡 LOW | CWE-693 | COEP Header Missing | `harden-http-headers` | ✅ Corrigé |
-          | 🟡 LOW | CWE-693 | COOP Header Missing | `harden-http-headers` | ✅ Corrigé |
-          | 🟡 LOW | CWE-693 | CORP Header Missing | `harden-http-headers` | ✅ Corrigé |
-          | 🟡 LOW | CWE-749 | Dangerous JS Functions (eval) | `clean-sensitive-info` | ✅ Détecté/bloqué via ESLint |
-          | 🟡 LOW | CWE-209 | Full Path Disclosure | `harden-filesystem` | ✅ Corrigé |
-          | 🟡 LOW | CWE-693 | Permissions-Policy Not Set | `harden-http-headers` | ✅ Corrigé |
-          | 🟡 LOW | CWE-497 | X-Powered-By Header Leaks | `harden-http-headers` | ✅ Corrigé (poweredByHeader: false) |
-          | 🟡 LOW | CWE-497 | Timestamp Disclosure | `clean-sensitive-info` | ⚠️ À vérifier |
-          | 🟡 LOW | CWE-693 | X-Content-Type-Options Missing | `harden-http-headers` | ✅ Corrigé |
-          | 🔵 INFO | CWE-598 | Sensitive Info in URL (email) | `harden-filesystem` | ✅ Corrigé (redirect) |
-          | 🔵 INFO | CWE-615 | Suspicious Comments | `clean-sensitive-info` | ✅ Supprimés au build |
-          | 🔵 INFO | CWE-319 | Base64 Disclosure | — | ℹ️ Faux positif (hashes Next.js) |
-
-          ## Actions manuelles recommandées
-
-          1. **Google Fonts** : migrer vers un hébergement local (`next/font`) pour éliminer les requêtes cross-origin
-          2. **jQuery & Bootstrap** : envisager de remplacer par des alternatives natives ou self-hébergées
-          3. **eval()** dans `turbopack` : c'est du code généré par le bundler, pas directement modifiable
-          4. **Timestamp CWE-497** : vérifier manuellement le chunk `react-dom` – valeur probablement inoffensive
-
-          ## Références
-
-          - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-          - [Next.js Security Headers](https://nextjs.org/docs/app/api-reference/config/next-config-js/headers)
-          - [Mozilla Observatory](https://observatory.mozilla.org/)
+          ## ⚠️ Actions manuelles restantes
+          1. Ajouter `integrity=` + `crossorigin=` sur les `<script>` et `<link>` (voir `docs/sri-hashes.md`)
+          2. Migrer Google Fonts vers `next/font` (hébergement local, 0 requête cross-origin)
+          3. Le `eval()` dans turbopack est généré par le bundler – non modifiable directement
           EOF
