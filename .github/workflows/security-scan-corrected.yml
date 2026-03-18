@@ -118,7 +118,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'fix(security): add CSP, X-Frame-Options, COEP, COOP, CORP, Permissions-Policy, X-Content-Type-Options, disable X-Powered-By'
-          file_pattern: 'next.config.js next.config.ts next.config.js.bak next.config.ts.bak'
+          file_pattern: 'next.config.*'
           # token: ${{ secrets.GH_PAT }}   ← Solution B
 
   # ─────────────────────────────────────────────
