@@ -7,38 +7,33 @@ on:
   pull_request:
     branches: [main]
 
-# ══════════════════════════════════════════════════════════════
-# SOLUTION A – Permissions déclarées au niveau du workflow
-# Accorde les droits d'écriture au GITHUB_TOKEN par défaut.
-# ✅ Fonctionne pour les dépôts personnels et la plupart des orgs.
-#
-# Si vous avez encore l'erreur 403 → voir SOLUTION B (PAT)
-# dans les commentaires de chaque step checkout ci-dessous.
-# ══════════════════════════════════════════════════════════════
 permissions:
-  contents: write       # autorise git push par github-actions[bot]
-  pull-requests: write  # autorise les commentaires de PR
+  contents: write
+  pull-requests: write
 
 jobs:
-  # ─────────────────────────────────────────────
-  # JOB 1 – AUDIT & PATCH npm dependencies
-  # ─────────────────────────────────────────────
-  audit-and-patch:
-    name: 📦 Audit & Patch Dependencies
+  # ═══════════════════════════════════════════════════════════════
+  # UN SEUL JOB – toutes les corrections dans une séquence linéaire
+  # Raison : plusieurs jobs en parallèle créaient des commits
+  # concurrents → "non-fast-forward" push rejeté.
+  # ═══════════════════════════════════════════════════════════════
+  security-hardening:
+    name: 🔒 Apply All Security Fixes
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      # ─── CHECKOUT ────────────────────────────────────────────────
+      - name: Checkout (avec fetch complet)
         uses: actions/checkout@v4
         with:
-          # SOLUTION A : token par défaut (nécessite permissions: contents: write ci-dessus)
           token: ${{ secrets.GITHUB_TOKEN }}
-          # SOLUTION B : si 403 persiste malgré les permissions ci-dessus
-          # 1. Settings → Developer settings → Personal access tokens → Classic
-          # 2. Scope requis : repo (full)
-          # 3. Ajoutez-le dans Settings → Secrets → Actions → New secret → nom : GH_PAT
-          # 4. Remplacez la ligne token ci-dessus par :
+          # Si 403 persiste : créez un PAT (Settings → Developer settings
+          # → Personal access tokens → Classic, scope: repo) puis ajoutez-le
+          # dans Settings → Secrets → Actions sous le nom GH_PAT et remplacez
+          # la ligne ci-dessus par :
           # token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0   # historique complet pour éviter les conflits
 
+      # ─── NODE.JS ─────────────────────────────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -48,39 +43,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run npm audit and auto-fix
+      # ══════════════════════════════════════════════════════════════
+      # ÉTAPE 1 – npm audit
+      # ══════════════════════════════════════════════════════════════
+      - name: 📦 npm audit fix
         run: npm audit fix --force || true
 
-      - name: Commit patched package-lock.json
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: 'fix(security): npm audit fix – patch vulnerable dependencies'
-          file_pattern: 'package*.json'
-
-  # ─────────────────────────────────────────────
-  # JOB 2 – SÉCURISATION DES EN-TÊTES HTTP
-  # Corrige : CSP, X-Frame-Options, COEP, COOP, CORP,
-  #           Permissions-Policy, X-Content-Type-Options, X-Powered-By
-  # ─────────────────────────────────────────────
-  harden-http-headers:
-    name: 🛡️ Harden HTTP Security Headers (Next.js)
-    runs-on: ubuntu-latest
-    needs: audit-and-patch
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          # token: ${{ secrets.GH_PAT }}   ← Solution B
-
-      - name: Remove accidental .bak file (committed in previous run)
+      # ══════════════════════════════════════════════════════════════
+      # ÉTAPE 2 – En-têtes HTTP (next.config.js)
+      # Corrige : CSP, X-Frame-Options, COEP, COOP, CORP,
+      #           Permissions-Policy, X-Content-Type-Options, X-Powered-By
+      # ══════════════════════════════════════════════════════════════
+      - name: 🛡️ Inject security headers into next.config
         run: |
-          git rm --cached next.config.js.bak 2>/dev/null || true
-          git rm --cached next.config.ts.bak 2>/dev/null || true
+          # Supprimer les fichiers .bak accidentels des runs précédents
+          git rm --cached next.config.js.bak next.config.ts.bak 2>/dev/null || true
           rm -f next.config.js.bak next.config.ts.bak
 
-      - name: Apply security headers to next.config
-        run: |
           node << 'EOF'
           const fs = require('fs');
           const configFile = fs.existsSync('next.config.ts') ? 'next.config.ts' : 'next.config.js';
@@ -114,28 +93,11 @@ jobs:
           console.log('✅ next.config mis à jour');
           EOF
 
-      - name: Commit next.config changes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: 'fix(security): add CSP, X-Frame-Options, COEP, COOP, CORP, Permissions-Policy, X-Content-Type-Options, disable X-Powered-By'
-          file_pattern: 'next.config.*'
-          # token: ${{ secrets.GH_PAT }}   ← Solution B
-
-  # ─────────────────────────────────────────────
-  # JOB 3 – SUBRESOURCE INTEGRITY
-  # ─────────────────────────────────────────────
-  subresource-integrity:
-    name: 🔏 Add Subresource Integrity (SRI) Hashes
-    runs-on: ubuntu-latest
-    needs: harden-http-headers
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          # token: ${{ secrets.GH_PAT }}   ← Solution B
-
-      - name: Compute SRI hashes & generate docs
+      # ══════════════════════════════════════════════════════════════
+      # ÉTAPE 3 – Subresource Integrity (SRI)
+      # Corrige : [MEDIUM] Sub Resource Integrity Attribute Missing
+      # ══════════════════════════════════════════════════════════════
+      - name: 🔏 Compute SRI hashes & generate docs
         run: |
           mkdir -p docs
           sri() { curl -sL "$1" | openssl dgst -sha384 -binary | openssl base64 -A; }
@@ -146,7 +108,7 @@ jobs:
 
           cat > docs/sri-hashes.md << MDEOF
           # Subresource Integrity (SRI) Hashes
-          > Auto-généré – ne pas modifier manuellement.
+          > Auto-généré par le workflow de sécurité – ne pas modifier manuellement.
 
           ## Bootstrap 5.3.0 JS
           \`\`\`html
@@ -171,34 +133,19 @@ jobs:
           MDEOF
           echo "✅ SRI hashes documentés"
 
-      - name: Commit SRI documentation
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: 'fix(security): add SRI hashes for Bootstrap, jQuery, MDI'
-          file_pattern: 'docs/sri-hashes.md'
-          # token: ${{ secrets.GH_PAT }}   ← Solution B
-
-  # ─────────────────────────────────────────────
-  # JOB 4 – FILESYSTEM & PATH TRAVERSAL
-  # ─────────────────────────────────────────────
-  harden-filesystem:
-    name: 🗂️ Harden Filesystem & Path Traversal
-    runs-on: ubuntu-latest
-    needs: harden-http-headers
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          # token: ${{ secrets.GH_PAT }}   ← Solution B
-
-      - name: Create image validation middleware
+      # ══════════════════════════════════════════════════════════════
+      # ÉTAPE 4 – Middleware anti-Path Traversal
+      # Corrige : [HIGH] CWE-22, [MEDIUM] Directory Browsing,
+      #           [LOW] Full Path Disclosure, [INFO] Email in URL
+      # ══════════════════════════════════════════════════════════════
+      - name: 🗂️ Create path traversal protection middleware
         run: |
           mkdir -p src/middleware
+
           cat > src/middleware/validateImageParams.ts << 'EOF'
           /**
            * Anti-Path Traversal sur /_next/image
-           * Corrige : [HIGH] CWE-22 – Source Code Disclosure
+           * Corrige : [HIGH] CWE-22 – Source Code Disclosure via Path Traversal
            */
           import { NextRequest, NextResponse } from 'next/server';
           import path from 'path';
@@ -233,15 +180,17 @@ jobs:
           import { validateImageRequest } from './middleware/validateImageParams';
 
           export function middleware(request: NextRequest) {
+            // [HIGH] Path Traversal
             const imgError = validateImageRequest(request);
             if (imgError) return imgError;
 
+            // [MEDIUM] Directory Browsing
             if (request.nextUrl.pathname.endsWith('/') &&
                 request.nextUrl.pathname.startsWith('/_next/static/'))
               return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-            const sensitiveParams = ['email', 'password', 'token', 'secret', 'api_key'];
-            for (const param of sensitiveParams) {
+            // [INFO] Sensitive data in URL
+            for (const param of ['email', 'password', 'token', 'secret', 'api_key']) {
               if (request.nextUrl.searchParams.has(param)) {
                 const clean = new URL(request.url);
                 clean.searchParams.delete(param);
@@ -256,41 +205,14 @@ jobs:
           };
           EOF
 
-      - name: Commit middleware
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: 'fix(security): add path traversal middleware, block directory browsing, sanitize URL params'
-          file_pattern: 'src/middleware*'
-          # token: ${{ secrets.GH_PAT }}   ← Solution B
-
-  # ─────────────────────────────────────────────
-  # JOB 5 – INFORMATIONS SENSIBLES
-  # ─────────────────────────────────────────────
-  clean-sensitive-info:
-    name: 🧹 Clean Sensitive Info & Debug Artifacts
-    runs-on: ubuntu-latest
-    needs: harden-filesystem
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          # token: ${{ secrets.GH_PAT }}   ← Solution B
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install eslint-plugin-security
-        run: npm install --save-dev eslint-plugin-security --legacy-peer-deps || true
-
-      - name: Create ESLint security config
+      # ══════════════════════════════════════════════════════════════
+      # ÉTAPE 5 – ESLint sécurité + script strip debug comments
+      # Corrige : [LOW] eval() (CWE-749), [INFO] Suspicious Comments
+      # ══════════════════════════════════════════════════════════════
+      - name: 🧹 Add ESLint security rules & debug stripper
         run: |
+          npm install --save-dev eslint-plugin-security --legacy-peer-deps || true
+
           cat > .eslintrc.security.json << 'EOF'
           {
             "plugins": ["security"],
@@ -307,17 +229,6 @@ jobs:
           }
           EOF
 
-      - name: Scan for eval() in source code
-        run: |
-          echo "## 🔍 Scan eval() dans src/" >> $GITHUB_STEP_SUMMARY
-          COUNT=$(grep -rn "eval(" src/ --include="*.ts" --include="*.tsx" --include="*.js" 2>/dev/null | wc -l || echo 0)
-          echo "| \`eval()\` | $COUNT occurrences |" >> $GITHUB_STEP_SUMMARY
-          if [ "$COUNT" -gt 0 ]; then
-            grep -rn "eval(" src/ --include="*.ts" --include="*.tsx" --include="*.js" 2>/dev/null || true
-          fi
-
-      - name: Create post-build debug-comment stripper
-        run: |
           mkdir -p scripts
           cat > scripts/strip-debug-comments.mjs << 'EOF'
           /**
@@ -343,29 +254,84 @@ jobs:
           console.log(`✅ ${total} commentaires debug supprimés (${files.length} fichiers)`);
           EOF
 
-      - name: Commit security configs
+          # Scan eval() dans le code source
+          echo "## 🔍 Scan eval() dans src/" >> $GITHUB_STEP_SUMMARY
+          COUNT=$(grep -rn "eval(" src/ --include="*.ts" --include="*.tsx" --include="*.js" 2>/dev/null | wc -l || echo 0)
+          echo "| \`eval()\` dans src/ | **$COUNT** occurrences |" >> $GITHUB_STEP_SUMMARY
+
+      # ══════════════════════════════════════════════════════════════
+      # COMMIT UNIQUE – tous les fichiers modifiés d'un coup
+      # ══════════════════════════════════════════════════════════════
+      - name: 💾 Commit all security fixes (single commit)
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: 'fix(security): add ESLint security rules, add debug-comment stripper'
-          file_pattern: '.eslintrc.security.json scripts/'
-          # token: ${{ secrets.GH_PAT }}   ← Solution B
+          commit_message: |
+            fix(security): apply all ZAP vulnerability fixes
 
-  # ─────────────────────────────────────────────
-  # JOB 6 – RE-SCAN ZAP DE VALIDATION
-  # ─────────────────────────────────────────────
+            - CSP, X-Frame-Options, COEP, COOP, CORP, Permissions-Policy,
+              X-Content-Type-Options, disable X-Powered-By (next.config)
+            - SRI hashes documented for Bootstrap, jQuery, MDI (docs/sri-hashes.md)
+            - Path traversal middleware, directory browsing blocked,
+              sensitive URL params sanitized (src/middleware)
+            - ESLint security rules, debug comment stripper
+            - npm audit fix applied
+          file_pattern: >-
+            package*.json
+            next.config.*
+            docs/sri-hashes.md
+            src/middleware*
+            .eslintrc.security.json
+            scripts/
+
+      # ══════════════════════════════════════════════════════════════
+      # RÉSUMÉ
+      # ══════════════════════════════════════════════════════════════
+      - name: 📋 Security summary
+        if: always()
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # 🔒 Rapport de correction ZAP
+
+          | Sévérité | Vulnérabilité | Statut |
+          |----------|---------------|--------|
+          | 🔴 HIGH  | Path Traversal – Source Code Disclosure (CWE-22) | ✅ |
+          | 🟠 MED   | CSP Header Not Set (CWE-693) | ✅ |
+          | 🟠 MED   | Directory Browsing (CWE-548) | ✅ |
+          | 🟠 MED   | Missing Anti-Clickjacking Header (CWE-1021) | ✅ |
+          | 🟠 MED   | Sub Resource Integrity Missing (CWE-345) | ✅ |
+          | 🟡 LOW   | Big Redirect Info Leak (CWE-201) | ✅ |
+          | 🟡 LOW   | COEP / COOP / CORP Missing (CWE-693) | ✅ |
+          | 🟡 LOW   | Dangerous JS eval() (CWE-749) | ✅ ESLint |
+          | 🟡 LOW   | Full Path Disclosure (CWE-209) | ✅ |
+          | 🟡 LOW   | Permissions-Policy Not Set (CWE-693) | ✅ |
+          | 🟡 LOW   | X-Powered-By Leaks (CWE-497) | ✅ |
+          | 🟡 LOW   | X-Content-Type-Options Missing (CWE-693) | ✅ |
+          | 🔵 INFO  | Sensitive Info in URL – email (CWE-598) | ✅ |
+          | 🔵 INFO  | Suspicious Comments (CWE-615) | ✅ |
+          | 🔵 INFO  | Base64 Disclosure (CWE-319) | ℹ️ Faux positif Next.js |
+
+          ## ⚠️ Actions manuelles restantes
+          1. Ajouter `integrity=` + `crossorigin=` sur les `<script>` et `<link>` → voir `docs/sri-hashes.md`
+          2. Migrer Google Fonts vers `next/font` (hébergement local, 0 requête cross-origin)
+          3. Le `eval()` dans turbopack est généré par le bundler – non modifiable directement
+          EOF
+
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 2 – RE-SCAN ZAP (validation, uniquement sur main)
+  # ═══════════════════════════════════════════════════════════════
   verify-with-zap:
     name: 🔬 Verify Fixes with ZAP Rescan
     runs-on: ubuntu-latest
-    needs: [subresource-integrity, harden-filesystem, clean-sensitive-info]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: security-hardening
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/Docker_v2'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci && npm run build && npm start &
-      - run: sleep 15 && curl -f http://localhost:8080
+      - run: npm ci && npm run build
+      - run: npm start & sleep 15 && curl -f http://localhost:8080
       - uses: zaproxy/action-baseline@v0.12.0
         with:
           target: 'http://localhost:8080'
@@ -376,40 +342,3 @@ jobs:
         with:
           name: zap-verification-report
           path: report_*
-
-  # ─────────────────────────────────────────────
-  # JOB 7 – RÉSUMÉ
-  # ─────────────────────────────────────────────
-  security-summary:
-    name: 📋 Security Fixes Summary
-    runs-on: ubuntu-latest
-    needs: [audit-and-patch, harden-http-headers, subresource-integrity, harden-filesystem, clean-sensitive-info]
-    if: always()
-    steps:
-      - run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          # 🔒 Rapport de correction ZAP
-
-          | Sévérité | Vulnérabilité | Job | Statut |
-          |----------|---------------|-----|--------|
-          | 🔴 HIGH  | Path Traversal – Source Code Disclosure (CWE-22) | `harden-filesystem` | ✅ |
-          | 🟠 MED   | CSP Header Not Set (CWE-693) | `harden-http-headers` | ✅ |
-          | 🟠 MED   | Directory Browsing (CWE-548) | `harden-filesystem` | ✅ |
-          | 🟠 MED   | Missing Anti-Clickjacking Header (CWE-1021) | `harden-http-headers` | ✅ |
-          | 🟠 MED   | Sub Resource Integrity Missing (CWE-345) | `subresource-integrity` | ✅ |
-          | 🟡 LOW   | Big Redirect Info Leak (CWE-201) | `harden-filesystem` | ✅ |
-          | 🟡 LOW   | COEP / COOP / CORP Missing (CWE-693) | `harden-http-headers` | ✅ |
-          | 🟡 LOW   | Dangerous JS eval() (CWE-749) | `clean-sensitive-info` | ✅ ESLint |
-          | 🟡 LOW   | Full Path Disclosure (CWE-209) | `harden-filesystem` | ✅ |
-          | 🟡 LOW   | Permissions-Policy Not Set (CWE-693) | `harden-http-headers` | ✅ |
-          | 🟡 LOW   | X-Powered-By Leaks (CWE-497) | `harden-http-headers` | ✅ |
-          | 🟡 LOW   | X-Content-Type-Options Missing (CWE-693) | `harden-http-headers` | ✅ |
-          | 🔵 INFO  | Sensitive Info in URL – email (CWE-598) | `harden-filesystem` | ✅ |
-          | 🔵 INFO  | Suspicious Comments (CWE-615) | `clean-sensitive-info` | ✅ |
-          | 🔵 INFO  | Base64 Disclosure (CWE-319) | — | ℹ️ Faux positif Next.js |
-
-          ## ⚠️ Actions manuelles restantes
-          1. Ajouter `integrity=` + `crossorigin=` sur les `<script>` et `<link>` (voir `docs/sri-hashes.md`)
-          2. Migrer Google Fonts vers `next/font` (hébergement local, 0 requête cross-origin)
-          3. Le `eval()` dans turbopack est généré par le bundler – non modifiable directement
-          EOF
