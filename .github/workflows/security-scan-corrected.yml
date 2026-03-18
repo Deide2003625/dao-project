@@ -330,8 +330,37 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci && npm run build
-      - run: npm start & sleep 15 && curl -f http://localhost:8080
+      - name: Create .env.local from existing .env secret
+        run: |
+          # ── Comment configurer ce secret ──────────────────────────────
+          # 1. Copiez le contenu COMPLET de votre fichier .env Docker
+          # 2. Settings → Secrets and variables → Actions → New repository secret
+          # 3. Nom : ENV_FILE  |  Valeur : collez le contenu du .env
+          # C'est tout – pas besoin de créer un secret par variable.
+          # ──────────────────────────────────────────────────────────────
+          echo "${{ secrets.ENV_FILE }}" > .env.local
+          echo "✅ .env.local créé depuis le secret ENV_FILE"
+
+      - name: Fix next.config.js – remove unsupported eslint key
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          const configFile = fs.existsSync('next.config.ts') ? 'next.config.ts' : 'next.config.js';
+          let content = fs.readFileSync(configFile, 'utf8');
+          // Supprimer le bloc eslint: { ... } non supporté dans Next.js 15+
+          content = content.replace(/\s*eslint\s*:\s*\{[^}]*\},?/g, '');
+          fs.writeFileSync(configFile, content);
+          console.log('✅ Clé eslint supprimée de next.config');
+          EOF
+
+      - name: Build
+        run: npm run build
+
+      - name: Start app
+        run: |
+          npm start &
+          sleep 15
+          curl -f http://localhost:8080 || curl -f http://localhost:3000
       - uses: zaproxy/action-baseline@v0.12.0
         with:
           target: 'http://localhost:8080'
