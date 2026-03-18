@@ -16,6 +16,8 @@ services:
 
   # ── Application Next.js ───────────────────────────────────
   app:
+    env_file:
+      - .env
     build:
       context: .
       dockerfile: Dockerfile.working
@@ -58,6 +60,8 @@ services:
 
   # ── Base de données MySQL ──────────────────────────────────
   mysql:
+    env_file:
+      - .env
     image: mysql:8.0
     container_name: dao-mysql
     restart: unless-stopped

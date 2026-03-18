@@ -2,7 +2,7 @@
 # CONFIGURATION DU PROJET — DAO
 #
 # Copier ce fichier en .env et adapter les valeurs :
-#   cp .env.example .env
+#   cp env-production.example .env
 #
 # IMPORTANT : Ne jamais commiter le fichier .env dans Git.
 #             Seul .env.example doit être versionné.
