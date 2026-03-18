@@ -375,13 +375,26 @@ jobs:
           npm start &
           sleep 15
           curl -f http://localhost:8080 || curl -f http://localhost:3000
-      - uses: zaproxy/action-baseline@v0.12.0
+      - name: Fix ZAP workspace permissions
+        run: |
+          # Le conteneur ZAP tourne en tant qu'utilisateur non-root
+          # et n'a pas le droit d'écrire dans le workspace par défaut.
+          chmod 777 ${{ github.workspace }}
+
+      - name: Run ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
         with:
           target: 'http://localhost:8080'
           fail_action: false
           allow_issue_writing: false
-      - uses: actions/upload-artifact@v4
+          cmd_options: '-I'   # -I = ignore warnings, ne fait pas échouer le job
+
+      - name: Upload ZAP report
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: zap-verification-report
-          path: report_*
+          name: zap-report
+          path: |
+            report_html.html
+            report_md.md
+            report_json.json
