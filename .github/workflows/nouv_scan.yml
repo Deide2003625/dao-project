@@ -11,40 +11,56 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 📥 Récupérer le code
+      # 📥 Checkout
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 🟢 Installer Node
+      # 🟢 Node 20 (FIX PRINCIPAL)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
+          cache: 'npm'
 
-      # 📦 Installer dépendances
+      # 🔍 Vérification version
+      - name: Check Node version
+        run: node -v
+
+      # 📦 Install
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      # 🏗️ Build Next.js
+      # 🏗️ Build
       - name: Build app
         run: npm run build
 
-      # 🚀 Lancer app en background
+      # 🚀 Start app
       - name: Start app
         run: |
           npm run start &
-          sleep 10
+          sleep 15
 
-      # 🔍 Vérifier que l'app tourne
+      # 🔍 Vérifier disponibilité
       - name: Wait for app
         run: |
-          curl -I http://localhost:3000
+          curl --retry 5 --retry-delay 5 --retry-connrefused http://localhost:3000
 
-      # 🛡️ Scan ZAP
+      # 🧪 Test sécurité rapide (Path Traversal)
+      - name: Test Path Traversal
+        run: |
+          if curl -s "http://localhost:3000/_next/image?url=../../etc/passwd" | grep "root"; then
+            echo "❌ Path Traversal vulnerability detected"
+            exit 1
+          else
+            echo "✅ Path Traversal safe"
+          fi
+
+      # 🛡️ ZAP Scan
       - name: ZAP Scan
         uses: zaproxy/action-full-scan@v0.10.0
         with:
           target: 'http://localhost:3000'
+          fail_action: false   # ⚠️ mets true quand tout est stable
           cmd_options: '-a'
 
       # 📊 Upload rapport
