@@ -1,42 +1,34 @@
 /** @type {import('next').NextConfig} */
-const path = require("path");
-
 const nextConfig = {
   poweredByHeader: false,
-  // Configuration de Turbopack
-  experimental: {
-    serverActions: {
-      bodySizeLimit: "2mb",
-    },
-  },
-  // Configuration des en-têtes pour les API
   async headers() {
-    return [
+    const securityHeaders = [
       {
-        source: "/api/:path*",
-        headers: [
-          { key: "Access-Control-Allow-Credentials", value: "true" },
-          { key: "Access-Control-Allow-Origin", value: "*" },
-          { key: "Access-Control-Allow-Methods", value: "GET,POST, PUT, DELETE, OPTIONS" }
-        ]
-      }
-    ]
+        key: 'Content-Security-Policy',
+        value: [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com",
+          "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
+          "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
+          "img-src 'self' data: blob:",
+          "connect-src 'self'",
+          "frame-ancestors 'none'",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+        ].join('; '),
+      },
+      { key: 'X-Frame-Options',              value: 'DENY' },
+      { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+      { key: 'Cross-Origin-Opener-Policy',   value: 'same-origin' },
+      { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+      { key: 'Permissions-Policy',           value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+      { key: 'X-Content-Type-Options',       value: 'nosniff' },
+      { key: 'Strict-Transport-Security',    value: 'max-age=63072000; includeSubDomains; preload' },
+      { key: 'Referrer-Policy',              value: 'strict-origin-when-cross-origin' },
+    ];
+    return [{ source: '/(.*)', headers: securityHeaders }];
   },
-  // Active le mode strict pour React (meilleur comportement)
-  reactStrictMode: true,
-  // Configuration pour le traitement CSS
-  compiler: {
-    removeConsole: false,
-  },
-  // Désactive la vérification ESLint pendant la compilation
-  eslint: {
-    ignoreDuringBuilds: true,
-    ignoreDuringTests: true
-  },
-  // Désactive les vérifications TypeScript pendant la compilation
-  typescript: {
-    ignoreBuildErrors: true
-  }
 };
 
 module.exports = nextConfig;

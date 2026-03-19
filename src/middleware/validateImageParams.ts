@@ -1,9 +1,4 @@
-/**
- * Anti-Path Traversal sur /_next/image
- * Corrige : [HIGH] CWE-22 – Source Code Disclosure via Path Traversal
- */
 import { NextRequest, NextResponse } from 'next/server';
-import path from 'path';
 
 const ALLOWED_PREFIXES   = ['/images/', '/public/'];
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.ico'];
@@ -18,7 +13,8 @@ export function validateImageRequest(request: NextRequest): NextResponse | null 
   const decoded = decodeURIComponent(url);
   if (/\.\.|\%2e\%2e|\%252e/i.test(decoded))
     return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
-  if (!ALLOWED_EXTENSIONS.includes(path.extname(decoded).toLowerCase()))
+  const ext = decoded.split('.').pop()?.toLowerCase() ?? '';
+  if (!ALLOWED_EXTENSIONS.includes('.' + ext))
     return NextResponse.json({ error: 'Invalid extension' }, { status: 400 });
   if (!ALLOWED_PREFIXES.some(p => decoded.startsWith(p)))
     return NextResponse.json({ error: 'Path not allowed' }, { status: 403 });
