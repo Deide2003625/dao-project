@@ -144,6 +144,34 @@ jobs:
       # Corrige : [HIGH] CWE-22, [MEDIUM] Directory Browsing,
       #           [LOW] Full Path Disclosure, [INFO] Email in URL
       # ══════════════════════════════════════════════════════════════
+      - name: 🔧 Fix Next.js 15 route handler params signature
+        run: |
+          # Next.js 15+ exige params: Promise<{id: string}> au lieu de params: {id: string}
+          # On corrige automatiquement tous les route handlers du projet.
+          find app/ src/ -name "route.ts" -o -name "route.tsx" 2>/dev/null | while read file; do
+            if grep -q 'params: {' "$file"; then
+              node << 'JSEOF'
+          const fs = require('fs');
+          const file = process.argv[1];
+          let content = fs.readFileSync(file, 'utf8');
+
+          // params: { id: string } → params: Promise<{ id: string }>
+          content = content.replace(
+            /\{\s*params\s*\}\s*:\s*\{\s*params\s*:\s*(\{[^}]+\})\s*\}/g,
+            '{ params }: { params: Promise<$1> }'
+          );
+          // await params pour extraire les valeurs
+          content = content.replace(
+            /const\s*\{\s*([^}]+)\s*\}\s*=\s*params(?!\s*\))/g,
+            'const { $1 } = await params'
+          );
+          fs.writeFileSync(file, content);
+          console.log('Fixed: ' + file);
+          JSEOF
+            fi
+          done
+          echo "✅ Route handlers Next.js 15+ corrigés"
+
       - name: 🗂️ Create path traversal protection middleware
         run: |
           mkdir -p src/middleware
@@ -152,13 +180,20 @@ jobs:
           /**
            * Anti-Path Traversal sur /_next/image
            * Corrige : [HIGH] CWE-22 – Source Code Disclosure via Path Traversal
+           * Note: Edge Runtime uniquement – pas d'import de modules Node.js (path, fs, etc.)
            */
           import { NextRequest, NextResponse } from 'next/server';
-          import path from 'path';
 
           const ALLOWED_PREFIXES   = ['/images/', '/public/'];
           const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.ico'];
           const ALLOWED_WIDTHS     = [16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 1200, 1920, 2048, 3840];
+
+          // Remplace path.extname() – compatible Edge Runtime
+          function getExtension(url: string): string {
+            const clean = url.split('?')[0].split('#')[0];
+            const dot = clean.lastIndexOf('.');
+            return dot !== -1 ? clean.slice(dot).toLowerCase() : '';
+          }
 
           export function validateImageRequest(request: NextRequest): NextResponse | null {
             if (!request.nextUrl.pathname.startsWith('/_next/image')) return null;
@@ -169,7 +204,7 @@ jobs:
             const decoded = decodeURIComponent(url);
             if (/\.\.|\%2e\%2e|\%252e/i.test(decoded))
               return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
-            if (!ALLOWED_EXTENSIONS.includes(path.extname(decoded).toLowerCase()))
+            if (!ALLOWED_EXTENSIONS.includes(getExtension(decoded)))
               return NextResponse.json({ error: 'Invalid extension' }, { status: 400 });
             if (!ALLOWED_PREFIXES.some(p => decoded.startsWith(p)))
               return NextResponse.json({ error: 'Path not allowed' }, { status: 403 });
