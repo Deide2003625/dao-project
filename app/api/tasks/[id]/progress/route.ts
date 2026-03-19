@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   console.log('=== DÉBUT API PUT /api/tasks/[id]/progress ===');
   

@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText } from "lucide-react";
 import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-
+// [auto-patch] import dynamique requis pour le SSR:
+// const { jsPDF } = await import("jspdf");
 interface Dao {
   id: number;
   numero: string;

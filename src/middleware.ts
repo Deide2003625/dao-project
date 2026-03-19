@@ -1,21 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateImageRequest } from './middleware/validateImageParams';
 
 export function middleware(request: NextRequest) {
-  const imgError = validateImageRequest(request);
-  if (imgError) return imgError;
+  const url = request.nextUrl;
 
-  if (request.nextUrl.pathname.endsWith('/') &&
-      request.nextUrl.pathname.startsWith('/_next/static/'))
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-  for (const param of ['email', 'password', 'token', 'secret', 'api_key']) {
-    if (request.nextUrl.searchParams.has(param)) {
+  // Supprime les params sensibles de l'URL (CWE-598)
+  for (const param of ['email', 'password', 'token', 'secret', 'api_key', 'access_token']) {
+    if (url.searchParams.has(param)) {
       const clean = new URL(request.url);
       clean.searchParams.delete(param);
-      return NextResponse.redirect(clean, { status: 301 });
+      return NextResponse.redirect(clean, 301);
     }
   }
+
+  // Anti Path Traversal sur /_next/image (CWE-22)
+  if (url.pathname.startsWith('/_next/image')) {
+    const img = url.searchParams.get('url');
+    if (img) {
+      const decoded = decodeURIComponent(img);
+      if (/\.{2,}/i.test(decoded) || /%2e%2e/i.test(decoded)) {
+        return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+      }
+    }
+  }
+
   return NextResponse.next();
 }
 
