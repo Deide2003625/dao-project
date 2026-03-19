@@ -2,7 +2,7 @@ name: 🔐 Security Scan (ZAP)
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "develop", "feature/Correction_v1" ]
   pull_request:
     branches: [ "main" ]
 
