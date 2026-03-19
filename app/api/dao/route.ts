@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sendDaoCreationEmail } from "@/lib/email";
+import { withRetry } from "@/utils/db-retry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -207,10 +208,11 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: daosWithStatus });
-  } catch (err: any) {
-    console.error("API /api/dao GET error:", err?.message, err);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('API /api/dao GET error:', message);
     return NextResponse.json(
-      { success: false, message: err?.message || "Erreur serveur" },
+      { success: false, message: message || "Erreur serveur" },
       { status: 500 },
     );
   }
@@ -325,9 +327,9 @@ export async function POST(req: NextRequest) {
     const generatedNumero = `DAO-${year}-${String(nextSeq).padStart(3, "0")}`;
     console.log("Numéro DAO généré lors de l'insertion:", generatedNumero);
 
-    // Insérer DAO
-    const [insertRes]: any = await connection.execute(
-      `
+    // Insérer DAO avec retry pour éviter les deadlocks
+    const [insertRes]: any = await withRetry(() =>
+      connection.execute(`
       INSERT INTO daos (numero, date_depot, objet, description, reference, autorite, statut, chef_id, team_id, groupement, nom_partenaire, type_dao)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
@@ -344,7 +346,7 @@ export async function POST(req: NextRequest) {
         groupement || null,
         groupement === "oui" ? nomPartenaire : null,
         typeDao || null,
-      ],
+      ])
     );
 
     const daoId = insertRes?.insertId;
@@ -463,10 +465,11 @@ export async function POST(req: NextRequest) {
       teamId,
       teamCode,
     });
-  } catch (err: any) {
-    console.error("API /api/dao POST error:", err?.message, err);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('API /api/dao POST error:', message);
     return NextResponse.json(
-      { success: false, message: "Erreur serveur lors de la création du DAO" },
+      { success: false, message: message || "Erreur serveur lors de la création du DAO" },
       { status: 500 },
     );
   }

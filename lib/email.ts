@@ -176,7 +176,7 @@ export async function sendDaoCreationEmail(daoName: string, chefProjetName: stri
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/dash/DirecteurGeneral" 
+            <a href="${process.env.NEXTAUTH_URL || 'http://localhost:2005'}/dash/DirecteurGeneral" 
                style="display: inline-block; background: linear-gradient(135deg, #4b49ac, #7da0fa); color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500; font-size: 16px;">
               🚀 Accéder au Dashboard
             </a>
@@ -199,7 +199,7 @@ export async function sendDaoCreationEmail(daoName: string, chefProjetName: stri
   `;
 
   // Envoyer l'email au chef de projet au lieu de l'admin
-  const targetEmail = chefProjetEmail || process.env.ADMIN_EMAIL || 'deidesarr@gmail.com';
+  const targetEmail = chefProjetEmail || process.env.EMAIL_RECEIVER || 'deidesarr@gmail.com';
   console.log("Email de création de DAO envoyé au chef de projet:", targetEmail);
   return await sendEmail(targetEmail, subject, html);
 }

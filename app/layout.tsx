@@ -1,81 +1,19 @@
-// app/layout.tsx
-"use client";
-
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Script from "next/script";
-import Header from "@/components/Header";
-import Sidebar from "@/components/Sidebar";
-import Footer from "@/components/Footer";
-import { usePathname } from "next/navigation";
-import { SessionProvider } from "next-auth/react";
-import { useState, useEffect } from "react";
+import { headers } from "next/headers";
+import ClientLayout from "./layout-client";
 
 const inter = Inter({ subsets: ["latin"] });
 
-// Cette partie doit être dans un composant client
-function AppContent({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const isLoginPage = pathname === "/login";
-  const [user, setUser] = useState<{ id: number; role_id: number } | null>(
-    null,
-  );
-
-  // Récupérer l'utilisateur connecté
-  useEffect(() => {
-    async function fetchUser() {
-      try {
-        const res = await fetch("/api/me", {
-          credentials: "include",
-          cache: "no-store",
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.user) {
-            setUser({
-              id: data.user.id,
-              role_id: data.user.role_id || 0,
-            });
-          }
-        }
-      } catch (error) {
-        console.error(
-          "Erreur lors de la récupération de l'utilisateur:",
-          error,
-        );
-      }
-    }
-
-    if (!isLoginPage) {
-      fetchUser();
-    }
-  }, [isLoginPage]);
-
-  if (isLoginPage) {
-    return <div className="container-scroller">{children}</div>;
-  }
-
-  return (
-    <div className="container-scroller">
-      <Header />
-      <div className="container-fluid page-body-wrapper">
-        <Sidebar />
-        <div className="main-panel">
-          <div className="content-wrapper">{children}</div>
-          <Footer />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Composant de mise en page racine (côté client)
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Récupérer le nonce depuis les headers du middleware
+  const headersList = await headers();
+  const nonce = headersList.get("x-nonce") || "";
+
   return (
     <html lang="fr">
       <head>
@@ -88,6 +26,8 @@ export default function RootLayout({
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css"
+          integrity="sha384-WKL5jx7Jp5xCgVpuz3AQtH37JBIDSgiCawKkzMQrYsWX1sjlIqJUlmCZuDgExIbE"
+          crossOrigin="anonymous"
         />
         {/* Remplacement du fichier manquant par Bootstrap depuis CDN */}
         <link
@@ -99,25 +39,29 @@ export default function RootLayout({
         <link rel="stylesheet" href="/css/style.css" />
         <link rel="stylesheet" href="/css/custom.css" />
 
-        {/* Scripts critiques */}
-        <Script
+        {/* Scripts critiques avec nonce et SRI */}
+        <script
           src="https://code.jquery.com/jquery-3.6.0.min.js"
-          strategy="beforeInteractive"
+          integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK"
+          crossOrigin="anonymous"
+          nonce={nonce}
         />
       </head>
       <body className={inter.className}>
-        <SessionProvider>
-          <AppContent>{children}</AppContent>
-        </SessionProvider>
+        <ClientLayout nonce={nonce}>
+          {children}
+        </ClientLayout>
 
-        {/* Scripts non critiques */}
-        <Script
+        {/* Scripts non critiques avec nonce et SRI */}
+        <script
           src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-          strategy="afterInteractive"
+          integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz"
+          crossOrigin="anonymous"
+          nonce={nonce}
         />
-        <Script src="/js/off-canvas.js" strategy="lazyOnload" />
-        <Script src="/js/hoverable-collapse.js" strategy="lazyOnload" />
-        <Script src="/js/template.js" strategy="lazyOnload" />
+        <script src="/js/off-canvas.js" nonce={nonce} />
+        <script src="/js/hoverable-collapse.js" nonce={nonce} />
+        <script src="/js/template.js" nonce={nonce} />
       </body>
     </html>
   );

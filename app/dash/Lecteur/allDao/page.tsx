@@ -250,19 +250,6 @@ export default function AllDaoPage() {
                         {dao.chef_projet || "N/A"}
                       </span>
                     </div>
-
-                    <div className="mt-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Progression</span>
-                        <span className="font-medium">0%</span>
-                      </div>
-                      <div className="w-full bg-gray-100 h-2 rounded mt-2">
-                        <div
-                          className="h-2 bg-blue-600 rounded"
-                          style={{ width: "0%" }}
-                        />
-                      </div>
-                    </div>
                   </div>
 
                   

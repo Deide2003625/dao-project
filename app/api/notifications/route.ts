@@ -72,7 +72,7 @@ async function checkAndCreateDepositNotifications(connection: any, userId: numbe
     // Récupérer tous les DAOs avec leur date de dépôt
     const [daos] = await connection.execute(
       `
-      SELECT id, nom, date_depot
+      SELECT id, objet, date_depot
       FROM daos
       WHERE date_depot IS NOT NULL
       ORDER BY date_depot ASC
@@ -96,7 +96,7 @@ async function checkAndCreateDepositNotifications(connection: any, userId: numbe
           SELECT id FROM notifications 
           WHERE user_id = ? AND title LIKE ? AND message LIKE ?
           `,
-          [userId, `%Date de dépôt%`, `%${dao.nom}%`]
+          [userId, `%Date de dépôt%`, `%${dao.objet}%`]
         );
 
         if ((existingNotif as any[]).length === 0) {
@@ -110,13 +110,23 @@ async function checkAndCreateDepositNotifications(connection: any, userId: numbe
               userId,
               daysUntilDeposit <= 1 ? 'error' : 'warning',
               'Date de dépôt approche',
-              `Le DAO "${dao.nom}" doit être déposé dans ${daysUntilDeposit} jour${daysUntilDeposit > 1 ? 's' : ''}`
+              `Le DAO "${dao.objet}" doit être déposé dans ${daysUntilDeposit} jour${daysUntilDeposit > 1 ? 's' : ''}`
             ]
           );
 
           // Envoyer un email à l'admin
-          const adminEmail = process.env.ADMIN_EMAIL || 'deidesarr@gmail.com';
-          await sendDepositNotification(adminEmail, dao.nom, daysUntilDeposit);
+          const adminEmail = process.env.EMAIL_RECEIVER || 'deidesarr@gmail.com';
+          const backupEmail = 'deidesarr@gmail.com'; // Email de backup
+          
+          try {
+            await sendDepositNotification(adminEmail, dao.objet, daysUntilDeposit);
+            console.log(`✅ Email de notification envoyé à: ${adminEmail}`);
+          } catch (emailError: any) {
+            console.error(`❌ Erreur envoi à ${adminEmail}, tentative vers backup:`, emailError.message);
+            // Essayer avec l'email de backup en cas de limite dépassée
+            await sendDepositNotification(backupEmail, dao.objet, daysUntilDeposit);
+            console.log(`🔄 Email de backup envoyé à: ${backupEmail}`);
+          }
         }
       }
       
@@ -130,7 +140,7 @@ async function checkAndCreateDepositNotifications(connection: any, userId: numbe
           SELECT id FROM notifications 
           WHERE user_id = ? AND title LIKE ? AND message LIKE ?
           `,
-          [userId, `%dépassée%`, `%${dao.nom}%`]
+          [userId, `%dépassée%`, `%${dao.objet}%`]
         );
 
         if ((existingNotif as any[]).length === 0) {
@@ -144,13 +154,13 @@ async function checkAndCreateDepositNotifications(connection: any, userId: numbe
               userId,
               'error',
               'Date de dépôt dépassée',
-              `Le DAO "${dao.nom}" était dû il y a ${daysOverdue} jour${daysOverdue > 1 ? 's' : ''}`
+              `Le DAO "${dao.objet}" était dû il y a ${daysOverdue} jour${daysOverdue > 1 ? 's' : ''}`
             ]
           );
 
           // Envoyer un email à l'admin
-          const adminEmail = process.env.ADMIN_EMAIL || 'deidesarr@gmail.com';
-          await sendDepositNotification(adminEmail, dao.nom, -daysOverdue);
+          const adminEmail = process.env.EMAIL_RECEIVER || 'deidesarr@gmail.com';
+          await sendDepositNotification(adminEmail, dao.objet, -daysOverdue);
         }
       }
     }
