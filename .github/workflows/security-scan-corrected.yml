@@ -372,15 +372,21 @@ jobs:
 
       - name: Start app
         run: |
-          npm start &
-          echo "Attente demarrage application..."
-          for i in $(seq 1 30); do
+          # Forcer le port 8080 pour correspondre a la cible ZAP
+          PORT=8080 npm start &
+          echo "Attente demarrage application sur :8080..."
+          for i in $(seq 1 40); do
             if curl -sf http://localhost:8080 > /dev/null 2>&1; then
               echo "Application disponible sur :8080"
               break
             fi
-            echo "  tentative $i/30..."
-            sleep 2
+            if [ $i -eq 40 ]; then
+              echo "Timeout - ports en ecoute :"
+              ss -tlnp | grep -E '8080|3000' || true
+              exit 1
+            fi
+            echo "  tentative $i/40..."
+            sleep 3
           done
 
       - name: Fix ZAP workspace permissions
