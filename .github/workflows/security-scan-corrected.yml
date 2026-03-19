@@ -3,7 +3,7 @@ name: Security Hardening - Fix ZAP Vulnerabilities
 on:
   workflow_dispatch:
   push:
-    branches: [main, develop, feature/Docker_v2]
+    branches: [main, develop, "feature/Docker_v2"]
   pull_request:
     branches: [main]
 
@@ -112,7 +112,7 @@ jobs:
           \`\`\`
           EOF
 
-      - name: Fix Next.js 15 route handlers
+      - name: Fix Next.js 15 route handlers ✅ CORRIGÉ
         run: |
           cat > /tmp/fix-route-handlers.js << 'JS_EOF'
           const fs = require('fs');
@@ -122,48 +122,54 @@ jobs:
             let content = fs.readFileSync(filePath, 'utf8');
             const original = content;
 
-            // Fix params type: { params: { id: string } } -> { params: Promise<{ id: string }> }
+            // Fix 1: { params }: { params: { id: string } } -> { params }: { params: Promise<{ id: string }> }
             content = content.replace(
-              /({ params }: \{ params: ([{][^}]*}) \}/g,
-              '($1): { params: Promise<$2> }'
+              /\\{\s*params\\s*\\}:\\s*\\{\\s*params\\s*:\\s*(\\{[^}]+\\})\\s*\\}/g,
+              '{ params }: { params: Promise<$1> }'
             );
 
-            // Fix destructuring: const { id } = params -> const { id } = await params
+            // Fix 2: const { id } = params -> const { id } = await params
             content = content.replace(
-              /(const\s+[{][^}]*}[)]?\s*=\s*params)(?!\s*\.)/g,
-              '$1 ? await $1 : $1'
+              /const\\s+([\\{][^}]+[\\}])\\s*=\\s*params(?!\\s*\\.|await)/g,
+              'const $1 = await params'
             );
 
             if (content !== original) {
               fs.writeFileSync(filePath, content);
-              console.log(`✅ Fixed: ${filePath}`);
+              console.log('✅ Fixed: ' + filePath);
               return true;
             }
             return false;
           }
 
-          const routeFiles = [];
-          function findRoutes(dir) {
-            const files = fs.readdirSync(dir);
+          function findRouteFiles(dir) {
+            const files = fs.readdirSync(dir, { withFileTypes: true });
+            const routeFiles = [];
+            
             for (const file of files) {
-              const fullPath = path.join(dir, file);
-              const stat = fs.statSync(fullPath);
-              if (stat.isDirectory()) {
-                findRoutes(fullPath);
-              } else if (file === 'route.ts' || file === 'route.js') {
+              const fullPath = path.join(dir, file.name);
+              if (file.isDirectory()) {
+                routeFiles.push(...findRouteFiles(fullPath));
+              } else if (file.name === 'route.ts' || file.name === 'route.js') {
                 routeFiles.push(fullPath);
               }
             }
+            return routeFiles;
           }
 
-          findRoutes('.');
-          console.log(`Found ${routeFiles.length} route files`);
+          try {
+            const routeFiles = findRouteFiles('.');
+            console.log(`Found ${routeFiles.length} route files`);
 
-          let fixedCount = 0;
-          for (const file of routeFiles) {
-            if (fixRouteHandler(file)) fixedCount++;
+            let fixedCount = 0;
+            for (const file of routeFiles) {
+              if (fixRouteHandler(file)) fixedCount++;
+            }
+            console.log(`✅ Fixed ${fixedCount} route handlers`);
+          } catch (error) {
+            console.error('❌ Error:', error.message);
+            process.exit(1);
           }
-          console.log(`✅ Fixed ${fixedCount} route handlers`);
           JS_EOF
 
           node /tmp/fix-route-handlers.js
@@ -192,7 +198,7 @@ jobs:
               const imageUrl = url.searchParams.get('url');
               if (imageUrl) {
                 const decoded = decodeURIComponent(imageUrl);
-                if (/\.\.|%2e%2e/i.test(decoded)) {
+                if (/\\.{2,}/i.test(decoded) || /%2e%2e/i.test(decoded)) {
                   return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
                 }
               }
@@ -270,7 +276,6 @@ jobs:
           APP_PID=$!
           echo "APP_PID=$APP_PID" >> $GITHUB_ENV
           
-          # Wait for app to be ready
           for i in {1..30}; do
             if curl -f http://localhost:3000 > /dev/null 2>&1; then
               echo "✅ App ready on port 3000"
@@ -283,7 +288,7 @@ jobs:
       - name: Get runner IP
         id: runner-ip
         run: |
-          IP=$(ip route get 1 | awk '{print $7; exit}')
+          IP=$(ip route get 1 | awk '{print $NF; exit}')
           echo "runner_ip=$IP" >> $GITHUB_OUTPUT
           echo "Runner IP: $IP"
 
@@ -299,7 +304,6 @@ jobs:
               -J zap-report.json \
               -w zap-report.md \
               -r zap-report.html \
-              --hook-on-output /zap/wrk/zap-hook.py \
               || true
 
       - name: Upload ZAP Reports
