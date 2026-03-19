@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 4️⃣ Patch global JSPDF pour SSR (import dynamique)
+      # 4️⃣ Patch global JSPDF et fflate pour SSR
       - name: Patch JSPDF imports for SSR
         run: |
           npm install glob --no-save
@@ -36,16 +36,34 @@ jobs:
           // Cherche tous les fichiers .tsx dans app/
           glob.sync('./app/**/*.tsx').forEach(file => {
             let code = fs.readFileSync(file, 'utf8');
+            
+            // Remplace les imports statiques de jsPDF
             if (/import\s+jsPDF\s+from\s+['\"]jspdf['\"]/.test(code)) {
               code = code.replace(/import\s+jsPDF\s+from\s+['\"]jspdf['\"];/g, '');
-              const patch = '\nconst generatePDF = async () => { const { jsPDF } = await import(\"jspdf\"); const doc = new jsPDF(); doc.text(\"Hello world\", 10, 10); doc.save(\"file.pdf\"); };\n';
+              
+              // Ajoute une fonction d'import dynamique
+              const dynamicImport = '\n// Dynamic import for SSR compatibility\nconst generatePDF = async () => {\n  try {\n    if (typeof window !== 'undefined') {\n      const { jsPDF } = await import('jspdf');\n      const doc = new jsPDF();\n      doc.text('Hello world', 10, 10);\n      doc.save('file.pdf');\n    }\n  } catch (error) {\n    console.error('PDF generation not available on server:', error);\n  }\n};\n';
+              
               if (!code.includes('generatePDF')) {
-                code += patch;
+                code += dynamicImport;
               }
+              
               fs.writeFileSync(file, code);
-              console.log(`Patch appliqué ✅ ${file}`);
+              console.log(`✅ Patched JSPDF import in ${file}`);
             }
           });
+
+          // Crée un patch pour next.config.js si nécessaire
+          const nextConfigPath = './next.config.js';
+          if (fs.existsSync(nextConfigPath)) {
+            let config = fs.readFileSync(nextConfigPath, 'utf8');
+            
+            if (!config.includes('serverExternalPackages')) {
+              config = config.replace('const nextConfig = {', 'const nextConfig = {\n  serverExternalPackages: ["jspdf", "fflate"],');
+              fs.writeFileSync(nextConfigPath, config);
+              console.log('✅ Added serverExternalPackages to next.config.js');
+            }
+          }
           "
 
       # 5️⃣ Build Next.js (Turbopack désactivé)
