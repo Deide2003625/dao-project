@@ -2,10 +2,10 @@
 
 interface ClientLoginLayoutProps {
   children: React.ReactNode;
-  nonce: string;
+  nonce?: string;
 }
 
-export default function ClientLoginLayout({ children }: ClientLoginLayoutProps) {
+export default function ClientLoginLayout({ children, nonce }: ClientLoginLayoutProps) {
   return (
     <div className="container-scroller">
       <div className="container-fluid page-body-wrapper full-page-wrapper">
