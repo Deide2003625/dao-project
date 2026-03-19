@@ -16,7 +16,8 @@ export async function PUT(
   console.log('En-têtes:', Object.fromEntries(req.headers.entries()));
   
   // Extraire l'ID des paramètres de la route ou de l'URL
-  let id = params?.id;
+  const { id: _id } = await params;
+  let id = _id;
   
   // Si l'ID n'est pas dans les paramètres, essayons de l'extraire de l'URL
   if (!id) {

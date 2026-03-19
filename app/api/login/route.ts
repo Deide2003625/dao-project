@@ -129,7 +129,7 @@ export async function POST(request: Request) {
         }
       } else {
         // Sinon, on crée un nouvel utilisateur
-        const result = await createUser(email, password, email.split("@")[0], 4); // Par défaut: Membre Equipe (nombre)
+        const result = await createUser(email, password, email.split("@")[0], "4"); // Par défaut: Membre Equipe (nombre)
         if (!result.success) {
           return NextResponse.json(
             {

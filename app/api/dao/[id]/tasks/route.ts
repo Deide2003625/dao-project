@@ -36,7 +36,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const daoId = params.id;
+    const { id: daoId } = await params;
     
     if (!daoId) {
       return NextResponse.json(
@@ -90,7 +90,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const taskId = params.id;
+    const { id: taskId } = await params;
     const body = await request.json();
     const { titre, description, statut, progress, date_echeance, priorite, assigned_to } = body;
 
@@ -246,7 +246,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const taskId = params.id;
+    const { id: taskId } = await params;
     
     if (!taskId) {
       return NextResponse.json(

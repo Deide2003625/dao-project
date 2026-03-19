@@ -115,10 +115,10 @@ export default function EditDaoPage() {
         if (typeof daoData.membres === 'string') {
           // Si c'est une chaîne comme "{41, 79}"
           const cleaned = daoData.membres.replace(/[{}]/g, '');
-          membresArray = cleaned.split(',').map(m => m.trim()).filter(m => m);
+          membresArray = cleaned.split(",").map((m: string) => m.trim()).filter((m: string) => m);
         } else if (Array.isArray(daoData.membres)) {
           // Si c'est déjà un tableau
-          membresArray = daoData.membres.map(m => m.toString());
+          membresArray = daoData.membres.map((m: any) => m.toString());
         }
       }
       

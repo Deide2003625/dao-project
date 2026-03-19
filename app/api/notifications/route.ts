@@ -5,7 +5,7 @@ import { sendDepositNotification } from "@/lib/email";
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
+    const userId = searchParams.get("userId") || searchParams.get("user_id");
     const checkDeposits = searchParams.get("checkDeposits");
 
     if (!userId) {

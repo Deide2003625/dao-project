@@ -6,6 +6,6 @@ const HistoryPageClient = dynamic(
   { ssr: false }
 );
 
-export default function HistoryPage() {
+export default function HistoryWrapper() {
   return <HistoryPageClient />;
 }
