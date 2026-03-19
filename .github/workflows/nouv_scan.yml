@@ -86,7 +86,7 @@ jobs:
 
           echo "DOCKERFILE=${DOCKERFILE}" >> $GITHUB_ENV
 
-          # ── Extraire le port exposé depuis le Dockerfile ────
+          # ── Détecter le port exposé ───────────────────────────────
           EXPOSED_PORT=$(grep -i "^EXPOSE" "${DOCKERFILE}" \
             | awk '{print $2}' \
             | head -1)
@@ -96,7 +96,17 @@ jobs:
               | tr -d ':' | head -1)
           fi
 
-          EXPOSED_PORT=${EXPOSED_PORT:-3000}
+          if [ -z "${EXPOSED_PORT}" ]; then
+            EXPOSED_PORT=$(grep -Eo 'PORT[[:space:]]*=[[:space:]]*[0-9]+' "${DOCKERFILE}" \
+              | tail -1 | cut -d'=' -f2 | tr -d ' ')
+          fi
+
+          if [ -z "${EXPOSED_PORT}" ]; then
+            EXPOSED_PORT=$(grep -Eo 'APP_PORT[[:space:]]*=[[:space:]]*[0-9]+' "${DOCKERFILE}" \
+              | tail -1 | cut -d'=' -f2 | tr -d ' ')
+          fi
+
+          EXPOSED_PORT=${EXPOSED_PORT:-2005}
           echo "Port expose detecte : ${EXPOSED_PORT}"
           echo "APP_PORT=${EXPOSED_PORT}" >> $GITHUB_ENV
           echo "HOST_PORT=8080" >> $GITHUB_ENV
