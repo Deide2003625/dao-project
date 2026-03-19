@@ -145,6 +145,12 @@ jobs:
           }
           JSEOF
 
+          # Afficher le contenu exact du fichier problematique
+          TARGET="./app/api/dao/[id]/tasks/route.ts"
+          echo "=== LIGNES AVEC params DANS $TARGET ==="
+          grep -n "params" "$TARGET" 2>/dev/null || echo "Fichier non trouve"
+          echo "=== FIN ==="
+
           find . -name "route.ts" \
             -not -path "*/node_modules/*" \
             -not -path "*/.next/*" | while read file; do
@@ -152,7 +158,6 @@ jobs:
             ROUTE_FILE="$file" node /tmp/fix-route-params.js
           done
           echo "✅ Correction route handlers terminee"
-
 
       - name: Create path traversal middleware
         run: |
