@@ -25,7 +25,7 @@ async function ensureCommentsTable(connection: any) {
 // GET - Récupérer les commentaires d'une tâche
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const taskId = params.id;
@@ -74,7 +74,7 @@ export async function GET(
 // POST - Ajouter un commentaire à une tâche
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const taskId = params.id;
@@ -130,7 +130,7 @@ export async function POST(
 // PUT - Mettre à jour un commentaire
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const taskId = params.id;
@@ -172,7 +172,7 @@ export async function PUT(
 // DELETE - Supprimer un commentaire
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const taskId = params.id;

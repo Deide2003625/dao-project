@@ -33,7 +33,7 @@ async function ensureTaskTables(connection: any) {
 // GET - Récupérer les tâches d'un DAO spécifique
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const daoId = params.id;
@@ -87,7 +87,7 @@ export async function GET(
 // PUT - Mettre à jour une tâche
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const taskId = params.id;
@@ -243,7 +243,7 @@ export async function PUT(
 // DELETE - Supprimer une tâche
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const taskId = params.id;

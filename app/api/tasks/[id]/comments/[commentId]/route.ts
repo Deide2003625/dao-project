@@ -6,12 +6,12 @@ export const dynamic = "force-dynamic";
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; commentId: string } },
+  { params }: { params: Promise<{ id: string; commentId: string }> },
 ) {
   try {
     console.log('API DELETE appelée avec params:', params);
     
-    const { id, commentId } = params;
+    const { id, commentId } = await params;
     
     // Pour le débogage, on va essayer de supprimer sans vérification user_id d'abord
     console.log('Tentative de suppression du commentaire:', commentId);
