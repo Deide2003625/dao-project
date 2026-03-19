@@ -401,13 +401,22 @@ jobs:
           echo "ip=$IP" >> $GITHUB_OUTPUT
           echo "IP du runner : $IP"
 
-      - name: Run ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
-        with:
-          target: "http://${{ steps.runner-ip.outputs.ip }}:8080"
-          fail_action: false
-          allow_issue_writing: false
-          cmd_options: '-I'
+      - name: Run ZAP Baseline Scan (direct docker)
+        run: |
+          # On lance ZAP directement via docker pour eviter que
+          # zaproxy/action-baseline tente d'uploader un artefact "zap_scan"
+          # dont le nom est rejete par l'API GitHub Actions.
+          docker run --rm \
+            --network host \
+            -v ${{ github.workspace }}:/zap/wrk/:rw \
+            -u root \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t "http://${{ steps.runner-ip.outputs.ip }}:8080" \
+              -J report_json.json \
+              -w report_md.md \
+              -r report_html.html \
+              -I || true
 
       - name: Upload ZAP report
         uses: actions/upload-artifact@v4
