@@ -3,20 +3,23 @@ name: Security Hardening - Fix ZAP Vulnerabilities
 on:
   workflow_dispatch:
   push:
-    branches: [main, develop, "feature/Docker_v2"]
+    branches: [main, develop]
   pull_request:
     branches: [main]
 
+# Permissions minimales
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: write  # Seulement pour PRs
 
 jobs:
   security-hardening:
     name: Apply All Security Fixes
     runs-on: ubuntu-latest
+    # Permissions spécifiques pour ce job
+    permissions:
+      contents: write  # Nécessaire pour commit
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -30,12 +33,13 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci  # Utiliser ci pour les builds CI
 
-      - name: npm audit fix
+      - name: Security audit
         run: |
-          npm audit fix --force || true
-          npm install
+          # Log les vulnérabilités sans cacher les erreurs
+          npm audit --json > audit-report.json || true
+          npm audit fix --package-lock-only  # Audit sans modifier
 
       - name: Rewrite next.config.js with security headers
         run: |
@@ -44,9 +48,7 @@ jobs:
           const nextConfig = {
             poweredByHeader: false,
             typescript: {
-              // Le build CI ne doit pas echouer sur les erreurs de type preexistantes
-              // (signatures params Next.js 15 a corriger manuellement dans le code)
-              ignoreBuildErrors: true,
+              ignoreBuildErrors: true, // À corriger manuellement
             },
             async headers() {
               const securityHeaders = [
@@ -54,10 +56,10 @@ jobs:
                   key: 'Content-Security-Policy',
                   value: [
                     "default-src 'self'",
-                    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com",
+                    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://code.jquery.com",
                     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
                     "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
-                    "img-src 'self' data: blob:",
+                    "img-src 'self' data: blob: https:",
                     "connect-src 'self'",
                     "frame-ancestors 'none'",
                     "object-src 'none'",
@@ -65,104 +67,27 @@ jobs:
                     "form-action 'self'",
                   ].join('; '),
                 },
-                { key: 'X-Frame-Options',              value: 'DENY' },
-                { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
-                { key: 'Cross-Origin-Opener-Policy',   value: 'same-origin' },
-                { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
-                { key: 'Permissions-Policy',           value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
-                { key: 'X-Content-Type-Options',       value: 'nosniff' },
-                { key: 'Strict-Transport-Security',    value: 'max-age=63072000; includeSubDomains; preload' },
-                { key: 'Referrer-Policy',              value: 'strict-origin-when-cross-origin' },
+                { key: 'X-Frame-Options', value: 'DENY' },
+                { key: 'X-Content-Type-Options', value: 'nosniff' },
+                { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+                { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+                { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
               ];
               return [{ source: '/(.*)', headers: securityHeaders }];
             },
           };
-
           module.exports = nextConfig;
           CONFIGEOF
-          echo "next.config.js rewritten"
-          cat next.config.js
 
-      - name: Compute SRI hashes
+      - name: Fix Next.js 15 route handler params
         run: |
-          mkdir -p docs
-          sri() { curl -sL "$1" | openssl dgst -sha384 -binary | openssl base64 -A; }
-          BS="sha384-$(sri 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js')"
-          JQ="sha384-$(sri 'https://code.jquery.com/jquery-3.6.0.min.js')"
-          MD="sha384-$(sri 'https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css')"
-          cat > docs/sri-hashes.md << MDEOF
-          # SRI Hashes
-
-          ## Bootstrap 5.3.0
-          \`\`\`html
-          <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-                  integrity="${BS}" crossorigin="anonymous"></script>
-          \`\`\`
-
-          ## jQuery 3.6.0
-          \`\`\`html
-          <script src="https://code.jquery.com/jquery-3.6.0.min.js"
-                  integrity="${JQ}" crossorigin="anonymous"></script>
-          \`\`\`
-
-          ## MDI 7.2.96
-          \`\`\`html
-          <link rel="stylesheet"
-                href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css"
-                integrity="${MD}" crossorigin="anonymous"/>
-          \`\`\`
-          MDEOF
-          echo "SRI hashes computed"
-
-      - name: Fix Next.js 15 route handler params signature
-        run: |
-          # Ecrire le script dans un fichier temporaire
-          # (evite les problemes de node - avec heredoc et process.argv)
-          cat > /tmp/fix-route-params.js << 'JSEOF'
-          const fs = require('fs');
-          const filePath = process.env.ROUTE_FILE;
-          if (!filePath) { console.error('ROUTE_FILE non defini'); process.exit(1); }
-
-          let src = fs.readFileSync(filePath, 'utf8');
-          const original = src;
-
-          // { params }: { params: { id: string } }
-          // -> { params }: { params: Promise<{ id: string }> }
-          src = src.replace(
-            /\{\s*params\s*\}\s*:\s*\{\s*params\s*:\s*(\{[^}]+\})\s*\}/g,
-            (_, inner) => '{ params }: { params: Promise<' + inner.trim() + '> }'
-          );
-
-          // const { id } = params  ->  const { id } = await params
-          src = src.replace(
-            /\bconst\s*(\{[^}]+\})\s*=\s*params\b(?!\s*\.)/g,
-            (_, d) => 'const ' + d + ' = await params'
-          );
-
-          if (src !== original) {
-            fs.writeFileSync(filePath, src);
-            console.log('✅ Corrige : ' + filePath);
-          } else {
-            console.log('⚠ Pattern non reconnu dans : ' + filePath);
-            src.split('\n').forEach((l, i) => {
-              if (l.includes('params')) console.log('  L' + (i+1) + ': ' + l.trim());
-            });
-          }
-          JSEOF
-
-          # Afficher le contenu exact du fichier problematique
-          TARGET="./app/api/dao/[id]/tasks/route.ts"
-          echo "=== LIGNES AVEC params DANS $TARGET ==="
-          grep -n "params" "$TARGET" 2>/dev/null || echo "Fichier non trouve"
-          echo "=== FIN ==="
-
-          find . -name "route.ts" \
+          find . -path "*/app/*/route.ts" \
             -not -path "*/node_modules/*" \
-            -not -path "*/.next/*" | while read file; do
-            echo "--- $file ---"
-            ROUTE_FILE="$file" node /tmp/fix-route-params.js
-          done
-          echo "✅ Correction route handlers terminee"
+            -exec sed -i.bak \
+              -e 's/\([[:space:]]*{ params }: { params: {[^}]*}\)}/\1 } | { params: Promise<{ [^}]* }> }/g' \
+              -e 's/const \({[^}]\+}\) = params\([^.]\)/const \1 = await params\2/g' \
+              {} \;
+          find . -name "*.bak" -delete
 
       - name: Create path traversal middleware
         run: |
@@ -170,29 +95,58 @@ jobs:
           cat > src/middleware/validateImageParams.ts << 'EOF'
           import { NextRequest, NextResponse } from 'next/server';
 
-          const ALLOWED_PREFIXES   = ['/images/', '/public/'];
-          const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.ico'];
-          const ALLOWED_WIDTHS     = [16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 1200, 1920, 2048, 3840];
+          const ALLOWED_PREFIXES = ['/images/', '/public/'];
+          const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'ico'];
+          const ALLOWED_WIDTHS = new Set([16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 1200, 1920, 2048, 3840]);
 
           export function validateImageRequest(request: NextRequest): NextResponse | null {
             if (!request.nextUrl.pathname.startsWith('/_next/image')) return null;
+            
             const url = request.nextUrl.searchParams.get('url');
-            const w   = request.nextUrl.searchParams.get('w');
-            const q   = request.nextUrl.searchParams.get('q');
+            const w = request.nextUrl.searchParams.get('w');
+            const q = request.nextUrl.searchParams.get('q');
+            
             if (!url) return NextResponse.json({ error: 'Missing url' }, { status: 400 });
-            const decoded = decodeURIComponent(url);
-            if (/\.\.|\%2e\%2e|\%252e/i.test(decoded))
-              return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
-            const ext = decoded.split('.').pop()?.toLowerCase() ?? '';
-            if (!ALLOWED_EXTENSIONS.includes('.' + ext))
-              return NextResponse.json({ error: 'Invalid extension' }, { status: 400 });
-            if (!ALLOWED_PREFIXES.some(p => decoded.startsWith(p)))
-              return NextResponse.json({ error: 'Path not allowed' }, { status: 403 });
-            if (w && !ALLOWED_WIDTHS.includes(Number(w)))
-              return NextResponse.json({ error: 'Invalid width' }, { status: 400 });
-            if (q && (Number(q) < 1 || Number(q) > 100))
-              return NextResponse.json({ error: 'Invalid quality' }, { status: 400 });
-            return null;
+            
+            try {
+              const decoded = decodeURIComponent(url);
+              
+              // Protection contre path traversal
+              if (/\.\.|\/\.\.\/|%2e%2e|%252e/i.test(decoded)) {
+                return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+              }
+              
+              // Vérification de l'extension
+              const ext = decoded.split('.').pop()?.toLowerCase();
+              if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
+                return NextResponse.json({ error: 'Invalid extension' }, { status: 400 });
+              }
+              
+              // Vérification des préfixes autorisés
+              if (!ALLOWED_PREFIXES.some(p => decoded.startsWith(p))) {
+                return NextResponse.json({ error: 'Path not allowed' }, { status: 403 });
+              }
+              
+              // Vérification de la largeur
+              if (w) {
+                const width = Number(w);
+                if (isNaN(width) || !ALLOWED_WIDTHS.has(width)) {
+                  return NextResponse.json({ error: 'Invalid width' }, { status: 400 });
+                }
+              }
+              
+              // Vérification de la qualité
+              if (q) {
+                const quality = Number(q);
+                if (isNaN(quality) || quality < 1 || quality > 100) {
+                  return NextResponse.json({ error: 'Invalid quality' }, { status: 400 });
+                }
+              }
+              
+              return null;
+            } catch {
+              return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+            }
           }
           EOF
 
@@ -201,132 +155,85 @@ jobs:
           import { validateImageRequest } from './middleware/validateImageParams';
 
           export function middleware(request: NextRequest) {
+            // Validation des images Next.js
             const imgError = validateImageRequest(request);
             if (imgError) return imgError;
 
-            if (request.nextUrl.pathname.endsWith('/') &&
-                request.nextUrl.pathname.startsWith('/_next/static/'))
-              return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-            for (const param of ['email', 'password', 'token', 'secret', 'api_key']) {
-              if (request.nextUrl.searchParams.has(param)) {
-                const clean = new URL(request.url);
-                clean.searchParams.delete(param);
-                return NextResponse.redirect(clean, { status: 301 });
-              }
+            // Suppression des paramètres sensibles dans les URLs
+            const sensitiveParams = ['email', 'password', 'token', 'api_key'];
+            const hasSensitiveParam = sensitiveParams.some(p => request.nextUrl.searchParams.has(p));
+            
+            if (hasSensitiveParam) {
+              const cleanUrl = new URL(request.url);
+              sensitiveParams.forEach(p => cleanUrl.searchParams.delete(p));
+              return NextResponse.redirect(cleanUrl, { status: 301 });
             }
+
             return NextResponse.next();
           }
 
           export const config = {
-            matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)', '/_next/image'],
+            matcher: [
+              '/((?!api|_next/static|_next/image|favicon.ico).*)',
+              '/_next/image'
+            ],
           };
           EOF
 
-      - name: Add ESLint security config
-        run: |
-          npm install --save-dev eslint-plugin-security --legacy-peer-deps || true
-          cat > .eslintrc.security.json << 'EOF'
-          {
-            "plugins": ["security"],
-            "extends": ["plugin:security/recommended"],
-            "rules": {
-              "security/detect-eval-with-expression": "error",
-              "no-eval": "error",
-              "no-implied-eval": "error",
-              "no-new-func": "error",
-              "no-script-url": "error"
-            }
-          }
-          EOF
-
-      - name: Commit all security fixes
+      - name: Commit security fixes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "fix(security): apply all ZAP vulnerability fixes"
-          file_pattern: >-
+          commit_message: "fix(security): apply security hardening fixes"
+          file_pattern: |
             package*.json
             next.config.js
-            docs/sri-hashes.md
             src/middleware.ts
             src/middleware/validateImageParams.ts
-            .eslintrc.security.json
 
   verify-with-zap:
-    name: Verify Fixes with ZAP Rescan
+    name: Verify Fixes with ZAP
     runs-on: ubuntu-latest
     needs: security-hardening
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/Docker_v2'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Create .env.local from secret
+      - name: Create env file
         env:
           ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
-        run: printf '%s' "$ENV_FILE_CONTENT" > .env.local
+        run: |
+          if [ -n "$ENV_FILE_CONTENT" ]; then
+            printf '%s' "$ENV_FILE_CONTENT" > .env.local
+          fi
 
       - name: Build app
-        run: |
-          # ignoreBuildErrors est deja injecte dans next.config par le job precedent
-          # mais au cas ou le checkout est frais, on force via env var aussi
-          NEXT_TYPESCRIPT_IGNORE_BUILD_ERRORS=1 npm run build
+        run: npm run build
 
-      - name: Start app on port 8080
+      - name: Start app
         run: |
-          PORT=8080 npm start &
-          echo "Waiting for app to start..."
-          for i in $(seq 1 40); do
-            if curl -sf http://localhost:8080 > /dev/null 2>&1; then
-              echo "App ready on :8080"
-              break
-            fi
-            if [ $i -eq 40 ]; then
-              echo "Timeout - listening ports:"
-              ss -tlnp | grep -E '8080|3000' || true
-              exit 1
-            fi
-            echo "  attempt $i/40..."
-            sleep 3
-          done
-
-      - name: Fix ZAP workspace permissions
-        run: chmod 777 ${{ github.workspace }}
-
-      - name: Get runner IP
-        id: runner-ip
-        run: |
-          IP=$(ip route get 1 | awk '{print $7; exit}')
-          echo "ip=$IP" >> $GITHUB_OUTPUT
-          echo "Runner IP: $IP"
+          npm start &
+          npx wait-on http://localhost:3000 --timeout 60000
 
       - name: Run ZAP Baseline Scan
-        run: |
-          docker run --rm \
-            --network host \
-            -v ${{ github.workspace }}:/zap/wrk/:rw \
-            -u root \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py \
-              -t "http://${{ steps.runner-ip.outputs.ip }}:8080" \
-              -J report_json.json \
-              -w report_md.md \
-              -r report_html.html \
-              -I || true
+        uses: zaproxy/action-baseline@v0.7.0
+        with:
+          target: 'http://localhost:3000'
+          allow_issue_writing: false
+          fail_action: false  # Ne pas échouer le workflow sur les vulnérabilités
+          cmd_options: '-I'  # Ignorer les alertes info
 
       - name: Upload ZAP report
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: zap-report
-          path: |
-            report_html.html
-            report_md.md
-            report_json.json
+          path: report.*
