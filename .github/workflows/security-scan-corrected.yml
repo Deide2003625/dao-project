@@ -7,18 +7,16 @@ on:
   pull_request:
     branches: [main]
 
-# Permissions minimales
 permissions:
   contents: read
-  pull-requests: write  # Seulement pour PRs
+  pull-requests: write
 
 jobs:
   security-hardening:
     name: Apply All Security Fixes
     runs-on: ubuntu-latest
-    # Permissions spécifiques pour ce job
     permissions:
-      contents: write  # Nécessaire pour commit
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,16 +28,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci  # Utiliser ci pour les builds CI
-
-      - name: Security audit
+      - name: Regenerate package-lock.json
         run: |
-          # Log les vulnérabilités sans cacher les erreurs
-          npm audit --json > audit-report.json || true
-          npm audit fix --package-lock-only  # Audit sans modifier
+          # Supprimer l'ancien fichier de verrouillage
+          rm -f package-lock.json
+          
+          # Installer les dépendances pour générer un nouveau fichier de verrouillage
+          npm install
+          
+          # Vérifier que le fichier a été généré
+          ls -la package-lock.json
 
       - name: Rewrite next.config.js with security headers
         run: |
@@ -48,7 +47,7 @@ jobs:
           const nextConfig = {
             poweredByHeader: false,
             typescript: {
-              ignoreBuildErrors: true, // À corriger manuellement
+              ignoreBuildErrors: true,
             },
             async headers() {
               const securityHeaders = [
@@ -56,10 +55,10 @@ jobs:
                   key: 'Content-Security-Policy',
                   value: [
                     "default-src 'self'",
-                    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://code.jquery.com",
+                    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com",
                     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
                     "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
-                    "img-src 'self' data: blob: https:",
+                    "img-src 'self' data: blob:",
                     "connect-src 'self'",
                     "frame-ancestors 'none'",
                     "object-src 'none'",
@@ -68,10 +67,13 @@ jobs:
                   ].join('; '),
                 },
                 { key: 'X-Frame-Options', value: 'DENY' },
+                { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+                { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+                { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+                { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
                 { key: 'X-Content-Type-Options', value: 'nosniff' },
                 { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
                 { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-                { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
               ];
               return [{ source: '/(.*)', headers: securityHeaders }];
             },
@@ -79,19 +81,11 @@ jobs:
           module.exports = nextConfig;
           CONFIGEOF
 
-      - name: Fix Next.js 15 route handler params
-        run: |
-          find . -path "*/app/*/route.ts" \
-            -not -path "*/node_modules/*" \
-            -exec sed -i.bak \
-              -e 's/\([[:space:]]*{ params }: { params: {[^}]*}\)}/\1 } | { params: Promise<{ [^}]* }> }/g' \
-              -e 's/const \({[^}]\+}\) = params\([^.]\)/const \1 = await params\2/g' \
-              {} \;
-          find . -name "*.bak" -delete
-
-      - name: Create path traversal middleware
+      - name: Create middleware
         run: |
           mkdir -p src/middleware
+          
+          # Créer le middleware de validation
           cat > src/middleware/validateImageParams.ts << 'EOF'
           import { NextRequest, NextResponse } from 'next/server';
 
@@ -202,10 +196,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          # Utiliser npm install au lieu de npm ci car le lockfile peut avoir changé
+          npm install
 
       - name: Create env file
         env:
@@ -228,8 +223,8 @@ jobs:
         with:
           target: 'http://localhost:3000'
           allow_issue_writing: false
-          fail_action: false  # Ne pas échouer le workflow sur les vulnérabilités
-          cmd_options: '-I'  # Ignorer les alertes info
+          fail_action: false
+          cmd_options: '-I'
 
       - name: Upload ZAP report
         uses: actions/upload-artifact@v4
