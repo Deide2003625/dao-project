@@ -28,21 +28,19 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies ✅ FIX npm ci
+      - name: Install dependencies
         run: |
-          # Supprime les fichiers lock cassés et réinstalle proprement
-          rm -f package-lock.json npm-shrinkwrap.json
+          rm -f package-lock.json npm-shrinkwrap.json || true
           npm install
 
       - name: npm audit (high+ severity only)
         run: |
           npm audit --audit-level=high
           npm audit fix --force --audit-level=high || true
-          # Régénère le lockfile après audit
-          rm -f package-lock.json
+          rm -f package-lock.json || true
           npm install
 
-      - name: Rewrite next.config.js ✅ FIX TURBOPACK + fflate
+      - name: Rewrite next.config.js ✅ FIX TURBOPACK DÉSACTIVÉ
         run: |
           cat > next.config.js << 'CONFIGEOF'
           /** @type {import('next').NextConfig} */
@@ -51,21 +49,51 @@ jobs:
             typescript: {
               ignoreBuildErrors: true,
             },
-            // ✅ FIX: Désactive Turbopack + fflate
-            webpack: (config, { isServer }) => {
+            // ✅ FORCE WEBPACK - Désactive complètement Turbopack
+            experimental: {
+              turbo: {
+                enabled: false
+              }
+            },
+            // ✅ Fix fflate/jspdf Webpack config
+            webpack: (config, { isServer, dev }) => {
               if (!isServer) {
                 config.resolve.fallback = {
                   ...config.resolve.fallback,
                   worker: false,
                   fs: false,
+                  net: false,
+                  tls: false
                 };
               }
+              
+              // Force transpile fflate et jspdf
+              config.module = config.module || {};
+              config.module.rules = [
+                ...(config.module.rules || []),
+                {
+                  test: /fflate/,
+                  use: {
+                    loader: 'babel-loader',
+                    options: {
+                      presets: ['next/babel']
+                    }
+                  }
+                },
+                {
+                  test: /jspdf/,
+                  use: {
+                    loader: 'babel-loader',
+                    options: {
+                      presets: ['next/babel']
+                    }
+                  }
+                }
+              ];
+              
               return config;
             },
-            transpilePackages: ['fflate', 'jspdf'],
-            experimental: {
-              esmExternals: 'loose',
-            },
+            transpilePackages: ['fflate', 'jspdf', '@types/jspdf'],
             async headers() {
               return [
                 {
@@ -133,7 +161,7 @@ jobs:
           \`\`\`
           EOF
 
-      - name: Fix Next.js 15 route handlers
+      - name: Fix Next.js route handlers
         run: |
           cat > /tmp/fix-route-handlers.js << 'JS_EOF'
           const fs = require('fs');
@@ -273,7 +301,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies ✅ FIX pour ZAP scan
+      - name: Install dependencies
         run: |
           rm -f package-lock.json npm-shrinkwrap.json || true
           npm install
@@ -285,10 +313,12 @@ jobs:
           echo "$ENV_FILE_CONTENT" > .env.local
           echo ".env.local" >> .gitignore
 
-      - name: Build application ✅ WEBPACK FORCÉ
+      - name: Build application ✅ TURBOPACK DÉSACTIVÉ
         run: npm run build
         env:
           NEXT_TYPESCRIPT_IGNORE_BUILD_ERRORS: 1
+          # Force Webpack (désactive Turbopack)
+          NEXT_TURBOPACK: 0
 
       - name: Start application
         run: |
