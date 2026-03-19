@@ -1,0 +1,1334 @@
+name: DevSecOps - Intelligent Auto-Discovery Security Pipeline
+
+# ══════════════════════════════════════════════════════════════
+# CE WORKFLOW EST AUTO-ADAPTATIF
+# Il n'a pas besoin de connaître l'application à l'avance.
+# Après le build Docker, il inspecte l'image et le code source
+# pour découvrir automatiquement :
+#   - Le port exposé
+#   - Le framework et les langages utilisés
+#   - Les fichiers de dépendances présents
+#   - Les routes et endpoints de l'application
+#   - Les variables d'environnement requises
+#   - La présence d'un formulaire de login
+# Les scans sont ensuite configurés dynamiquement.
+# ══════════════════════════════════════════════════════════════
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["**"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  security-pipeline:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ════════════════════════════════════════════════════════
+      # PHASE 0 — AUTO-DISCOVERY
+      # Inspection du repo et du Dockerfile AVANT le build
+      # pour découvrir la structure de l'application
+      # ════════════════════════════════════════════════════════
+
+      - name: "[DISCOVERY] Inspection du repo et du Dockerfile"
+        id: discovery
+        run: |
+          echo "================================================"
+          echo " AUTO-DISCOVERY — Analyse du projet"
+          echo "================================================"
+
+          # ── Trouver le Dockerfile ───────────────────────────
+          DOCKERFILE=""
+          for candidate in \
+              Dockerfile \
+              Dockerfile.prod \
+              Dockerfile.production \
+              Dockerfile.working \
+              Dockerfile.dev \
+              docker/Dockerfile \
+              .docker/Dockerfile; do
+            if [ -f "${candidate}" ]; then
+              DOCKERFILE="${candidate}"
+              echo "Dockerfile trouve : ${DOCKERFILE}"
+              break
+            fi
+          done
+
+          if [ -z "${DOCKERFILE}" ]; then
+            # Recherche globale si pas trouvé aux emplacements standards
+            DOCKERFILE=$(find . -name "Dockerfile*" \
+              -not -path "*/node_modules/*" \
+              -not -path "*/.git/*" \
+              -not -path "*/vendor/*" \
+              | head -1)
+          fi
+
+          if [ -z "${DOCKERFILE}" ]; then
+            echo "ERREUR : Aucun Dockerfile trouve."
+            exit 1
+          fi
+
+          echo "DOCKERFILE=${DOCKERFILE}" >> $GITHUB_ENV
+
+          # ── Extraire le port exposé depuis le Dockerfile ────
+          EXPOSED_PORT=$(grep -i "^EXPOSE" "${DOCKERFILE}" \
+            | awk '{print $2}' \
+            | head -1)
+
+          if [ -z "${EXPOSED_PORT}" ]; then
+            # Chercher dans CMD ou ENTRYPOINT si pas de EXPOSE
+            EXPOSED_PORT=$(grep -Eo ':[0-9]{3,5}' "${DOCKERFILE}" \
+              | tr -d ':' | head -1)
+          fi
+
+          # Port par défaut selon le framework détecté plus bas
+          EXPOSED_PORT=${EXPOSED_PORT:-3000}
+          echo "Port expose detecte : ${EXPOSED_PORT}"
+          echo "APP_PORT=${EXPOSED_PORT}" >> $GITHUB_ENV
+          echo "HOST_PORT=8080" >> $GITHUB_ENV
+
+          # ── Détecter les langages et frameworks ─────────────
+          LANGS=""
+          FRAMEWORKS=""
+          SEMGREP_CONFIGS="p/security-audit p/owasp-top-ten"
+          CODEQL_LANG=""
+
+          # Node.js / JavaScript / TypeScript
+          if [ -f "package.json" ]; then
+            LANGS="${LANGS} nodejs"
+            SEMGREP_CONFIGS="${SEMGREP_CONFIGS} p/nodejs p/javascript"
+            CODEQL_LANG="javascript"
+
+            # Détecter le framework Node.js
+            if grep -q '"express"' package.json 2>/dev/null; then
+              FRAMEWORKS="${FRAMEWORKS} express"
+              SEMGREP_CONFIGS="${SEMGREP_CONFIGS} p/express"
+            fi
+            if grep -q '"fastify"' package.json 2>/dev/null; then
+              FRAMEWORKS="${FRAMEWORKS} fastify"
+            fi
+            if grep -q '"koa"' package.json 2>/dev/null; then
+              FRAMEWORKS="${FRAMEWORKS} koa"
+            fi
+            if grep -q '"next"' package.json 2>/dev/null; then
+              FRAMEWORKS="${FRAMEWORKS} nextjs"
+              SEMGREP_CONFIGS="${SEMGREP_CONFIGS} p/nextjs"
+            fi
+            if grep -q '"react"' package.json 2>/dev/null; then
+              FRAMEWORKS="${FRAMEWORKS} react"
+            fi
+            if [ -f "tsconfig.json" ]; then
+              LANGS="${LANGS} typescript"
+              SEMGREP_CONFIGS="${SEMGREP_CONFIGS} p/typescript"
+            fi
+          fi
+
+          # Python
+          if [ -f "requirements.txt" ] || [ -f "pyproject.toml" ] \
+              || [ -f "setup.py" ] || [ -f "Pipfile" ]; then
+            LANGS="${LANGS} python"
+            SEMGREP_CONFIGS="${SEMGREP_CONFIGS} p/python"
+            CODEQL_LANG="${CODEQL_LANG:+${CODEQL_LANG},}python"
+
+            if grep -qi "django" requirements.txt 2>/dev/null \
+                || grep -qi "django" pyproject.toml 2>/dev/null; then
+              FRAMEWORKS="${FRAMEWORKS} django"
+              SEMGREP_CONFIGS="${SEMGREP_CONFIGS} p/django"
+            fi
+            if grep -qi "fastapi\|flask" requirements.txt 2>/dev/null \
+                || grep -qi "fastapi\|flask" pyproject.toml 2>/dev/null; then
+              FRAMEWORKS="${FRAMEWORKS} flask-fastapi"
+              SEMGREP_CONFIGS="${SEMGREP_CONFIGS} p/flask"
+            fi
+          fi
+
+          # PHP / Laravel
+          if [ -f "composer.json" ]; then
+            LANGS="${LANGS} php"
+            SEMGREP_CONFIGS="${SEMGREP_CONFIGS} p/php"
+            if grep -q '"laravel/framework"' composer.json 2>/dev/null; then
+              FRAMEWORKS="${FRAMEWORKS} laravel"
+            fi
+          fi
+
+          # Java / Spring
+          if [ -f "pom.xml" ] || [ -f "build.gradle" ]; then
+            LANGS="${LANGS} java"
+            SEMGREP_CONFIGS="${SEMGREP_CONFIGS} p/java"
+            CODEQL_LANG="${CODEQL_LANG:+${CODEQL_LANG},}java"
+          fi
+
+          # Go
+          if [ -f "go.mod" ]; then
+            LANGS="${LANGS} go"
+            SEMGREP_CONFIGS="${SEMGREP_CONFIGS} p/golang"
+            CODEQL_LANG="${CODEQL_LANG:+${CODEQL_LANG},}go"
+          fi
+
+          # Ruby
+          if [ -f "Gemfile" ]; then
+            LANGS="${LANGS} ruby"
+            SEMGREP_CONFIGS="${SEMGREP_CONFIGS} p/ruby"
+            CODEQL_LANG="${CODEQL_LANG:+${CODEQL_LANG},}ruby"
+          fi
+
+          LANGS=$(echo $LANGS | xargs)
+          FRAMEWORKS=$(echo $FRAMEWORKS | xargs)
+          CODEQL_LANG=${CODEQL_LANG:-javascript}
+
+          echo "Langages detectes : ${LANGS}"
+          echo "Frameworks detectes : ${FRAMEWORKS}"
+          echo "Configs Semgrep : ${SEMGREP_CONFIGS}"
+          echo "Langage CodeQL : ${CODEQL_LANG}"
+
+          echo "DETECTED_LANGS=${LANGS}" >> $GITHUB_ENV
+          echo "DETECTED_FRAMEWORKS=${FRAMEWORKS}" >> $GITHUB_ENV
+          echo "SEMGREP_CONFIGS=${SEMGREP_CONFIGS}" >> $GITHUB_ENV
+          echo "CODEQL_LANG=${CODEQL_LANG}" >> $GITHUB_ENV
+
+          # ── Détecter la base de données ─────────────────────
+          DB_TYPE="none"
+          DB_IMAGE="none"
+          DB_PORT="none"
+          DB_NAME="app_db"
+          DB_USER="app_user"
+          DB_PASSWORD="app_password"
+          DB_ROOT_PASSWORD="root_password"
+
+          # Chercher dans docker-compose si présent
+          for compose_file in docker-compose.yml docker-compose.yaml \
+              docker-compose.prod.yml compose.yml; do
+            if [ -f "${compose_file}" ]; then
+              if grep -qi "mysql\|mariadb" "${compose_file}"; then
+                DB_TYPE="mysql"
+                DB_IMAGE="mysql:8.0"
+                DB_PORT="3306"
+                # Extraire les variables depuis le compose
+                DB_NAME=$(grep -i "MYSQL_DATABASE\|DB_NAME" \
+                  "${compose_file}" | head -1 \
+                  | sed 's/.*=\s*//' | tr -d '"' | tr -d "'" \
+                  | xargs 2>/dev/null || echo "app_db")
+                DB_USER=$(grep -i "MYSQL_USER\b\|DB_USER" \
+                  "${compose_file}" | head -1 \
+                  | sed 's/.*=\s*//' | tr -d '"' | tr -d "'" \
+                  | xargs 2>/dev/null || echo "app_user")
+                DB_PASSWORD=$(grep -i "MYSQL_PASSWORD\b\|DB_PASS" \
+                  "${compose_file}" | head -1 \
+                  | sed 's/.*=\s*//' | tr -d '"' | tr -d "'" \
+                  | xargs 2>/dev/null || echo "app_password")
+              elif grep -qi "postgres" "${compose_file}"; then
+                DB_TYPE="postgres"
+                DB_IMAGE="postgres:15"
+                DB_PORT="5432"
+                DB_NAME=$(grep -i "POSTGRES_DB\|DB_NAME" \
+                  "${compose_file}" | head -1 \
+                  | sed 's/.*=\s*//' | tr -d '"' | tr -d "'" \
+                  | xargs 2>/dev/null || echo "app_db")
+                DB_USER=$(grep -i "POSTGRES_USER\|DB_USER" \
+                  "${compose_file}" | head -1 \
+                  | sed 's/.*=\s*//' | tr -d '"' | tr -d "'" \
+                  | xargs 2>/dev/null || echo "app_user")
+                DB_PASSWORD=$(grep -i "POSTGRES_PASSWORD\|DB_PASS" \
+                  "${compose_file}" | head -1 \
+                  | sed 's/.*=\s*//' | tr -d '"' | tr -d "'" \
+                  | xargs 2>/dev/null || echo "app_password")
+              elif grep -qi "mongo" "${compose_file}"; then
+                DB_TYPE="mongo"
+                DB_IMAGE="mongo:7"
+                DB_PORT="27017"
+              elif grep -qi "redis" "${compose_file}"; then
+                DB_TYPE="redis"
+                DB_IMAGE="redis:7"
+                DB_PORT="6379"
+              fi
+              break
+            fi
+          done
+
+          # Chercher dans les fichiers .env si compose pas trouvé
+          if [ "${DB_TYPE}" = "none" ]; then
+            for env_file in .env .env.example .env.sample \
+                .env.local config/.env; do
+              if [ -f "${env_file}" ]; then
+                if grep -qi "mysql\|DB_HOST\|DATABASE_URL.*mysql" \
+                    "${env_file}" 2>/dev/null; then
+                  DB_TYPE="mysql"
+                  DB_IMAGE="mysql:8.0"
+                  DB_PORT="3306"
+                  DB_NAME=$(grep -i "^DB_NAME\|^MYSQL_DATABASE\|^DB_DATABASE" \
+                    "${env_file}" | head -1 \
+                    | cut -d= -f2 | tr -d '"' | tr -d "'" \
+                    | xargs 2>/dev/null || echo "app_db")
+                  DB_USER=$(grep -i "^DB_USER\|^MYSQL_USER\b\|^DB_USERNAME" \
+                    "${env_file}" | head -1 \
+                    | cut -d= -f2 | tr -d '"' | tr -d "'" \
+                    | xargs 2>/dev/null || echo "app_user")
+                elif grep -qi "postgres\|DATABASE_URL.*postgres" \
+                    "${env_file}" 2>/dev/null; then
+                  DB_TYPE="postgres"
+                  DB_IMAGE="postgres:15"
+                  DB_PORT="5432"
+                elif grep -qi "mongo\|MONGO_URI\|MONGODB_URI" \
+                    "${env_file}" 2>/dev/null; then
+                  DB_TYPE="mongo"
+                  DB_IMAGE="mongo:7"
+                  DB_PORT="27017"
+                fi
+                break
+              fi
+            done
+          fi
+
+          # Chercher dans le code source si toujours rien
+          if [ "${DB_TYPE}" = "none" ]; then
+            if grep -rq "mysql\|knex\|sequelize\|typeorm" \
+                --include="*.js" --include="*.ts" --include="*.json" \
+                --exclude-dir=node_modules --exclude-dir=.git \
+                . 2>/dev/null; then
+              DB_TYPE="mysql"
+              DB_IMAGE="mysql:8.0"
+              DB_PORT="3306"
+            elif grep -rq "pg\|postgresql\|postgres" \
+                --include="*.js" --include="*.ts" --include="*.json" \
+                --exclude-dir=node_modules --exclude-dir=.git \
+                . 2>/dev/null; then
+              DB_TYPE="postgres"
+              DB_IMAGE="postgres:15"
+              DB_PORT="5432"
+            elif grep -rq "mongoose\|mongodb" \
+                --include="*.js" --include="*.ts" --include="*.json" \
+                --exclude-dir=node_modules --exclude-dir=.git \
+                . 2>/dev/null; then
+              DB_TYPE="mongo"
+              DB_IMAGE="mongo:7"
+              DB_PORT="27017"
+            fi
+          fi
+
+          echo "Base de donnees detectee : ${DB_TYPE} (${DB_IMAGE})"
+          echo "DB_TYPE=${DB_TYPE}"           >> $GITHUB_ENV
+          echo "DB_IMAGE=${DB_IMAGE}"         >> $GITHUB_ENV
+          echo "DB_PORT=${DB_PORT}"           >> $GITHUB_ENV
+          echo "DB_NAME=${DB_NAME}"           >> $GITHUB_ENV
+          echo "DB_USER=${DB_USER}"           >> $GITHUB_ENV
+          echo "DB_PASSWORD=${DB_PASSWORD}"   >> $GITHUB_ENV
+          echo "DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}" >> $GITHUB_ENV
+
+          # ── Détecter les variables d'env requises ───────────
+          # Lire les variables depuis le Dockerfile et .env.example
+          ENV_VARS=""
+          if [ -f ".env.example" ]; then
+            ENV_VARS=$(grep -v '^#' .env.example \
+              | grep -v '^$' \
+              | cut -d= -f1 \
+              | xargs 2>/dev/null || true)
+            echo "Variables env depuis .env.example : ${ENV_VARS}"
+          fi
+
+          # Détecter le login path pour le DAST authentifié
+          LOGIN_PATH=""
+          LOGIN_FIELD_USER="email"
+          LOGIN_FIELD_PASS="password"
+          LOGIN_SUCCESS_REGEX="dashboard|home|profile|welcome"
+
+          # Chercher une route de login dans le code
+          LOGIN_PATH=$(grep -r \
+            "router\.\(post\|get\)\|app\.\(post\|get\)\|path.*login\|route.*auth" \
+            --include="*.js" --include="*.ts" \
+            --exclude-dir=node_modules --exclude-dir=.git \
+            -h . 2>/dev/null \
+            | grep -i "login\|signin\|auth" \
+            | grep -Eo "'[^']*login[^']*'\|\"[^\"]*login[^\"]*\"" \
+            | head -1 \
+            | tr -d "'\""  || echo "")
+
+          LOGIN_PATH=${LOGIN_PATH:-/login}
+
+          # Chercher les noms des champs dans les fichiers de vue/template
+          FIELD_USER_DETECT=$(grep -r \
+            'name=.*email\|name=.*username\|name=.*login' \
+            --include="*.html" --include="*.ejs" --include="*.hbs" \
+            --include="*.jsx" --include="*.tsx" \
+            --exclude-dir=node_modules \
+            -oh . 2>/dev/null \
+            | grep -Eo 'name="[^"]*"' \
+            | head -1 \
+            | tr -d '"' \
+            | sed 's/name=//' || echo "email")
+
+          LOGIN_FIELD_USER=${FIELD_USER_DETECT:-email}
+
+          echo "Login path detecte : ${LOGIN_PATH}"
+          echo "Champ utilisateur detecte : ${LOGIN_FIELD_USER}"
+
+          echo "LOGIN_PATH=${LOGIN_PATH}"               >> $GITHUB_ENV
+          echo "LOGIN_FIELD_USER=${LOGIN_FIELD_USER}"   >> $GITHUB_ENV
+          echo "LOGIN_FIELD_PASS=${LOGIN_FIELD_PASS}"   >> $GITHUB_ENV
+          echo "LOGIN_SUCCESS_REGEX=${LOGIN_SUCCESS_REGEX}" >> $GITHUB_ENV
+
+          echo ""
+          echo "================================================"
+          echo " RAPPORT AUTO-DISCOVERY"
+          echo "================================================"
+          echo "  Dockerfile    : ${DOCKERFILE}"
+          echo "  Port          : ${EXPOSED_PORT} -> 8080"
+          echo "  Langages      : ${LANGS}"
+          echo "  Frameworks    : ${FRAMEWORKS}"
+          echo "  Base donnees  : ${DB_TYPE}"
+          echo "  Login path    : ${LOGIN_PATH}"
+          echo "================================================"
+
+      # ── Démarrage conditionnel de la BDD ──────────────────
+      # La BDD est démarrée dynamiquement selon ce qui a été détecté
+      - name: "[DISCOVERY] Demarrage base de donnees (si detectee)"
+        run: |
+          if [ "${{ env.DB_TYPE }}" = "none" ]; then
+            echo "Aucune base de donnees detectee. Step ignore."
+            exit 0
+          fi
+
+          echo "Demarrage : ${{ env.DB_IMAGE }}"
+
+          if [ "${{ env.DB_TYPE }}" = "mysql" ]; then
+            docker run -d \
+              --name db-service \
+              -p ${{ env.DB_PORT }}:3306 \
+              -e MYSQL_ROOT_PASSWORD=${{ env.DB_ROOT_PASSWORD }} \
+              -e MYSQL_DATABASE=${{ env.DB_NAME }} \
+              -e MYSQL_USER=${{ env.DB_USER }} \
+              -e MYSQL_PASSWORD=${{ env.DB_PASSWORD }} \
+              ${{ env.DB_IMAGE }}
+
+            echo "Attente MySQL..."
+            for i in {1..20}; do
+              if docker exec db-service mysqladmin ping \
+                  -h localhost \
+                  -u root \
+                  --password=${{ env.DB_ROOT_PASSWORD }} \
+                  --silent 2>/dev/null; then
+                echo "MySQL pret."
+                break
+              fi
+              echo "Tentative $i/20..."
+              sleep 3
+            done
+
+          elif [ "${{ env.DB_TYPE }}" = "postgres" ]; then
+            docker run -d \
+              --name db-service \
+              -p ${{ env.DB_PORT }}:5432 \
+              -e POSTGRES_DB=${{ env.DB_NAME }} \
+              -e POSTGRES_USER=${{ env.DB_USER }} \
+              -e POSTGRES_PASSWORD=${{ env.DB_PASSWORD }} \
+              ${{ env.DB_IMAGE }}
+
+            echo "Attente PostgreSQL..."
+            for i in {1..20}; do
+              if docker exec db-service pg_isready \
+                  -U ${{ env.DB_USER }} \
+                  -d ${{ env.DB_NAME }} \
+                  --quiet 2>/dev/null; then
+                echo "PostgreSQL pret."
+                break
+              fi
+              echo "Tentative $i/20..."
+              sleep 3
+            done
+
+          elif [ "${{ env.DB_TYPE }}" = "mongo" ]; then
+            docker run -d \
+              --name db-service \
+              -p ${{ env.DB_PORT }}:27017 \
+              ${{ env.DB_IMAGE }}
+
+            echo "Attente MongoDB..."
+            sleep 10
+
+          elif [ "${{ env.DB_TYPE }}" = "redis" ]; then
+            docker run -d \
+              --name db-service \
+              -p ${{ env.DB_PORT }}:6379 \
+              ${{ env.DB_IMAGE }}
+            sleep 3
+          fi
+
+      # ════════════════════════════════════════════════════════
+      # PHASE 1 — SAST
+      # ════════════════════════════════════════════════════════
+
+      - name: "[SAST-1] Gitleaks - Secrets historique Git"
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_REPORT_PATH: gitleaks-raw.json
+        continue-on-error: true
+
+      - name: "[SAST-1] Gitleaks - Conversion Markdown"
+        run: |
+          cat <<'MD' > gitleaks-report.md
+          # Gitleaks - Secrets dans l historique Git
+
+          | Description | Fichier | Ligne | Auteur | Date |
+          |-------------|---------|-------|--------|------|
+          MD
+          if [ -f gitleaks-raw.json ] && [ -s gitleaks-raw.json ]; then
+            python3 - <<'PYEOF'
+          import json
+          with open("gitleaks-raw.json") as f:
+              data = json.load(f)
+          with open("gitleaks-report.md", "a") as out:
+              if not data:
+                  out.write("| OK Aucun secret detecte | - | - | - | - |\n")
+              else:
+                  for item in data:
+                      desc   = item.get("Description","N/A").replace("|","\\|")
+                      file_  = item.get("File","N/A").replace("|","\\|")
+                      line   = str(item.get("StartLine","N/A"))
+                      author = item.get("Author","N/A").replace("|","\\|")
+                      date   = item.get("Date","N/A")[:10]
+                      out.write(
+                          f"| {desc} | {file_} | {line} | {author} | {date} |\n"
+                      )
+          PYEOF
+          else
+            echo "| OK Aucun secret detecte | - | - | - | - |" \
+              >> gitleaks-report.md
+          fi
+          rm -f gitleaks-raw.json
+
+      - name: "[SAST-2] detect-secrets - Secrets fichiers actuels"
+        run: |
+          pip install detect-secrets -q
+          detect-secrets scan \
+            --exclude-files '\.git/.*' \
+            --exclude-files 'node_modules/.*' \
+            --exclude-files 'vendor/.*' \
+            --exclude-files '.*\.lock$' \
+            --exclude-files '.*\.min\.js$' \
+            > detect-secrets-raw.json 2>/dev/null || true
+
+          cat <<'MD' > detect-secrets-report.md
+          # detect-secrets - Secrets dans les fichiers actuels
+
+          | Fichier | Ligne | Type de secret |
+          |---------|-------|----------------|
+          MD
+          python3 - <<'PYEOF'
+          import json
+          try:
+              with open("detect-secrets-raw.json") as f:
+                  data = json.load(f)
+              results = data.get("results", {})
+              with open("detect-secrets-report.md", "a") as out:
+                  if not results:
+                      out.write("| OK Aucun secret detecte | - | - |\n")
+                  else:
+                      for filepath, secrets in results.items():
+                          for s in secrets:
+                              line  = s.get("line_number", "N/A")
+                              stype = s.get("type","N/A").replace("|","\\|")
+                              fp    = filepath.replace("|","\\|")
+                              out.write(f"| {fp} | {line} | {stype} |\n")
+          except Exception as e:
+              with open("detect-secrets-report.md", "a") as out:
+                  out.write(f"| Erreur : {e} | - | - |\n")
+          PYEOF
+          rm -f detect-secrets-raw.json
+
+      # Semgrep utilise les configs détectées dynamiquement
+      - name: "[SAST-3] Semgrep - Analyse statique (configs auto-detectees)"
+        run: |
+          pip install semgrep -q
+          echo "Configs Semgrep utilisees : ${{ env.SEMGREP_CONFIGS }}"
+
+          ARGS=""
+          for config in ${{ env.SEMGREP_CONFIGS }}; do
+            ARGS="${ARGS} --config=${config}"
+          done
+
+          semgrep ${ARGS} \
+            --text \
+            --output semgrep-report.txt \
+            --timeout 60 \
+            --exclude="node_modules" \
+            --exclude="vendor" \
+            --exclude="*.min.js" || true
+
+      - name: "[SAST-4] CodeQL - Taint analysis (langage auto-detecte)"
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ env.CODEQL_LANG }}
+          queries: security-extended
+
+      - name: CodeQL Autobuild
+        uses: github/codeql-action/autobuild@v4
+
+      - name: CodeQL Analyze
+        uses: github/codeql-action/analyze@v4
+
+      - name: "[SAST-5] Hadolint - Analyse Dockerfile"
+        run: |
+          docker run --rm \
+            -v "$(pwd):/workspace" \
+            hadolint/hadolint:latest \
+            hadolint --format json \
+            /workspace/${{ env.DOCKERFILE }} \
+            > hadolint-raw.json 2>/dev/null || true
+
+          cat <<'MD' > hadolint-report.md
+          # Hadolint - Analyse Dockerfile
+
+          | Ligne | Niveau | Regle | Message |
+          |-------|--------|-------|---------|
+          MD
+          python3 - <<'PYEOF'
+          import json
+          try:
+              with open("hadolint-raw.json") as f:
+                  data = json.load(f)
+              with open("hadolint-report.md", "a") as out:
+                  if not data:
+                      out.write("| OK Aucune anomalie | - | - | - |\n")
+                  else:
+                      for item in data:
+                          line  = str(item.get("line","N/A"))
+                          level = item.get("level","N/A")
+                          code  = item.get("code","N/A")
+                          msg   = item.get("message","N/A").replace("|","\\|")
+                          out.write(f"| {line} | {level} | {code} | {msg} |\n")
+          except Exception as e:
+              with open("hadolint-report.md", "a") as out:
+                  out.write(f"| Erreur : {e} | - | - | - |\n")
+          PYEOF
+          rm -f hadolint-raw.json
+
+      # ════════════════════════════════════════════════════════
+      # PHASE 2 — BUILD & INSPECTION IMAGE
+      # ════════════════════════════════════════════════════════
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: "[BUILD] Construction image Docker"
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./${{ env.DOCKERFILE }}
+          push: false
+          load: true
+          tags: app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Inspection POST-BUILD de l'image ──────────────────
+      # On inspecte l'image buildée pour confirmer/corriger
+      # ce qui a été détecté dans le Dockerfile
+      - name: "[DISCOVERY] Inspection image buildee (post-build)"
+        run: |
+          echo "================================================"
+          echo " INSPECTION IMAGE app:latest"
+          echo "================================================"
+
+          # Port réel exposé par l'image
+          REAL_PORT=$(docker inspect app:latest \
+            --format='{{range $port, $_ := .Config.ExposedPorts}}{{$port}} {{end}}' \
+            2>/dev/null \
+            | tr -d '/tcp /udp' \
+            | awk '{print $1}')
+
+          if [ -n "${REAL_PORT}" ] && [ "${REAL_PORT}" != "${{ env.APP_PORT }}" ]; then
+            echo "Correction port : ${{ env.APP_PORT }} -> ${REAL_PORT}"
+            echo "APP_PORT=${REAL_PORT}" >> $GITHUB_ENV
+          fi
+
+          # User de l'image
+          IMG_USER=$(docker inspect app:latest \
+            --format='{{.Config.User}}' 2>/dev/null)
+          echo "User image : ${IMG_USER:-root (attention !)}"
+
+          # Variables d'environnement définies dans l'image
+          IMG_ENVS=$(docker inspect app:latest \
+            --format='{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null)
+          echo "Variables env image :"
+          echo "${IMG_ENVS}" | head -20
+
+          # Workdir de l'image
+          IMG_WORKDIR=$(docker inspect app:latest \
+            --format='{{.Config.WorkingDir}}' 2>/dev/null)
+          echo "Workdir : ${IMG_WORKDIR}"
+          echo "IMG_WORKDIR=${IMG_WORKDIR}" >> $GITHUB_ENV
+
+          # Entrypoint / CMD
+          IMG_CMD=$(docker inspect app:latest \
+            --format='{{.Config.Cmd}}' 2>/dev/null)
+          echo "CMD : ${IMG_CMD}"
+
+          # Lister les fichiers de l'image pour enrichir le scan
+          echo ""
+          echo "Fichiers dans le workdir de l image :"
+          docker run --rm --entrypoint="" app:latest \
+            ls -la "${IMG_WORKDIR:-/app}" 2>/dev/null || \
+          docker run --rm --entrypoint="" app:latest \
+            ls -la / 2>/dev/null | head -30
+
+          # Détecter les fichiers de dépendances dans l'image
+          echo ""
+          echo "Fichiers de dependances dans l image :"
+          docker run --rm --entrypoint="" app:latest \
+            find / \
+            -name "package.json" \
+            -o -name "requirements.txt" \
+            -o -name "composer.json" \
+            -o -name "go.mod" \
+            -o -name "Gemfile" \
+            2>/dev/null \
+            | grep -v node_modules \
+            | grep -v vendor \
+            | head -10
+
+          # Détecter les routes Express dans l'image
+          echo ""
+          echo "Routes detectees dans l image :"
+          ROUTES=$(docker run --rm --entrypoint="" app:latest \
+            grep -r \
+            "router\.\|app\.get\|app\.post\|app\.put\|app\.delete" \
+            "${IMG_WORKDIR:-/app}" \
+            --include="*.js" \
+            --include="*.ts" \
+            -h 2>/dev/null \
+            | grep -Eo "'[^']*'\|\"[^\"]*\"" \
+            | sort -u \
+            | head -20 || echo "")
+          echo "${ROUTES}"
+          echo "DISCOVERED_ROUTES=${ROUTES}" >> $GITHUB_ENV
+
+          echo "================================================"
+
+      # ════════════════════════════════════════════════════════
+      # PHASE 3 — SCAN IMAGE
+      # ════════════════════════════════════════════════════════
+
+      - name: "[SCAN-1] Trivy - Layers image Docker"
+        run: |
+          {
+            echo "# Trivy - Scan image Docker"
+            echo "Image    : app:latest"
+            echo "Langages : ${{ env.DETECTED_LANGS }}"
+            echo "Frameworks : ${{ env.DETECTED_FRAMEWORKS }}"
+            echo ""
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy:latest image \
+              --format table \
+              --severity CRITICAL,HIGH \
+              --ignore-unfixed \
+              app:latest
+          } > trivy-image-report.txt 2>&1 || true
+
+      - name: "[SCAN-2] Trivy - Dependances code source"
+        run: |
+          {
+            echo "# Trivy - Scan dependances"
+            echo "Fichiers analyses : package.json / requirements.txt / composer.json"
+            echo ""
+            docker run --rm \
+              -v "$(pwd):/src" \
+              aquasec/trivy:latest fs \
+              --format table \
+              --severity CRITICAL,HIGH,MEDIUM \
+              --ignore-unfixed \
+              /src
+          } > trivy-fs-report.txt 2>&1 || true
+
+      # ════════════════════════════════════════════════════════
+      # PHASE 4 — SBOM
+      # ════════════════════════════════════════════════════════
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: "[SBOM-1] Syft - Inventaire composants"
+        run: |
+          syft dir:. -o table > sbom-report.txt 2>/dev/null || \
+          syft . -o table > sbom-report.txt 2>/dev/null || \
+          echo "SBOM non disponible." > sbom-report.txt
+
+      - name: "[SBOM-2] Syft - License compliance"
+        run: |
+          syft dir:. -o syft-json > syft-raw.json 2>/dev/null || \
+          syft . -o syft-json > syft-raw.json 2>/dev/null || true
+
+          cat <<'MD' > license-report.md
+          # License Compliance
+
+          | Package | Version | Licence | Risque |
+          |---------|---------|---------|--------|
+          MD
+          python3 - <<'PYEOF'
+          import json
+          RISKY = {
+              "GPL-2.0","GPL-3.0","AGPL-3.0","LGPL-2.0",
+              "LGPL-2.1","LGPL-3.0","CC-BY-SA-4.0",
+              "EUPL-1.1","EUPL-1.2"
+          }
+          try:
+              with open("syft-raw.json") as f:
+                  data = json.load(f)
+              artifacts = data.get("artifacts", [])
+              with open("license-report.md", "a") as out:
+                  if not artifacts:
+                      out.write("| Aucun composant | - | - | - |\n")
+                  else:
+                      for a in sorted(artifacts,
+                                      key=lambda x: x.get("name","")):
+                          name    = a.get("name","N/A").replace("|","\\|")
+                          version = a.get("version","N/A")
+                          lics    = a.get("licenses", [])
+                          lic_str = ", ".join(
+                              l.get("value","N/A") for l in lics
+                          ) if lics else "UNKNOWN"
+                          risk = "RISQUE" if any(
+                              l.get("value","") in RISKY for l in lics
+                          ) else "OK"
+                          out.write(
+                              f"| {name} | {version} | {lic_str} | {risk} |\n"
+                          )
+          except Exception as e:
+              with open("license-report.md", "a") as out:
+                  out.write(f"| Erreur : {e} | - | - | - |\n")
+          PYEOF
+          rm -f syft-raw.json
+
+      - name: "[SBOM-3] Syft - SBOM CycloneDX pour Grype"
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-cyclonedx-tmp.json
+
+      - name: "[SBOM-4] Grype - CVEs sur composants"
+        run: |
+          curl -sSfL \
+            https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+          grype sbom:sbom-cyclonedx-tmp.json \
+            -o json --fail-on "" > grype-raw.json 2>/dev/null || true
+
+          cat <<'MD' > grype-report.md
+          # Grype - CVEs sur les composants
+
+          | Package | Version | CVE | Severite | Fix disponible |
+          |---------|---------|-----|----------|----------------|
+          MD
+          python3 - <<'PYEOF'
+          import json
+          SEV = {"Critical":0,"High":1,"Medium":2,"Low":3,"Negligible":4}
+          try:
+              with open("grype-raw.json") as f:
+                  data = json.load(f)
+              matches = sorted(
+                  data.get("matches", []),
+                  key=lambda x: SEV.get(
+                      x.get("vulnerability",{}).get("severity",""), 99)
+              )
+              with open("grype-report.md", "a") as out:
+                  if not matches:
+                      out.write("| OK Aucun CVE detecte | - | - | - | - |\n")
+                  else:
+                      for m in matches:
+                          pkg = m.get("artifact",{}).get("name","N/A")
+                          ver = m.get("artifact",{}).get("version","N/A")
+                          v   = m.get("vulnerability",{})
+                          cve = v.get("id","N/A")
+                          sev = v.get("severity","N/A")
+                          fix = v.get("fix",{}).get("state","N/A")
+                          out.write(
+                              f"| {pkg} | {ver} | {cve} | {sev} | {fix} |\n"
+                          )
+          except Exception as e:
+              with open("grype-report.md", "a") as out:
+                  out.write(f"| Erreur : {e} | - | - | - |\n")
+          PYEOF
+          rm -f grype-raw.json sbom-cyclonedx-tmp.json
+
+      # ════════════════════════════════════════════════════════
+      # PHASE 5 — DAST
+      # L'app est démarrée avec les variables d'env
+      # découvertes automatiquement
+      # ════════════════════════════════════════════════════════
+
+      - name: "[DAST] Demarrage application"
+        run: |
+          HOST_IP=$(docker network inspect bridge \
+            --format='{{range .IPAM.Config}}{{.Gateway}}{{end}}')
+
+          # Construction dynamique des variables d'env
+          DB_ARGS=""
+          if [ "${{ env.DB_TYPE }}" != "none" ]; then
+            DB_ARGS="-e DB_HOST=${HOST_IP} \
+              -e DB_PORT=${{ env.DB_PORT }} \
+              -e DB_NAME=${{ env.DB_NAME }} \
+              -e DB_USER=${{ env.DB_USER }} \
+              -e DB_PASSWORD=${{ env.DB_PASSWORD }} \
+              -e DATABASE_URL=${{ env.DB_TYPE }}://${{ env.DB_USER }}:${{ env.DB_PASSWORD }}@${HOST_IP}:${{ env.DB_PORT }}/${{ env.DB_NAME }}"
+          fi
+
+          docker run -d \
+            --name app-under-test \
+            -p 8080:${{ env.APP_PORT }} \
+            -e NODE_ENV=production \
+            ${DB_ARGS} \
+            app:latest
+
+      - name: "[DAST] Attente demarrage application"
+        run: |
+          echo "Attente application sur le port 8080..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:8080 > /dev/null 2>&1; then
+              echo "Application prete."
+              break
+            fi
+            echo "Tentative $i/30..."
+            sleep 5
+          done
+          if ! curl -sf http://localhost:8080 > /dev/null 2>&1; then
+            echo "Application non disponible. Logs :"
+            docker logs app-under-test
+            exit 1
+          fi
+
+      - name: "[DAST-1] Nikto - Recon passive"
+        run: |
+          sudo apt-get install -y nikto -q
+          nikto \
+            -h http://localhost:8080 \
+            -Format html \
+            -output nikto-report.html \
+            -Tuning 123bde \
+            -nointeractive || true
+        continue-on-error: true
+
+      - name: "[DAST-2] FFUF - Cartographie endpoints (routes auto-detectees)"
+        run: |
+          go install github.com/ffuf/ffuf/v2@latest
+
+          curl -sL \
+            https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt \
+            -o wordlist.txt
+          curl -sL \
+            https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/api/api-endpoints.txt \
+            -o wordlist-api.txt 2>/dev/null || true
+          cat wordlist.txt wordlist-api.txt > wordlist-full.txt 2>/dev/null \
+            || mv wordlist.txt wordlist-full.txt
+
+          # Ajouter les routes découvertes dans l'image
+          if [ -n "${{ env.DISCOVERED_ROUTES }}" ]; then
+            echo "${{ env.DISCOVERED_ROUTES }}" \
+              | tr ' ' '\n' \
+              | tr -d "'\""  >> wordlist-full.txt
+          fi
+
+          $HOME/go/bin/ffuf \
+            -u http://localhost:8080/FUZZ \
+            -w wordlist-full.txt \
+            -mc 200,201,204,301,302,403,405 \
+            -o ffuf-raw.json \
+            -of json \
+            -t 50 -timeout 10 -silent || true
+
+          python3 - <<'PYEOF'
+          import json
+          md  = "# FFUF - Endpoints decouverts\n\n"
+          md += "| URL | Status | Taille (octets) | Duree (ms) |\n"
+          md += "|-----|--------|-----------------|------------|\n"
+          try:
+              with open("ffuf-raw.json") as f:
+                  data = json.load(f)
+              results = data.get("results", [])
+              if not results:
+                  md += "| OK Aucun endpoint sensible | - | - | - |\n"
+              else:
+                  for r in sorted(results,
+                                  key=lambda x: (x.get("status",0),
+                                                 x.get("url",""))):
+                      url    = r.get("url","N/A")
+                      status = r.get("status","N/A")
+                      length = r.get("length","N/A")
+                      dur    = round(r.get("duration",0)/1_000_000, 2)
+                      md    += f"| {url} | {status} | {length} | {dur} |\n"
+          except Exception as e:
+              md += f"| Erreur : {e} | - | - | - |\n"
+          with open("ffuf-report.md","w") as f:
+              f.write(md)
+          PYEOF
+          rm -f ffuf-raw.json wordlist.txt wordlist-api.txt wordlist-full.txt
+        continue-on-error: true
+
+      - name: "[DAST-3] ZAP - Scan actif public"
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: "http://localhost:8080"
+          cmd_options: "-a"
+          fail_action: false
+          allow_issue_writing: false
+        continue-on-error: true
+
+      - name: "[DAST-3] ZAP - Recuperation rapport HTML"
+        run: |
+          mv report_html.html zap-public-report.html 2>/dev/null || \
+          echo '<html><body><h1>ZAP - Aucune alerte</h1></body></html>' \
+            > zap-public-report.html
+          rm -f report_json.json report_md.md 2>/dev/null || true
+
+      - name: "[DAST-4] ZAP - Scan authentifie (login auto-detecte)"
+        run: |
+          if [ -z "${{ secrets.DAST_AUTH_PASSWORD }}" ]; then
+            echo "Secret DAST_AUTH_PASSWORD non configure — scan ignore."
+            echo '<html><body>
+              <h1>ZAP Auth - Non configure</h1>
+              <p>Login detecte : ${{ env.LOGIN_PATH }}</p>
+              <p>Champ user : ${{ env.LOGIN_FIELD_USER }}</p>
+              <p>Configurer DAST_AUTH_USERNAME + DAST_AUTH_PASSWORD
+              dans les secrets GitHub pour activer ce scan.</p>
+            </body></html>' > zap-auth-report.html
+            exit 0
+          fi
+
+          docker run -d --name zap-daemon --network host \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap.sh -daemon -host 0.0.0.0 -port 8090 \
+            -config api.disablekey=true \
+            -config api.addrs.addr.name=.* \
+            -config api.addrs.addr.regex=true
+
+          for i in {1..30}; do
+            if curl -sf http://localhost:8090/JSON/core/view/version/ \
+                > /dev/null 2>&1; then
+              echo "ZAP daemon pret."
+              break
+            fi
+            sleep 3
+          done
+
+          python3 - <<PYEOF
+          import time, json, urllib.request, urllib.parse
+
+          ZAP     = "http://localhost:8090"
+          TARGET  = "http://localhost:8080"
+          USER    = "${{ secrets.DAST_AUTH_USERNAME }}"
+          PASSWD  = "${{ secrets.DAST_AUTH_PASSWORD }}"
+          LOGIN   = "${{ env.LOGIN_PATH }}"
+          SUCCESS = "${{ env.LOGIN_SUCCESS_REGEX }}"
+          FIELD_U = "${{ env.LOGIN_FIELD_USER }}"
+          FIELD_P = "${{ env.LOGIN_FIELD_PASS }}"
+
+          def zap(path, params=None):
+              url = f"{ZAP}{path}"
+              if params:
+                  url += "?" + urllib.parse.urlencode(params)
+              try:
+                  with urllib.request.urlopen(url, timeout=30) as r:
+                      return json.loads(r.read())
+              except Exception as e:
+                  print(f"ZAP API error {path}: {e}")
+                  return {}
+
+          ctx    = zap("/JSON/context/action/newContext/",
+                       {"contextName": "auth-scan"})
+          ctx_id = ctx.get("contextId", "1")
+          zap("/JSON/context/action/includeInContext/",
+              {"contextId": ctx_id, "regex": f"{TARGET}.*"})
+
+          # Login path détecté automatiquement par auto-discovery
+          login_data = (
+              f"loginUrl={TARGET}{LOGIN}"
+              f"&loginRequestData="
+              f"{FIELD_U}%3D%7B%25username%25%7D"
+              f"%26{FIELD_P}%3D%7B%25password%25%7D"
+          )
+          zap("/JSON/authentication/action/setAuthenticationMethod/", {
+              "contextId": ctx_id,
+              "authMethodName": "formBasedAuthentication",
+              "authMethodConfigParams": login_data
+          })
+          zap("/JSON/authentication/action/setLoggedInIndicator/", {
+              "contextId": ctx_id,
+              "loggedInIndicatorRegex": SUCCESS
+          })
+          user    = zap("/JSON/users/action/newUser/",
+                        {"contextId": ctx_id, "name": "dast-user"})
+          user_id = user.get("userId", "0")
+          zap("/JSON/users/action/setAuthenticationCredentials/", {
+              "contextId": ctx_id, "userId": user_id,
+              "authCredentialsConfigParams":
+                  f"username={urllib.parse.quote(USER)}"
+                  f"&password={urllib.parse.quote(PASSWD)}"
+          })
+          zap("/JSON/users/action/setUserEnabled/",
+              {"contextId": ctx_id, "userId": user_id, "enabled": "true"})
+
+          zap("/JSON/ajaxSpider/action/scanAsUser/",
+              {"contextId": ctx_id, "userId": user_id, "url": TARGET})
+          time.sleep(25)
+
+          scan    = zap("/JSON/ascan/action/scanAsUser/", {
+              "url": TARGET, "contextId": ctx_id,
+              "userId": user_id, "recurse": "true"
+          })
+          scan_id = scan.get("scan", "0")
+          for _ in range(60):
+              pct = zap("/JSON/ascan/view/status/",
+                        {"scanId": scan_id}).get("status", "0")
+              print(f"  Scan : {pct}%")
+              if pct == "100":
+                  break
+              time.sleep(10)
+
+          with urllib.request.urlopen(
+              f"{ZAP}/OTHER/core/other/htmlreport/"
+          ) as r:
+              with open("zap-auth-report.html","wb") as f:
+                  f.write(r.read())
+          print("[+] ZAP auth termine.")
+          PYEOF
+
+          docker stop zap-daemon && docker rm zap-daemon || true
+        continue-on-error: true
+
+      - name: "[DAST-5] Nuclei - CVEs specifiques"
+        run: |
+          go install -v \
+            github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+          $HOME/go/bin/nuclei -update-templates -silent
+
+          $HOME/go/bin/nuclei \
+            -u http://localhost:8080 \
+            -severity critical,high,medium \
+            -t cves,misconfiguration,exposures,technologies \
+            -markdown-export nuclei-report-md/ \
+            -silent || true
+
+          if [ -d nuclei-report-md ] \
+              && [ "$(ls -A nuclei-report-md 2>/dev/null)" ]; then
+            echo "# Nuclei - CVEs et misconfigurations" > nuclei-report.md
+            echo "" >> nuclei-report.md
+            cat nuclei-report-md/*.md >> nuclei-report.md 2>/dev/null
+          else
+            printf "# Nuclei\n\nOK Aucune vulnerabilite.\n" \
+              > nuclei-report.md
+          fi
+          rm -rf nuclei-report-md/
+        continue-on-error: true
+
+      # ════════════════════════════════════════════════════════
+      # PHASE 6 — CLEANUP
+      # ════════════════════════════════════════════════════════
+      - name: Cleanup containers
+        if: always()
+        run: |
+          docker stop app-under-test 2>/dev/null || true
+          docker stop db-service     2>/dev/null || true
+          docker rm   app-under-test 2>/dev/null || true
+          docker rm   db-service     2>/dev/null || true
+
+      # ════════════════════════════════════════════════════════
+      # PHASE 7 — RAPPORT + PDF + ARCHIVE
+      # ════════════════════════════════════════════════════════
+      - name: Generate consolidated report
+        if: always()
+        run: |
+          DATE=$(date '+%Y-%m-%d %H:%M:%S UTC')
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          BRANCH_SAFE=$(echo "${{ github.ref_name }}" | tr '/' '-')
+          echo "BRANCH_SAFE=${BRANCH_SAFE}" >> $GITHUB_ENV
+
+          cat <<EOF > rapport-consolide.md
+          # RAPPORT D AUDIT DE SECURITE
+
+          **Date :** ${DATE}
+          **Repository :** ${{ github.repository }}
+          **Branche :** ${{ github.ref_name }}
+          **Commit :** ${SHORT_SHA}
+
+          ---
+
+          ## 1. Auto-Discovery — Ce qui a ete detecte
+
+          | Element | Valeur detectee |
+          |---------|----------------|
+          | Dockerfile | ${{ env.DOCKERFILE }} |
+          | Port applicatif | ${{ env.APP_PORT }} |
+          | Langages | ${{ env.DETECTED_LANGS }} |
+          | Frameworks | ${{ env.DETECTED_FRAMEWORKS }} |
+          | Base de donnees | ${{ env.DB_TYPE }} |
+          | Login path | ${{ env.LOGIN_PATH }} |
+          | Champ utilisateur | ${{ env.LOGIN_FIELD_USER }} |
+
+          ## 2. Pipeline execute
+
+          \`\`\`
+          SAST
+          ├── Gitleaks        secrets Git history    MD
+          ├── detect-secrets  secrets fichiers       MD
+          ├── Semgrep         patterns OWASP+${{ env.DETECTED_FRAMEWORKS }}  TXT
+          ├── CodeQL          taint analysis (${{ env.CODEQL_LANG }})         GitHub
+          └── Hadolint        Dockerfile             MD
+
+          IMAGE DOCKER
+          ├── Trivy image     layers OS              TXT
+          └── Trivy fs        dependances            TXT
+
+          SBOM
+          ├── Syft            inventaire             TXT
+          ├── Syft            licenses               MD
+          └── Grype           CVEs                   MD
+
+          DAST (app + ${{ env.DB_TYPE }})
+          ├── Nikto           recon passive          HTML
+          ├── FFUF            endpoints              MD
+          ├── ZAP public      OWASP Top 10           HTML
+          ├── ZAP auth        zones protegees        HTML
+          └── Nuclei          CVEs specifiques       MD
+          \`\`\`
+
+          ---
+
+          ## 3. SAST
+
+          ### Gitleaks
+          EOF
+          cat gitleaks-report.md >> rapport-consolide.md 2>/dev/null \
+            || echo "Non disponible." >> rapport-consolide.md
+
+          echo -e "\n### detect-secrets\n" >> rapport-consolide.md
+          cat detect-secrets-report.md >> rapport-consolide.md 2>/dev/null \
+            || echo "Non disponible." >> rapport-consolide.md
+
+          echo -e "\n### Semgrep\n\`\`\`" >> rapport-consolide.md
+          cat semgrep-report.txt >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucune vulnerabilite." >> rapport-consolide.md
+          echo -e "\`\`\`" >> rapport-consolide.md
+
+          echo -e "\n### Hadolint\n" >> rapport-consolide.md
+          cat hadolint-report.md >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucune anomalie." >> rapport-consolide.md
+
+          echo -e "\n---\n\n## 4. Image Docker\n" >> rapport-consolide.md
+          echo -e "\n### Trivy layers\n\`\`\`" >> rapport-consolide.md
+          cat trivy-image-report.txt >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucune vulnerabilite." >> rapport-consolide.md
+          echo -e "\`\`\`" >> rapport-consolide.md
+
+          echo -e "\n### Trivy dependances\n\`\`\`" >> rapport-consolide.md
+          cat trivy-fs-report.txt >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucune vulnerabilite." >> rapport-consolide.md
+          echo -e "\`\`\`" >> rapport-consolide.md
+
+          echo -e "\n---\n\n## 5. SBOM\n" >> rapport-consolide.md
+          echo -e "\n### Composants (50 premieres lignes)\n\`\`\`" \
+            >> rapport-consolide.md
+          head -50 sbom-report.txt >> rapport-consolide.md 2>/dev/null \
+            || echo "Non disponible." >> rapport-consolide.md
+          echo -e "\`\`\`" >> rapport-consolide.md
+
+          echo -e "\n### License Compliance\n" >> rapport-consolide.md
+          cat license-report.md >> rapport-consolide.md 2>/dev/null \
+            || echo "Non disponible." >> rapport-consolide.md
+
+          echo -e "\n### Grype CVEs\n" >> rapport-consolide.md
+          cat grype-report.md >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucun CVE." >> rapport-consolide.md
+
+          echo -e "\n---\n\n## 6. DAST\n" >> rapport-consolide.md
+
+          echo -e "\n### FFUF - Endpoints\n" >> rapport-consolide.md
+          cat ffuf-report.md >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucun endpoint." >> rapport-consolide.md
+
+          echo -e "\n### Nuclei\n" >> rapport-consolide.md
+          cat nuclei-report.md >> rapport-consolide.md 2>/dev/null \
+            || echo "Aucune vulnerabilite." >> rapport-consolide.md
+
+          cat <<'NOTE' >> rapport-consolide.md
+
+          > Rapports HTML disponibles dans l archive :
+          > - dast/nikto-report.html
+          > - dast/zap-public-report.html
+          > - dast/zap-auth-report.html
+          NOTE
+
+          echo -e "\n---\n\n## 7. Conclusion\n" >> rapport-consolide.md
+          echo "Rapport genere le ${DATE}." >> rapport-consolide.md
+
+      - name: Install Pandoc + XeLaTeX
+        if: always()
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y pandoc texlive-xetex
+
+      - name: Generate PDF
+        if: always()
+        run: |
+          pandoc rapport-consolide.md \
+            -o rapport-audit-securite.pdf \
+            --pdf-engine=xelatex \
+            -V geometry:margin=2cm \
+            -V fontsize=11pt \
+            -V colorlinks=true \
+            --toc --toc-depth=2 || \
+          cp rapport-consolide.md rapport-audit-securite-fallback.md
+
+      - name: Compress all reports
+        if: always()
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          DIR="audit-securite-${SHORT_SHA}"
+          mkdir -p "${DIR}/sast" "${DIR}/sbom" "${DIR}/dast"
+
+          cp rapport-consolide.md               "${DIR}/" 2>/dev/null || true
+          cp rapport-audit-securite.pdf         "${DIR}/" 2>/dev/null || true
+          cp rapport-audit-securite-fallback.md "${DIR}/" 2>/dev/null || true
+
+          cp gitleaks-report.md       "${DIR}/sast/" 2>/dev/null || true
+          cp detect-secrets-report.md "${DIR}/sast/" 2>/dev/null || true
+          cp semgrep-report.txt       "${DIR}/sast/" 2>/dev/null || true
+          cp hadolint-report.md       "${DIR}/sast/" 2>/dev/null || true
+          cp trivy-image-report.txt   "${DIR}/sast/" 2>/dev/null || true
+          cp trivy-fs-report.txt      "${DIR}/sast/" 2>/dev/null || true
+
+          cp sbom-report.txt          "${DIR}/sbom/" 2>/dev/null || true
+          cp license-report.md        "${DIR}/sbom/" 2>/dev/null || true
+          cp grype-report.md          "${DIR}/sbom/" 2>/dev/null || true
+
+          cp nikto-report.html        "${DIR}/dast/" 2>/dev/null || true
+          cp ffuf-report.md           "${DIR}/dast/" 2>/dev/null || true
+          cp zap-public-report.html   "${DIR}/dast/" 2>/dev/null || true
+          cp zap-auth-report.html     "${DIR}/dast/" 2>/dev/null || true
+          cp nuclei-report.md         "${DIR}/dast/" 2>/dev/null || true
+
+          ARCHIVE="audit-securite-${SHORT_SHA}.zip"
+          zip -r "${ARCHIVE}" "${DIR}/"
+          echo "ARCHIVE_NAME=${ARCHIVE}" >> $GITHUB_ENV
+
+      - name: Upload archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Audit-Securite-${{ env.BRANCH_SAFE }}-run${{ github.run_number }}
+          path: ${{ env.ARCHIVE_NAME }}
+          retention-days: 30
