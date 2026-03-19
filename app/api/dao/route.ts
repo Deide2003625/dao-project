@@ -148,8 +148,8 @@ export async function GET(req: NextRequest) {
   try {
     const connection = await db();
 
-    // crée les tables si besoin
-    await ensureTables(connection);
+    // crée les tables si besoin avec retry pour éviter les deadlocks
+    await withRetry(() => ensureTables(connection));
 
     const { searchParams } = new URL(req.url);
     const chefId = searchParams.get("chefId");
@@ -180,7 +180,7 @@ export async function GET(req: NextRequest) {
 
     query += " ORDER BY d.numero ASC";
 
-    const [rows]: any = await connection.execute(query, params);
+    const [rows]: any = await withRetry(() => connection.execute(query, params));
 
     // Garder le statut réel de la base de données, ne pas l'écraser
     // Le statut est maintenant géré automatiquement par la progression des tâches
