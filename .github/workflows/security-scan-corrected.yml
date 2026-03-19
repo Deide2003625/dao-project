@@ -3,7 +3,7 @@ name: Security Hardening - Fix ZAP Vulnerabilities
 on:
   workflow_dispatch:
   push:
-    branches: [main, develop]
+    branches: [main, develop, feature/Docker_v2]
   pull_request:
     branches: [main]
 
