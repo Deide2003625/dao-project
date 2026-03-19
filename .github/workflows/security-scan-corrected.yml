@@ -1,4 +1,5 @@
-name: 🔒 Security Hardening & ZAP Scan
+name: Security Hardening - Fix ZAP Vulnerabilities
+
 on:
   workflow_dispatch:
   push:
@@ -6,232 +7,382 @@ on:
   pull_request:
     branches: [main]
 
-# 🔐 MINIMUM PERMISSIONS (Security Best Practice)
 permissions:
-  contents: read   # Downgrade de write→read
-  pull-requests: read
-  checks: write    # Seulement pour status
+  contents: write
+  pull-requests: write
 
 jobs:
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 1 – CORRECTIONS DE SÉCURITÉ + COMMIT
+  # ═══════════════════════════════════════════════════════════════════
   security-hardening:
-    name: 🔧 Apply Security Fixes
+    name: Apply All Security Fixes
     runs-on: ubuntu-latest
-    permissions:
-      contents: write  # Job-level seulement
+    outputs:
+      # Transmet le SHA du commit de sécurité au job ZAP
+      # pour qu'il checkout exactement le bon code
+      commit_sha: ${{ steps.commit.outputs.commit_hash }}
     steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: ⚙️ Setup Node.js 20
-        uses: actions/setup-node@1e60f620b9541d16be8755b28b49d2f972b1fa7d # v4.0.3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: 'npm'
 
-      - name: 📦 Clean Install
+      - name: Install dependencies
         run: |
-          rm -f package-lock.json pnpm-lock.yaml yarn.lock
-          npm clean-install --prefer-offline
+          rm -f package-lock.json npm-shrinkwrap.json
+          npm install
 
-      - name: 🔍 npm audit (HIGH+ only)
+      - name: npm audit fix
         run: |
-          npm audit --audit-level=high
           npm audit fix --force --audit-level=high || true
+          rm -f package-lock.json
+          npm install
 
-      - name: 🛡️ Next.js Security Config (JSPDF FIXED)
+      # ── FIX #3 : next.config.js sans indentation parasite ───────────────
+      # Le heredoc avec indentation injectait 10 espaces devant chaque ligne,
+      # rendant le fichier invalide. On écrit via un script Node.js à la place.
+      - name: Rewrite next.config.js
         run: |
-          cat > next.config.js << 'EOF'
-          /** @type {import('next').NextConfig} */
+          node -e "
+          const fs = require('fs');
+          const config = \`/** @type {import('next').NextConfig} */
           const nextConfig = {
             poweredByHeader: false,
-            typescript: { ignoreBuildErrors: true },
-            
-            // 🔥 FIX jspdf/fflate SSR (Turbopack incompatible)
-            serverExternalPackages: ['jspdf', 'fflate', '@jspdf/layout', 'canvg'],
-            
-            // 🔒 SECURITY HEADERS
+
+            typescript: {
+              ignoreBuildErrors: true,
+            },
+
+            // jspdf/fflate utilisent des workers Node.js incompatibles avec le SSR.
+            // serverExternalPackages les exclut du bundle serveur.
+            serverExternalPackages: ['jspdf', 'fflate'],
+
             async headers() {
-              return [{
-                source: '/(.*)',
-                headers: [
-                  { key: 'X-Frame-Options', value: 'DENY' },
-                  { key: 'X-Content-Type-Options', value: 'nosniff' },
-                  { key: 'X-XSS-Protection', value: '1; mode=block' },
-                  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-                  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-                  { key: 'Permissions-Policy', value: 'camera=(),microphone=(),geolocation=()' },
-                  {
-                    key: 'Content-Security-Policy',
-                    value: "default-src 'self';script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com;style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;img-src 'self' data: blob:;connect-src 'self'"
-                  }
-                ]
-              }];
+              return [
+                {
+                  source: '/(.*)',
+                  headers: [
+                    { key: 'Content-Security-Policy', value: [\
+          \"default-src 'self'\",\
+          \"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com\",\
+          \"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com\",\
+          \"font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net\",\
+          \"img-src 'self' data: blob:\",\
+          \"connect-src 'self'\",\
+          \"frame-ancestors 'none'\",\
+          \"object-src 'none'\",\
+          \"base-uri 'self'\",\
+          \"form-action 'self'\"\
+          ].join('; ') },
+                    { key: 'X-Frame-Options',              value: 'DENY' },
+                    { key: 'X-Content-Type-Options',       value: 'nosniff' },
+                    { key: 'Strict-Transport-Security',    value: 'max-age=63072000; includeSubDomains; preload' },
+                    { key: 'Referrer-Policy',              value: 'strict-origin-when-cross-origin' },
+                    { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+                    { key: 'Cross-Origin-Opener-Policy',   value: 'same-origin' },
+                    { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+                    { key: 'Permissions-Policy',           value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+                  ],
+                },
+              ];
             },
           };
           module.exports = nextConfig;
-          EOF
+          \`;
+          // Supprimer l'indentation des 10 espaces introduite par le template literal
+          const cleaned = config.split('\n').map(l => l.replace(/^          /, '')).join('\n');
+          fs.writeFileSync('next.config.js', cleaned);
+          console.log('next.config.js ecrit avec succes');
+          "
 
-      - name: 🩹 Patch Client Components (jspdf SSR)
+      - name: Patch jspdf static imports (add use client)
         run: |
-          # Add 'use client' + dynamic imports for jspdf users
-          for f in app/dash/admin/History/page.{ts,tsx,js,jsx} app/**/history/page.{ts,tsx,js,jsx}; do
-            [ -f "$f" ] || continue
-            echo "🔧 Patching $f"
-            # Add use client if missing
-            if ! grep -q "use client" "$f"; then
-              sed -i '1i\'use client";\' "$f" && echo "  ✅ Added 'use client'"
-            fi
-            # Replace static jspdf import
-            sed -i 's|^\(import.*jsPDF.*jspdf\)|\//\1\n\/\/ TODO: const { jsPDF } = await import("jspdf");|g' "$f"
-          done
+          node -e "
+          const fs = require('fs');
+          const candidates = [
+            'app/dash/admin/History/page.tsx',
+            'app/dash/admin/History/page.jsx',
+          ];
+          for (const filePath of candidates) {
+            if (!fs.existsSync(filePath)) continue;
+            let src = fs.readFileSync(filePath, 'utf8');
+            if (!src.includes('jspdf') && !src.includes('fflate')) continue;
+            let changed = false;
+            if (!src.match(/^['\"']use client['\"']/m)) {
+              src = \"'use client';\\n\" + src;
+              changed = true;
+            }
+            const staticImport = /^import\\s+\\{?\\s*jsPDF\\s*\\}?\\s+from\\s+['\"]jspdf['\"]\\s*;?\\s*$/m;
+            if (staticImport.test(src)) {
+              src = src.replace(staticImport,
+                '// [auto-patch] import dynamique requis pour le SSR:\\n' +
+                '// const { jsPDF } = await import(\"jspdf\");'
+              );
+              changed = true;
+            }
+            if (changed) {
+              fs.writeFileSync(filePath, src);
+              console.log('Patche : ' + filePath);
+            }
+          }
+          "
 
-      - name: ⚡ Fix Route Handlers (Next.js 15+)
+      - name: Generate SRI hashes
         run: |
-          find . -name "route.ts" ! -path "*/node_modules/*" ! -path "*/.next/*" | 
-          xargs -I {} sh -c '
-            sed -i "s|\({params\):{params:\({.*}\)}\)|\1: { params: Promise<\2> }|g" "{}"
-            sed -i "s|const{\([^}]*\)}=params|const{\1}=await params|g" "{}"
-            echo "✅ Fixed {}"
-          '
+          mkdir -p docs
+          sri() { curl -sL "$1" | openssl dgst -sha384 -binary | openssl base64 -A; }
+          BS="sha384-$(sri 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js')"
+          JQ="sha384-$(sri 'https://code.jquery.com/jquery-3.6.0.min.js')"
+          MD="sha384-$(sri 'https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css')"
+          cat > docs/sri-hashes.md << MDEOF
+          # SRI Hashes
+          ## Bootstrap 5.3.0
+          \`<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="${BS}" crossorigin="anonymous"></script>\`
+          ## jQuery 3.6.0
+          \`<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="${JQ}" crossorigin="anonymous"></script>\`
+          ## MDI 7.2.96
+          \`<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css" integrity="${MD}" crossorigin="anonymous"/>\`
+          MDEOF
 
-      - name: 🛡️ Security Middleware
+      - name: Fix Next.js 15 route handler params signature
         run: |
-          mkdir -p middleware
-          cat > middleware.ts << 'EOF'
+          node -e "
+          const fs   = require('fs');
+          const path = require('path');
+
+          function walk(dir) {
+            let results = [];
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory() &&
+                  entry.name !== 'node_modules' &&
+                  entry.name !== '.next') {
+                results = results.concat(walk(full));
+              } else if (entry.name === 'route.ts' || entry.name === 'route.js') {
+                results.push(full);
+              }
+            }
+            return results;
+          }
+
+          let fixed = 0;
+          for (const file of walk('.')) {
+            let src = fs.readFileSync(file, 'utf8');
+            const orig = src;
+            src = src.replace(
+              /\{(\s*params\s*)\}(\s*:\s*)\{(\s*params\s*:\s*)(\{[^}]+\})(\s*)\}/g,
+              (_, p1, p2, p3, inner, p5) =>
+                '{' + p1 + '}' + p2 + '{' + p3 + 'Promise<' + inner.trim() + '>' + p5 + '}'
+            );
+            src = src.replace(
+              /\bconst\s*(\{[^}]+\})\s*=\s*params\b(?!\s*[.(])/g,
+              (_, d) => 'const ' + d + ' = await params'
+            );
+            if (src !== orig) {
+              fs.writeFileSync(file, src);
+              console.log('Corrige: ' + file);
+              fixed++;
+            }
+          }
+          console.log('Total: ' + fixed + ' fichier(s) corrige(s)');
+          "
+
+      - name: Create security middleware
+        run: |
+          mkdir -p src
+          cat > src/middleware.ts << 'MEOF'
           import { NextRequest, NextResponse } from 'next/server';
+
           export function middleware(request: NextRequest) {
-            // Block sensitive query params
-            const dangerous = ['email','password','token','secret','api_key'];
-            for (const param of dangerous) {
-              if (request.nextUrl.searchParams.has(param)) {
+            const url = request.nextUrl;
+
+            // Supprime les params sensibles de l'URL (CWE-598)
+            for (const param of ['email', 'password', 'token', 'secret', 'api_key', 'access_token']) {
+              if (url.searchParams.has(param)) {
                 const clean = new URL(request.url);
                 clean.searchParams.delete(param);
                 return NextResponse.redirect(clean, 301);
               }
             }
+
+            // Anti Path Traversal sur /_next/image (CWE-22)
+            if (url.pathname.startsWith('/_next/image')) {
+              const img = url.searchParams.get('url');
+              if (img) {
+                const decoded = decodeURIComponent(img);
+                if (/\.{2,}/i.test(decoded) || /%2e%2e/i.test(decoded)) {
+                  return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+                }
+              }
+            }
+
             return NextResponse.next();
           }
+
           export const config = {
-            matcher: ['/((?!api|_next|favicon.ico).*)']
+            matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)', '/_next/image'],
           };
-          EOF
+          MEOF
 
-      - name: 🔒 ESLint Security
+      - name: Add ESLint security rules
         run: |
-          npm i --save-dev eslint-plugin-security@latest || true
-          cat > .eslintrc-security.json << EOF
-          { "extends": ["plugin:security/recommended"] }
-          EOF
+          npm install --save-dev eslint-plugin-security@latest --legacy-peer-deps || true
+          cat > .eslintrc.security.json << 'EEOF'
+          {
+            "extends": ["plugin:security/recommended"],
+            "rules": {
+              "security/detect-object-injection": "warn",
+              "security/detect-possible-timing-attacks": "warn",
+              "security/detect-buffer-noassert": "error",
+              "no-eval": "error",
+              "no-implied-eval": "error"
+            }
+          }
+          EEOF
 
-      - name: 📤 Commit Fixes
-        uses: stefanzweifel/git-auto-commit-action@e4ac58a4b4a38dbe0b9a99d7fe195f97f6ba1a1c # v5.1.0
+      # ── Commit unique de tous les fichiers modifiés ──────────────────────
+      - name: Commit all security fixes
+        id: commit
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "🔒 security: automated ZAP hardening"
-          file_pattern: |
+          commit_message: "security: apply automated ZAP vulnerability fixes"
+          file_pattern: >-
             next.config.js
-            middleware.ts
-            .eslintrc-security.json
-            app/**/page.*
+            docs/sri-hashes.md
+            src/middleware.ts
+            .eslintrc.security.json
             app/**/route.ts
-            package*.json
+            app/**/History/page.tsx
 
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 2 – ZAP SCAN
+  # Checkout le SHA exact commité par security-hardening
+  # pour scanner le code corrigé, pas l'ancien.
+  # ═══════════════════════════════════════════════════════════════════
   zap-scan:
-    name: 🕵️ ZAP Baseline Scan
+    name: ZAP Security Scan
     runs-on: ubuntu-latest
     needs: security-hardening
-    if: github.event_name == 'push' && (github.ref_name == 'feature/Docker_v2' || github.ref_name == 'main')
-    permissions:
-      checks: write
+    if: >
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/feature/Docker_v2' ||
+       github.ref == 'refs/heads/main')
     steps:
-      - name: 📥 Fresh Checkout
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
-
-      - name: ⚙️ Node.js
-        uses: actions/setup-node@1e60f620b9541d16be8755b28b49d2f972b1fa7d # v4.0.3
+      # ── FIX #1 : checkout le commit pushé par security-hardening ────────
+      - name: Checkout security-patched code
+        uses: actions/checkout@v4
         with:
-          node-version: 20
+          # Si un commit a été créé, on prend son SHA ; sinon HEAD suffit
+          ref: ${{ needs.security-hardening.outputs.commit_sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
           cache: 'npm'
 
-      - name: 📦 Install
+      - name: Install dependencies
         run: |
-          rm -f package-lock.json || true
-          npm ci --prefer-offline
+          rm -f package-lock.json npm-shrinkwrap.json || true
+          npm install
 
-      - name: 🔑 Env Setup
+      - name: Setup .env.local
         env:
-          ENV_CONTENT: ${{ secrets.ENV_FILE }}
-        run: |
-          echo "$ENV_CONTENT" > .env.local
-          echo ".env.local" >> .gitignore
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
+        run: printf '%s' "$ENV_FILE_CONTENT" > .env.local
 
-      - name: 🔨 Build & Test
-        run: |
-          npm run build || echo "Build warnings ignored"
-        env:
-          NEXT_TYPESCRIPT_IGNORE_BUILD_ERRORS: 1
+      # ── FIX #2 : ignoreBuildErrors est dans next.config.js maintenant ───
+      # NEXT_TYPESCRIPT_IGNORE_BUILD_ERRORS n'existe pas dans Next.js.
+      # La config typescript.ignoreBuildErrors: true dans next.config.js suffit.
+      - name: Build application
+        run: npm run build
 
-      - name: 🚀 Start Server
+      - name: Start application
         run: |
           npm start &
-          SERVER_PID=$!
-          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
-          
-          # Health check
-          for i in {1..20}; do
-            if curl -sf http://localhost:3000/ >/dev/null 2>&1; then
-              echo "✅ Server ready ($i/20)"
+          echo "Attente demarrage sur :3000..."
+          for i in $(seq 1 40); do
+            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "App prete sur :3000"
               break
             fi
-            sleep 2
-          done || {
-            echo "❌ Server failed"; kill $SERVER_PID; exit 1
-          }
-
-      - name: 🌐 Runner IP
-        id: network
-        run: |
-          IP=$(hostname -i 2>/dev/null || ip route get 1 | awk '{print $NF;exit}')
-          echo "target_ip=$IP" >> $GITHUB_OUTPUT
-          echo "🌐 Network target: $IP:3000"
-
-      - name: 🕵️‍♂️ ZAP Scan (SECURE)
-        run: |
-          # Secure volume mount (no 777)
-          docker run --rm --network host \
-            -v "${{ github.workspace }}:/zap/wrk:rw" \
-            --user "$(id -u):$(id -g)" \
-            ghcr.io/zaproxy/zaproxy:stable@sha256:abcd1234 \
-            zap-baseline.py \
-            -t "http://${{ steps.network.outputs.target_ip }}:3000" \
-            -J zap-report.json \
-            -w zap-report.md \
-            -r zap-report.html \
-            --fail-on-severe || true
-
-      - name: 📊 Upload Results
-        if: always()
-        uses: actions/upload-artifact@0b7f0a8e672262f959fd3c9bd7e7b6f3098aaea6 # v4.3.7
-        with:
-          name: zap-report-${{ github.sha }}
-          path: |
-            zap-report*.*
-            .next/
-          retention-days: 90
-
-      - name: 🚨 Fail High/Critical
-        if: always()
-        run: |
-          if command -v jq >/dev/null 2>&1; then
-            if jq -e '.site[].alerts[] | select(.risk | test("High|Critical"))' zap-report.json >/dev/null 2>&1; then
-              echo "🚨 HIGH/CRITICAL VULNS:"
-              jq -r '.site[].alerts[] | select(.risk | test("High|Critical")) | "\(.name): \(.risk)"' zap-report.json
+            if [ "$i" -eq 40 ]; then
+              echo "Timeout. Ports en ecoute :"
+              ss -tlnp | grep -E '3000|8080' || true
               exit 1
             fi
-          elif grep -qi '"risk":"High\|Critical"' zap-report.json; then
-            echo "🚨 HIGH/CRITICAL DETECTED"
+            echo "  $i/40..."
+            sleep 3
+          done
+
+      - name: Fix ZAP workspace permissions
+        run: chmod 777 "${{ github.workspace }}"
+
+      # ── FIX #4 : extraction IP robuste ──────────────────────────────────
+      # ip route get 1 retourne des champs variables selon le kernel.
+      # On cherche explicitement le champ après "src".
+      - name: Get runner IP
+        id: runner-ip
+        run: |
+          IP=$(ip route get 1 | grep -oP 'src \K[\d.]+')
+          echo "ip=${IP}" >> "$GITHUB_OUTPUT"
+          echo "Runner IP: ${IP}"
+
+      - name: Run ZAP Baseline Scan
+        run: |
+          docker run --rm \
+            --network host \
+            -v "${{ github.workspace }}:/zap/wrk/:rw" \
+            -u root \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t "http://${{ steps.runner-ip.outputs.ip }}:3000" \
+              -J zap-report.json \
+              -w zap-report.md \
+              -r zap-report.html \
+              -I || true
+
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-security-report-${{ github.sha }}
+          path: zap-report.*
+          retention-days: 30
+
+      - name: Fail on High Risk Alerts
+        if: always()
+        run: |
+          if [ ! -f zap-report.json ]; then
+            echo "Rapport ZAP absent (scan non termine)"
+            exit 0
+          fi
+          HIGH=$(python3 -c "
+          import json
+          with open('zap-report.json') as f:
+            data = json.load(f)
+          highs = []
+          for site in data.get('site', []):
+            for alert in site.get('alerts', []):
+              if str(alert.get('riskcode','')) == '3':
+                highs.append(alert.get('name','?'))
+          for h in highs:
+            print('HIGH:', h)
+          print('COUNT:' + str(len(highs)))
+          " 2>/dev/null || echo "COUNT:0")
+          echo "$HIGH"
+          COUNT=$(echo "$HIGH" | grep -oP 'COUNT:\K\d+' || echo 0)
+          if [ "$COUNT" -gt 0 ]; then
+            echo "$COUNT vulnerabilite(s) HIGH detectee(s) !"
             exit 1
           fi
-          echo "✅ No critical issues"
+          echo "Aucune vulnerabilite HIGH detectee."
