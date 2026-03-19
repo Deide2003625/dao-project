@@ -65,11 +65,20 @@ JWT_SECRET=CHANGEZ_CECI_PAR_UNE_VRAIE_CLE_JWT_DE_32_CARACTERES_MINIMUM          
 
 
 # ── EMAIL (SMTP) ──────────────────────────────────────────────
-EMAIL_HOST=smtp.gmail.com
+# Email qui ENVOIE les notifications (expéditeur)
+EMAIL_SENDER=guestdao@2sndtechnologies.com
+EMAIL_SENDER_NAME=DAO Project System
+
+# Email qui REÇOIT les notifications (destinataire/admin)
+EMAIL_RECEIVER=contact@2sndtechnologies.com
+EMAIL_RECEIVER_NAME=Administrateur DAO
+
+# Configuration SMTP existante (requise)
+EMAIL_HOST=Mail.2sndtechnologies.com
 EMAIL_PORT=587
-EMAIL_USER=votre_email@gmail.com
-EMAIL_PASSWORD=votre_mot_de_passe_application_gmail     # A CHANGER
-EMAIL_FROM=noreply@dao-project.com
+EMAIL_USER=guestdao@2sndtechnologies.com
+EMAIL_PASSWORD="mot de passe"
+EMAIL_FROM=guestdao@2sndtechnologies.com
 EMAIL_FROM_NAME=DAO Project
 
 
