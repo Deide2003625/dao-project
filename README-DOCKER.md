@@ -114,6 +114,7 @@ docker compose up -d
 docker compose down
 docker compose build --no-cache
 docker compose up -d
+docker compose logs app --tail=30
 ```
 
 ### Script de redéploiement complet
