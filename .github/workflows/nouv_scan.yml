@@ -91,6 +91,12 @@ jobs:
             | awk '{print $2}' \
             | head -1)
 
+          # Si EXPOSE utilise une variable, chercher sa valeur par défaut
+          if [ "${EXPOSED_PORT}" = "\$PORT" ] || [ "${EXPOSED_PORT}" = "$PORT" ]; then
+            EXPOSED_PORT=$(grep -i "ARG PORT=" "${DOCKERFILE}" \
+              | cut -d'=' -f2 | tr -d ' ')
+          fi
+
           if [ -z "${EXPOSED_PORT}" ]; then
             EXPOSED_PORT=$(grep -Eo ':[0-9]{3,5}' "${DOCKERFILE}" \
               | tr -d ':' | head -1)
