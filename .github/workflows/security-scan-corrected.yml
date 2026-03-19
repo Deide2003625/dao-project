@@ -109,6 +109,50 @@ jobs:
           MDEOF
           echo "SRI hashes computed"
 
+      - name: Fix Next.js 15 route handler params signature
+        run: |
+          echo "=== Fichiers route.ts trouves ==="
+          find . -name "route.ts" -not -path "*/node_modules/*" -not -path "*/.next/*"
+
+          find . -name "route.ts" -not -path "*/node_modules/*" -not -path "*/.next/*" | while read file; do
+            echo "--- Traitement : $file ---"
+
+            node - "$file" << 'JSEOF'
+          const fs = require('fs');
+          const filePath = process.argv[1];
+          if (!filePath) process.exit(0);
+
+          let src = fs.readFileSync(filePath, 'utf8');
+          const original = src;
+
+          // Corrige toutes les variantes de signature de params dynamiques
+          // Ex: { params }: { params: { id: string } }
+          //  -> { params }: { params: Promise<{ id: string }> }
+          src = src.replace(
+            /\{\s*params\s*\}\s*:\s*\{\s*params\s*:\s*(\{[^}]+\})\s*\}/g,
+            (_, inner) => `{ params }: { params: Promise<${inner.trim()}> }`
+          );
+
+          // Corrige: const { id } = params  ->  const { id } = await params
+          src = src.replace(
+            /\bconst\s*(\{[^}]+\})\s*=\s*params\b(?!\s*\.)/g,
+            (_, destructure) => `const ${destructure} = await params`
+          );
+
+          if (src !== original) {
+            fs.writeFileSync(filePath, src);
+            console.log('Corrige : ' + filePath);
+          } else {
+            console.log('Deja correct ou pattern non reconnu : ' + filePath);
+            // Afficher les lignes avec params pour debug
+            src.split('\n').forEach((line, i) => {
+              if (line.includes('params')) console.log('  L' + (i+1) + ': ' + line.trim());
+            });
+          }
+          JSEOF
+          done
+          echo "✅ Correction route handlers terminee"
+
       - name: Create path traversal middleware
         run: |
           mkdir -p src/middleware
