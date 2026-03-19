@@ -1,5 +1,8 @@
+// app/login/layout.tsx
 import { Inter, Roboto } from "next/font/google";
 import "../globals.css";
+import "bootstrap/dist/css/bootstrap.min.css";
+import "@mdi/font/css/materialdesignicons.min.css";
 import Script from "next/script";
 import ClientLoginLayout from "./layout-client";
 
@@ -19,18 +22,6 @@ export default async function LoginLayout({
 }) {
   return (
     <div className={`${inter.className} ${roboto.variable}`}>
-      <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css"
-        integrity="sha384-WKL5jx7Jp5xCgVpuz3AQtH37JBIDSgiCawKkzMQrYsWX1sjlIqJUlmCZuDgExIbE"
-        crossOrigin="anonymous"
-      />
-      <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
-        crossOrigin="anonymous"
-      />
       <link rel="stylesheet" href="/css/style.css" />
       <ClientLoginLayout>
         {children}

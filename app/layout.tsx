@@ -1,6 +1,8 @@
 // app/layout.tsx
 import { Inter, Roboto } from "next/font/google";
 import "./globals.css";
+import "bootstrap/dist/css/bootstrap.min.css";
+import "@mdi/font/css/materialdesignicons.min.css";
 import { headers } from "next/headers";
 import ClientLayout from "./layout-client";
 
@@ -10,7 +12,7 @@ const roboto = Roboto({
   weight: ["300", "400", "500", "700"],
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-roboto", // accessible en CSS si besoin
+  variable: "--font-roboto",
 });
 
 export default async function RootLayout({
@@ -25,19 +27,6 @@ export default async function RootLayout({
     <html lang="fr" className={roboto.variable}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* Google Fonts Roboto supprimé → géré par next/font/google ci-dessus */}
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css"
-          integrity="sha384-WKL5jx7Jp5xCgVpuz3AQtH37JBIDSgiCawKkzMQrYsWX1sjlIqJUlmCZuDgExIbE"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-          rel="stylesheet"
-          integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
-          crossOrigin="anonymous"
-        />
         <link rel="stylesheet" href="/css/style.css" />
         <link rel="stylesheet" href="/css/custom.css" />
         <script

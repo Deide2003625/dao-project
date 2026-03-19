@@ -1,68 +1,96 @@
 import { NextResponse } from "next/server";
-import mysql from "mysql2/promise";
+import { db } from "@/lib/db";
 import fs from "fs";
 import path from "path";
 
 export async function PUT(req: Request) {
   try {
     const formData = await req.formData();
-
     const name = formData.get("name") as string;
     const email = formData.get("email") as string;
     const image = formData.get("image") as File | null;
+    const userIdRaw = formData.get("userId");
 
-    // ID utilisateur (remplace par ton système d’auth)
-    const userId = 1;
+    // Validation : userId obligatoire
+    if (!userIdRaw) {
+      return NextResponse.json(
+        { success: false, message: "Utilisateur non identifié" },
+        { status: 401 }
+      );
+    }
+    const userId = parseInt(userIdRaw as string, 10);
+    if (isNaN(userId)) {
+      return NextResponse.json(
+        { success: false, message: "userId invalide" },
+        { status: 400 }
+      );
+    }
 
-    // Connexion DB
-    const db = await mysql.createConnection({
-      host: "localhost",
-      user: "root",
-      password: "",
-      database: "dao",
-    });
+    // Validation des champs obligatoires
+    if (!name || !email) {
+      return NextResponse.json(
+        { success: false, message: "Nom et email requis" },
+        { status: 400 }
+      );
+    }
 
     let photoUrl = null;
 
-    // Si une image a été uploadée
     if (image) {
+      // Validation du type de fichier
+      const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+      if (!allowedTypes.includes(image.type)) {
+        return NextResponse.json(
+          { success: false, message: "Type de fichier non autorisé. Utilisez JPG, PNG, WEBP ou GIF." },
+          { status: 400 }
+        );
+      }
+
+      // Validation de la taille (max 5MB)
+      if (image.size > 5 * 1024 * 1024) {
+        return NextResponse.json(
+          { success: false, message: "Fichier trop volumineux (max 5MB)" },
+          { status: 400 }
+        );
+      }
+
       const bytes = await image.arrayBuffer();
       const buffer = Buffer.from(bytes);
 
-      // Stockage local dans /public/uploads
-      const uploadDir = path.join(process.cwd(), "public/uploads");
-      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+      // Stockage dans private/uploads (hors de public/)
+      const uploadDir = path.join(process.cwd(), "private", "uploads");
+      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-      const filename = `user_${userId}_${Date.now()}.jpg`;
+      const ext = image.type.split("/")[1];
+      const filename = `user_${userId}_${Date.now()}.${ext}`;
       const filepath = path.join(uploadDir, filename);
-
       fs.writeFileSync(filepath, buffer);
 
-      photoUrl = `/uploads/${filename}`;
+      // URL via la route API sécurisée
+      photoUrl = `/api/uploads/${filename}`;
     }
 
-    // Mise à jour SQL
-    const [result] = await db.execute(
-      `
-        UPDATE users
-        SET username = ?, email = ?, ${photoUrl ? "url_photo = ?," : ""}
-            updated_at = NOW()
-        WHERE id = ?
-      `,
-      photoUrl ? [name, email, photoUrl, userId] : [name, email, userId],
-    );
+    // Connexion via le pool centralisé
+    const connection = await db();
 
-    db.end();
+    await connection.execute(
+      `UPDATE users
+       SET username = ?, email = ?${photoUrl ? ", url_photo = ?" : ""},
+           updated_at = NOW()
+       WHERE id = ?`,
+      photoUrl ? [name, email, photoUrl, userId] : [name, email, userId]
+    );
 
     return NextResponse.json({
       success: true,
       message: "Profil mis à jour",
       photoUrl,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Erreur serveur";
     return NextResponse.json(
-      { success: false, message: error.message },
-      { status: 500 },
+      { success: false, message },
+      { status: 500 }
     );
   }
 }
