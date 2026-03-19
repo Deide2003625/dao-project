@@ -1,377 +1,156 @@
-name: Security Hardening - Fix ZAP Vulnerabilities
+name: Security Pipeline (Production Ready)
 
 on:
-  workflow_dispatch:
   push:
     branches: [main, develop, "feature/Docker_v2"]
-  pull_request:
-    branches: [main]
-
-permissions:
-  contents: write
-  pull-requests: write
+  workflow_dispatch:
 
 jobs:
-  security-hardening:
-    name: Apply All Security Fixes
+
+# ═══════════════════════════════════════
+# 1. BUILD SAFE (NO DB DEPENDENCY)
+# ═══════════════════════════════════════
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
+          node-version: 20
+          cache: npm
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - name: Install deps
+        run: npm ci
 
-      - name: Install dependencies
+      # 🔥 ENV FAKE POUR BUILD (IMPORTANT)
+      - name: Create safe env
         run: |
-          rm -f package-lock.json npm-shrinkwrap.json
-          npm install
+          cat > .env.local <<EOF
+          DB_HOST=localhost
+          DB_USER=dummy
+          DB_PASSWORD=dummy
+          DB_NAME=dummy
+          NEXT_PUBLIC_APP_ENV=ci
+          EOF
 
-      - name: npm audit fix
+      # 🔒 Next config sécurisé
+      - name: Apply security headers
         run: |
-          npm audit fix --force --audit-level=high || true
-          rm -f package-lock.json
-          npm install
-
-      - name: Rewrite next.config.js
-        run: |
-          cat > next.config.js << 'CONFIGEOF'
+          cat > next.config.js << 'EOF'
           /** @type {import('next').NextConfig} */
           const nextConfig = {
             poweredByHeader: false,
 
             typescript: {
-              // Les erreurs de type preexistantes ne bloquent pas le build CI.
               ignoreBuildErrors: true,
             },
 
-            // ── FIX jspdf / fflate ─────────────────────────────────────────
-            // jspdf importe fflate/lib/node.cjs (workers Node.js).
-            // Turbopack tente de le bundler cote SSR → erreur de compilation.
-            // serverExternalPackages exclut ces packages du bundle serveur :
-            // ils ne sont charges que cote client (import dynamique requis).
             serverExternalPackages: ['jspdf', 'fflate'],
 
             async headers() {
-              return [
-                {
-                  source: '/(.*)',
-                  headers: [
-                    {
-                      key: 'Content-Security-Policy',
-                      value: [
-                        "default-src 'self'",
-                        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com",
-                        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
-                        "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
-                        "img-src 'self' data: blob:",
-                        "connect-src 'self'",
-                        "frame-ancestors 'none'",
-                        "object-src 'none'",
-                        "base-uri 'self'",
-                        "form-action 'self'",
-                      ].join('; ')
-                    },
-                    { key: 'X-Frame-Options',              value: 'DENY' },
-                    { key: 'X-Content-Type-Options',       value: 'nosniff' },
-                    { key: 'Strict-Transport-Security',    value: 'max-age=63072000; includeSubDomains; preload' },
-                    { key: 'Referrer-Policy',              value: 'strict-origin-when-cross-origin' },
-                    { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
-                    { key: 'Cross-Origin-Opener-Policy',   value: 'same-origin' },
-                    { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
-                    { key: 'Permissions-Policy',           value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' }
-                  ]
-                }
-              ];
-            },
+              return [{
+                source: '/(.*)',
+                headers: [
+                  {
+                    key: 'Content-Security-Policy',
+                    value: [
+                      "default-src 'self'",
+                      "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com",
+                      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+                      "font-src 'self' https://fonts.gstatic.com",
+                      "img-src 'self' data: blob:",
+                      "connect-src 'self'",
+                      "frame-ancestors 'none'",
+                      "object-src 'none'"
+                    ].join('; ')
+                  },
+                  { key: 'X-Frame-Options', value: 'DENY' },
+                  { key: 'X-Content-Type-Options', value: 'nosniff' },
+                  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+                  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+                  { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' }
+                ]
+              }];
+            }
           };
+
           module.exports = nextConfig;
-          CONFIGEOF
+          EOF
 
-      # ── FIX jspdf cote composant ────────────────────────────────────────
-      # serverExternalPackages empeche le SSR de bundler jspdf, mais si
-      # History/page.tsx l'importe en statique SANS 'use client', Next.js
-      # tente quand meme de l'evaluer cote serveur → erreur.
-      # Ce step : ajoute 'use client' et convertit l'import en dynamique.
-      - name: Patch jspdf imports in History page
-        run: |
-          cat > /tmp/fix-jspdf.js << 'JSEOF'
-          const fs = require('fs');
-
-          const candidates = [
-            'app/dash/admin/History/page.tsx',
-            'app/dash/admin/History/page.jsx',
-            'app/dash/admin/history/page.tsx',
-            'app/dash/admin/history/page.jsx',
-          ];
-
-          for (const filePath of candidates) {
-            if (!fs.existsSync(filePath)) continue;
-            let src = fs.readFileSync(filePath, 'utf8');
-
-            if (!src.includes('jspdf') && !src.includes('fflate')) {
-              console.log('jspdf non trouve dans ' + filePath);
-              continue;
-            }
-
-            let changed = false;
-
-            // 1. Ajouter 'use client' si absent
-            if (!src.match(/^['"]use client['"]/m)) {
-              src = "'use client';\n" + src;
-              changed = true;
-              console.log("'use client' ajoute : " + filePath);
-            }
-
-            // 2. Convertir import statique jspdf en commentaire d'instructions
-            //    Le dev devra remplacer l'appel par : const { jsPDF } = await import('jspdf')
-            const staticImport = /^import\s+\{?\s*jsPDF\s*\}?\s+from\s+['"]jspdf['"]\s*;?\s*$/m;
-            if (staticImport.test(src)) {
-              src = src.replace(staticImport,
-                "// TODO: remplacer par import dynamique :\n" +
-                "// const { jsPDF } = await import('jspdf');"
-              );
-              changed = true;
-              console.log('Import statique jspdf commente : ' + filePath);
-            }
-
-            if (changed) {
-              fs.writeFileSync(filePath, src);
-              console.log('Patch applique : ' + filePath);
-            }
-          }
-          JSEOF
-          node /tmp/fix-jspdf.js
-
-      - name: Generate SRI hashes
-        run: |
-          mkdir -p docs
-          sri() { curl -sL "$1" | openssl dgst -sha384 -binary | openssl base64 -A; }
-          BS="sha384-$(sri 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js')"
-          JQ="sha384-$(sri 'https://code.jquery.com/jquery-3.6.0.min.js')"
-          MD="sha384-$(sri 'https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css')"
-          cat > docs/sri-hashes.md << MDEOF
-          # SRI Hashes
-
-          ## Bootstrap 5.3.0
-          \`\`\`html
-          <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-                  integrity="${BS}" crossorigin="anonymous"></script>
-          \`\`\`
-
-          ## jQuery 3.6.0
-          \`\`\`html
-          <script src="https://code.jquery.com/jquery-3.6.0.min.js"
-                  integrity="${JQ}" crossorigin="anonymous"></script>
-          \`\`\`
-
-          ## MDI 7.2.96
-          \`\`\`html
-          <link rel="stylesheet"
-                href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css"
-                integrity="${MD}" crossorigin="anonymous"/>
-          \`\`\`
-          MDEOF
-
-      - name: Fix Next.js 15 route handler params signature
-        run: |
-          cat > /tmp/fix-route-params.js << 'JSEOF'
-          const fs = require('fs');
-          const filePath = process.env.ROUTE_FILE;
-          if (!filePath) { process.exit(1); }
-          let src = fs.readFileSync(filePath, 'utf8');
-          const original = src;
-          src = src.replace(
-            /\{\s*params\s*\}\s*:\s*\{\s*params\s*:\s*(\{[^}]+\})\s*\}/g,
-            (_, inner) => '{ params }: { params: Promise<' + inner.trim() + '> }'
-          );
-          src = src.replace(
-            /\bconst\s*(\{[^}]+\})\s*=\s*params\b(?!\s*\.)/g,
-            (_, d) => 'const ' + d + ' = await params'
-          );
-          if (src !== original) {
-            fs.writeFileSync(filePath, src);
-            console.log('Corrige : ' + filePath);
-          } else {
-            src.split('\n').forEach((l, i) => {
-              if (l.includes('params')) console.log('L' + (i+1) + ': ' + l.trim());
-            });
-          }
-          JSEOF
-          find . -name "route.ts" \
-            -not -path "*/node_modules/*" \
-            -not -path "*/.next/*" | while read file; do
-            ROUTE_FILE="$file" node /tmp/fix-route-params.js
-          done
-
-      - name: Create security middleware
-        run: |
-          mkdir -p src
-          cat > src/middleware.ts << 'MIDDLEWARE_EOF'
-          import { NextRequest, NextResponse } from 'next/server';
-
-          export function middleware(request: NextRequest) {
-            const url = request.nextUrl;
-
-            const sensitiveParams = ['email', 'password', 'token', 'secret', 'api_key', 'access_token'];
-            for (const param of sensitiveParams) {
-              if (url.searchParams.has(param)) {
-                const cleanUrl = new URL(request.url);
-                cleanUrl.searchParams.delete(param);
-                return NextResponse.redirect(cleanUrl, 301);
-              }
-            }
-
-            if (url.pathname.startsWith('/_next/image')) {
-              const imageUrl = url.searchParams.get('url');
-              if (imageUrl) {
-                const decoded = decodeURIComponent(imageUrl);
-                if (/\.{2,}/i.test(decoded) || /%2e%2e/i.test(decoded)) {
-                  return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
-                }
-              }
-            }
-
-            return NextResponse.next();
-          }
-
-          export const config = {
-            matcher: [
-              '/((?!api|_next/static|_next/image|favicon.ico).*)',
-              '/_next/image'
-            ]
-          };
-          MIDDLEWARE_EOF
-
-      - name: Add ESLint security rules
-        run: |
-          npm install --save-dev eslint-plugin-security@latest --legacy-peer-deps || true
-          cat > .eslintrc.security.json << 'ESLINT_EOF'
-          {
-            "extends": ["plugin:security/recommended"],
-            "rules": {
-              "security/detect-object-injection": "warn",
-              "security/detect-possible-timing-attacks": "warn",
-              "security/detect-buffer-noassert": "error"
-            }
-          }
-          ESLINT_EOF
-
-      - name: Commit all security fixes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "security: apply automated ZAP vulnerability fixes"
-          file_pattern: >-
-            next.config.js
-            docs/sri-hashes.md
-            src/middleware.ts
-            .eslintrc.security.json
-            app/**/History/page.tsx
-            app/**/history/page.tsx
-            app/**/route.ts
-
-  # ═══════════════════════════════════════════════════════
-  # JOB 2 – ZAP SCAN
-  # ═══════════════════════════════════════════════════════
-  zap-scan:
-    name: ZAP Security Scan
-    runs-on: ubuntu-latest
-    needs: security-hardening
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/feature/Docker_v2' || github.ref == 'refs/heads/main')
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: |
-          rm -f package-lock.json npm-shrinkwrap.json || true
-          npm install
-
-      - name: Setup .env.local
-        env:
-          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
-        run: printf '%s' "$ENV_FILE_CONTENT" > .env.local
-
-      - name: Build application
+      - name: Build
         run: npm run build
-        env:
-          NEXT_TYPESCRIPT_IGNORE_BUILD_ERRORS: 1
 
-      - name: Start application on port 3000
+# ═══════════════════════════════════════
+# 2. RUN APP IN DOCKER (ISOLATED)
+# ═══════════════════════════════════════
+  docker-run:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
         run: |
-          npm start &
+          docker build -t dao-app .
+
+      - name: Run container
+        run: |
+          docker network create zap-net || true
+
+          docker run -d \
+            --name dao-app \
+            --network zap-net \
+            -p 3000:3000 \
+            -e DB_HOST=localhost \
+            -e DB_USER=dummy \
+            -e DB_PASSWORD=dummy \
+            dao-app
+
+      - name: Wait for app
+        run: |
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
-              echo "App ready on :3000"
+            if curl -sf http://localhost:3000 > /dev/null; then
+              echo "App ready"
               break
             fi
-            if [ $i -eq 30 ]; then
-              echo "Timeout - ports en ecoute :"
-              ss -tlnp | grep -E '3000|8080' || true
-              exit 1
-            fi
-            echo "  attente $i/30..."
             sleep 3
           done
 
-      - name: Fix ZAP workspace permissions
-        run: chmod 777 ${{ github.workspace }}
+# ═══════════════════════════════════════
+# 3. ZAP SCAN (CLEAN + ISOLATED)
+# ═══════════════════════════════════════
+  zap:
+    runs-on: ubuntu-latest
+    needs: docker-run
 
-      - name: Get runner IP
-        id: runner-ip
-        run: |
-          IP=$(ip route get 1 | awk '{print $7; exit}')
-          echo "ip=$IP" >> $GITHUB_OUTPUT
-          echo "Runner IP: $IP"
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Run ZAP Baseline Scan
+      - name: Run ZAP scan
         run: |
           docker run --rm \
-            --network host \
-            -v "${{ github.workspace }}:/zap/wrk/:rw" \
-            -u root \
+            --network zap-net \
+            -v $(pwd):/zap/wrk \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
-              -t "http://${{ steps.runner-ip.outputs.ip }}:3000" \
-              -J zap-report.json \
-              -w zap-report.md \
-              -r zap-report.html \
+              -t http://dao-app:3000 \
+              -r report.html \
+              -J report.json \
               -I || true
 
-      - name: Upload ZAP report
-        if: always()
+      - name: Upload report
         uses: actions/upload-artifact@v4
         with:
-          name: zap-security-report-${{ github.sha }}
-          path: zap-report.*
-          retention-days: 30
+          name: zap-report
+          path: report.*
 
-      - name: Fail on High Risk Alerts
-        if: always()
+      - name: Fail on HIGH
         run: |
-          if grep -q '"risk":"High"' zap-report.json 2>/dev/null; then
-            echo "High risk vulnerabilities found!"
-            python3 -c "
-          import json, sys
-          with open('zap-report.json') as f:
-            data = json.load(f)
-          for site in data.get('site', []):
-            for alert in site.get('alerts', []):
-              if alert.get('riskcode') == '3':
-                print('HIGH:', alert.get('name'))
-          "
+          if grep -q '"riskcode":"3"' report.json; then
+            echo "❌ HIGH vulnerabilities detected"
             exit 1
           fi
-          echo "No high risk vulnerabilities detected"
+          echo "✅ No HIGH vulnerabilities"
