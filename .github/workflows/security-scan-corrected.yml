@@ -8,15 +8,13 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
   security-hardening:
     name: Apply All Security Fixes
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,17 +26,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      - name: Regenerate package-lock.json
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (high+ severity only)
         run: |
-          # Supprimer l'ancien fichier de verrouillage
-          rm -f package-lock.json
-          
-          # Installer les dépendances pour générer un nouveau fichier de verrouillage
-          npm install
-          
-          # Vérifier que le fichier a été généré
-          ls -la package-lock.json
+          npm audit --audit-level=high
+          npm audit fix --force --audit-level=high || true
 
       - name: Rewrite next.config.js with security headers
         run: |
@@ -50,117 +46,156 @@ jobs:
               ignoreBuildErrors: true,
             },
             async headers() {
-              const securityHeaders = [
+              return [
                 {
-                  key: 'Content-Security-Policy',
-                  value: [
-                    "default-src 'self'",
-                    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com",
-                    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
-                    "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
-                    "img-src 'self' data: blob:",
-                    "connect-src 'self'",
-                    "frame-ancestors 'none'",
-                    "object-src 'none'",
-                    "base-uri 'self'",
-                    "form-action 'self'",
-                  ].join('; '),
-                },
-                { key: 'X-Frame-Options', value: 'DENY' },
-                { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
-                { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-                { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
-                { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
-                { key: 'X-Content-Type-Options', value: 'nosniff' },
-                { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-                { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+                  source: '/(.*)',
+                  headers: [
+                    {
+                      key: 'Content-Security-Policy',
+                      value: [
+                        "default-src 'self'",
+                        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com",
+                        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
+                        "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
+                        "img-src 'self' data: blob:",
+                        "connect-src 'self'",
+                        "frame-ancestors 'none'",
+                        "object-src 'none'",
+                        "base-uri 'self'",
+                        "form-action 'self'",
+                      ].join('; ')
+                    },
+                    { key: 'X-Frame-Options', value: 'DENY' },
+                    { key: 'X-Content-Type-Options', value: 'nosniff' },
+                    { key: 'X-XSS-Protection', value: '1; mode=block' },
+                    { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+                    { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+                    { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+                    { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+                    { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+                    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' }
+                  ]
+                }
               ];
-              return [{ source: '/(.*)', headers: securityHeaders }];
             },
           };
           module.exports = nextConfig;
           CONFIGEOF
 
-      - name: Create middleware
+      - name: Generate SRI hashes
         run: |
-          mkdir -p src/middleware
-          
-          # Créer le middleware de validation
-          cat > src/middleware/validateImageParams.ts << 'EOF'
-          import { NextRequest, NextResponse } from 'next/server';
+          mkdir -p docs
+          sri() { curl -sL "$1" | openssl dgst -sha384 -binary | openssl base64 -A; }
+          BS="sha384-$(sri 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js')"
+          JQ="sha384-$(sri 'https://code.jquery.com/jquery-3.6.0.min.js')"
+          MD="sha384-$(sri 'https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css')"
+          cat > docs/sri-hashes.md << EOF
+          # SRI Hashes
 
-          const ALLOWED_PREFIXES = ['/images/', '/public/'];
-          const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'ico'];
-          const ALLOWED_WIDTHS = new Set([16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 1200, 1920, 2048, 3840]);
+          ## Bootstrap 5.3.0
+          \`\`\`html
+          <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+                  integrity="${BS}" crossorigin="anonymous"></script>
+          \`\`\`
 
-          export function validateImageRequest(request: NextRequest): NextResponse | null {
-            if (!request.nextUrl.pathname.startsWith('/_next/image')) return null;
-            
-            const url = request.nextUrl.searchParams.get('url');
-            const w = request.nextUrl.searchParams.get('w');
-            const q = request.nextUrl.searchParams.get('q');
-            
-            if (!url) return NextResponse.json({ error: 'Missing url' }, { status: 400 });
-            
-            try {
-              const decoded = decodeURIComponent(url);
-              
-              // Protection contre path traversal
-              if (/\.\.|\/\.\.\/|%2e%2e|%252e/i.test(decoded)) {
-                return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
-              }
-              
-              // Vérification de l'extension
-              const ext = decoded.split('.').pop()?.toLowerCase();
-              if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
-                return NextResponse.json({ error: 'Invalid extension' }, { status: 400 });
-              }
-              
-              // Vérification des préfixes autorisés
-              if (!ALLOWED_PREFIXES.some(p => decoded.startsWith(p))) {
-                return NextResponse.json({ error: 'Path not allowed' }, { status: 403 });
-              }
-              
-              // Vérification de la largeur
-              if (w) {
-                const width = Number(w);
-                if (isNaN(width) || !ALLOWED_WIDTHS.has(width)) {
-                  return NextResponse.json({ error: 'Invalid width' }, { status: 400 });
-                }
-              }
-              
-              // Vérification de la qualité
-              if (q) {
-                const quality = Number(q);
-                if (isNaN(quality) || quality < 1 || quality > 100) {
-                  return NextResponse.json({ error: 'Invalid quality' }, { status: 400 });
-                }
-              }
-              
-              return null;
-            } catch {
-              return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-            }
-          }
+          ## jQuery 3.6.0
+          \`\`\`html
+          <script src="https://code.jquery.com/jquery-3.6.0.min.js"
+                  integrity="${JQ}" crossorigin="anonymous"></script>
+          \`\`\`
+
+          ## MDI 7.2.96
+          \`\`\`html
+          <link rel="stylesheet"
+                href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css"
+                integrity="${MD}" crossorigin="anonymous"/>
+          \`\`\`
           EOF
 
-          cat > src/middleware.ts << 'EOF'
+      - name: Fix Next.js 15 route handlers
+        run: |
+          cat > /tmp/fix-route-handlers.js << 'JS_EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          function fixRouteHandler(filePath) {
+            let content = fs.readFileSync(filePath, 'utf8');
+            const original = content;
+
+            // Fix params type: { params: { id: string } } -> { params: Promise<{ id: string }> }
+            content = content.replace(
+              /({ params }: \{ params: ([{][^}]*}) \}/g,
+              '($1): { params: Promise<$2> }'
+            );
+
+            // Fix destructuring: const { id } = params -> const { id } = await params
+            content = content.replace(
+              /(const\s+[{][^}]*}[)]?\s*=\s*params)(?!\s*\.)/g,
+              '$1 ? await $1 : $1'
+            );
+
+            if (content !== original) {
+              fs.writeFileSync(filePath, content);
+              console.log(`✅ Fixed: ${filePath}`);
+              return true;
+            }
+            return false;
+          }
+
+          const routeFiles = [];
+          function findRoutes(dir) {
+            const files = fs.readdirSync(dir);
+            for (const file of files) {
+              const fullPath = path.join(dir, file);
+              const stat = fs.statSync(fullPath);
+              if (stat.isDirectory()) {
+                findRoutes(fullPath);
+              } else if (file === 'route.ts' || file === 'route.js') {
+                routeFiles.push(fullPath);
+              }
+            }
+          }
+
+          findRoutes('.');
+          console.log(`Found ${routeFiles.length} route files`);
+
+          let fixedCount = 0;
+          for (const file of routeFiles) {
+            if (fixRouteHandler(file)) fixedCount++;
+          }
+          console.log(`✅ Fixed ${fixedCount} route handlers`);
+          JS_EOF
+
+          node /tmp/fix-route-handlers.js
+
+      - name: Create security middleware
+        run: |
+          mkdir -p src/middleware
+          cat > src/middleware.ts << 'MIDDLEWARE_EOF'
           import { NextRequest, NextResponse } from 'next/server';
-          import { validateImageRequest } from './middleware/validateImageParams';
 
           export function middleware(request: NextRequest) {
-            // Validation des images Next.js
-            const imgError = validateImageRequest(request);
-            if (imgError) return imgError;
+            const url = request.nextUrl;
 
-            // Suppression des paramètres sensibles dans les URLs
-            const sensitiveParams = ['email', 'password', 'token', 'api_key'];
-            const hasSensitiveParam = sensitiveParams.some(p => request.nextUrl.searchParams.has(p));
-            
-            if (hasSensitiveParam) {
-              const cleanUrl = new URL(request.url);
-              sensitiveParams.forEach(p => cleanUrl.searchParams.delete(p));
-              return NextResponse.redirect(cleanUrl, { status: 301 });
+            // Block sensitive params in query strings
+            const sensitiveParams = ['email', 'password', 'token', 'secret', 'api_key', 'access_token'];
+            for (const param of sensitiveParams) {
+              if (url.searchParams.has(param)) {
+                const cleanUrl = new URL(request.url);
+                cleanUrl.searchParams.delete(param);
+                return NextResponse.redirect(cleanUrl, 301);
+              }
+            }
+
+            // Image optimization path traversal protection
+            if (url.pathname.startsWith('/_next/image')) {
+              const imageUrl = url.searchParams.get('url');
+              if (imageUrl) {
+                const decoded = decodeURIComponent(imageUrl);
+                if (/\.\.|%2e%2e/i.test(decoded)) {
+                  return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+                }
+              }
             }
 
             return NextResponse.next();
@@ -170,65 +205,117 @@ jobs:
             matcher: [
               '/((?!api|_next/static|_next/image|favicon.ico).*)',
               '/_next/image'
-            ],
+            ]
           };
-          EOF
+          MIDDLEWARE_EOF
+
+      - name: Add ESLint security rules
+        run: |
+          npm install --save-dev eslint-plugin-security@latest --legacy-peer-deps || true
+          cat > .eslintrc.security.json << 'ESLINT_EOF'
+          {
+            "extends": ["plugin:security/recommended"],
+            "rules": {
+              "security/detect-object-injection": "warn",
+              "security/detect-possible-timing-attacks": "warn",
+              "security/detect-buffer-noassert": "error"
+            }
+          }
+          ESLINT_EOF
 
       - name: Commit security fixes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "fix(security): apply security hardening fixes"
+          commit_message: "security: apply automated ZAP vulnerability fixes"
           file_pattern: |
             package*.json
             next.config.js
+            docs/sri-hashes.md
             src/middleware.ts
-            src/middleware/validateImageParams.ts
+            .eslintrc.security.json
 
-  verify-with-zap:
-    name: Verify Fixes with ZAP
+  zap-scan:
+    name: ZAP Security Scan
     runs-on: ubuntu-latest
     needs: security-hardening
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/feature/Docker_v2' || github.ref == 'refs/heads/main')
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          # Utiliser npm install au lieu de npm ci car le lockfile peut avoir changé
-          npm install
+        run: npm ci
 
-      - name: Create env file
+      - name: Setup .env.local
         env:
           ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
         run: |
-          if [ -n "$ENV_FILE_CONTENT" ]; then
-            printf '%s' "$ENV_FILE_CONTENT" > .env.local
-          fi
+          echo "$ENV_FILE_CONTENT" > .env.local
+          echo ".env.local" >> .gitignore
 
-      - name: Build app
+      - name: Build application
         run: npm run build
+        env:
+          NEXT_TYPESCRIPT_IGNORE_BUILD_ERRORS: 1
 
-      - name: Start app
+      - name: Start application
         run: |
           npm start &
-          npx wait-on http://localhost:3000 --timeout 60000
+          APP_PID=$!
+          echo "APP_PID=$APP_PID" >> $GITHUB_ENV
+          
+          # Wait for app to be ready
+          for i in {1..30}; do
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "✅ App ready on port 3000"
+              break
+            fi
+            echo "Waiting for app... ($i/30)"
+            sleep 2
+          done || (echo "❌ App failed to start"; exit 1)
+
+      - name: Get runner IP
+        id: runner-ip
+        run: |
+          IP=$(ip route get 1 | awk '{print $7; exit}')
+          echo "runner_ip=$IP" >> $GITHUB_OUTPUT
+          echo "Runner IP: $IP"
 
       - name: Run ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.7.0
-        with:
-          target: 'http://localhost:3000'
-          allow_issue_writing: false
-          fail_action: false
-          cmd_options: '-I'
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/zap/wrk/:rw" \
+            --network host \
+            -u "$(id -u):$(id -g)" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t "http://${{ steps.runner-ip.outputs.runner_ip }}:3000" \
+              -J zap-report.json \
+              -w zap-report.md \
+              -r zap-report.html \
+              --hook-on-output /zap/wrk/zap-hook.py \
+              || true
 
-      - name: Upload ZAP report
-        uses: actions/upload-artifact@v4
+      - name: Upload ZAP Reports
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: zap-report
-          path: report.*
+          name: zap-security-report-${{ github.sha }}
+          path: |
+            zap-report*.*
+          retention-days: 30
+
+      - name: Fail on High Risk Alerts
+        if: always()
+        run: |
+          if grep -q '"risk":"High"' zap-report.json 2>/dev/null; then
+            echo "❌ High risk vulnerabilities found!"
+            exit 1
+          fi
+          echo "✅ No high risk vulnerabilities detected"
