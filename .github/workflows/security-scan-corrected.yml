@@ -36,7 +36,7 @@ jobs:
           npm audit --audit-level=high
           npm audit fix --force --audit-level=high || true
 
-      - name: Rewrite next.config.js with security headers
+      - name: Rewrite next.config.js ✅ FIX TURBOPACK + fflate
         run: |
           cat > next.config.js << 'CONFIGEOF'
           /** @type {import('next').NextConfig} */
@@ -44,6 +44,20 @@ jobs:
             poweredByHeader: false,
             typescript: {
               ignoreBuildErrors: true,
+            },
+            // ✅ FIX: Force Webpack au lieu de Turbopack (fflate incompatible)
+            webpack: (config, { isServer }) => {
+              if (!isServer) {
+                config.resolve.fallback = {
+                  ...config.resolve.fallback,
+                  worker: false,
+                };
+              }
+              return config;
+            },
+            transpilePackages: ['fflate', 'jspdf'],
+            experimental: {
+              esmExternals: 'loose',
             },
             async headers() {
               return [
@@ -112,7 +126,7 @@ jobs:
           \`\`\`
           EOF
 
-      - name: Fix Next.js 15 route handlers ✅ CORRIGÉ
+      - name: Fix Next.js 15 route handlers
         run: |
           cat > /tmp/fix-route-handlers.js << 'JS_EOF'
           const fs = require('fs');
@@ -122,13 +136,11 @@ jobs:
             let content = fs.readFileSync(filePath, 'utf8');
             const original = content;
 
-            // Fix 1: { params }: { params: { id: string } } -> { params }: { params: Promise<{ id: string }> }
             content = content.replace(
-              /\\{\s*params\\s*\\}:\\s*\\{\\s*params\\s*:\\s*(\\{[^}]+\\})\\s*\\}/g,
+              /\\{\\s*params\\s*\\}:\\s*\\{\\s*params\\s*:\\s*(\\{[^}]+\\})\\s*\\}/g,
               '{ params }: { params: Promise<$1> }'
             );
 
-            // Fix 2: const { id } = params -> const { id } = await params
             content = content.replace(
               /const\\s+([\\{][^}]+[\\}])\\s*=\\s*params(?!\\s*\\.|await)/g,
               'const $1 = await params'
@@ -159,13 +171,13 @@ jobs:
 
           try {
             const routeFiles = findRouteFiles('.');
-            console.log(`Found ${routeFiles.length} route files`);
+            console.log('Found ' + routeFiles.length + ' route files');
 
             let fixedCount = 0;
             for (const file of routeFiles) {
               if (fixRouteHandler(file)) fixedCount++;
             }
-            console.log(`✅ Fixed ${fixedCount} route handlers`);
+            console.log('✅ Fixed ' + fixedCount + ' route handlers');
           } catch (error) {
             console.error('❌ Error:', error.message);
             process.exit(1);
@@ -183,7 +195,6 @@ jobs:
           export function middleware(request: NextRequest) {
             const url = request.nextUrl;
 
-            // Block sensitive params in query strings
             const sensitiveParams = ['email', 'password', 'token', 'secret', 'api_key', 'access_token'];
             for (const param of sensitiveParams) {
               if (url.searchParams.has(param)) {
@@ -193,7 +204,6 @@ jobs:
               }
             }
 
-            // Image optimization path traversal protection
             if (url.pathname.startsWith('/_next/image')) {
               const imageUrl = url.searchParams.get('url');
               if (imageUrl) {
@@ -265,10 +275,12 @@ jobs:
           echo "$ENV_FILE_CONTENT" > .env.local
           echo ".env.local" >> .gitignore
 
-      - name: Build application
+      - name: Build application ✅ WEBPACK FORCÉ
         run: npm run build
         env:
           NEXT_TYPESCRIPT_IGNORE_BUILD_ERRORS: 1
+          # Force Webpack (Turbopack désactivé)
+          NEXT_BUILD_WEBPACK: 1
 
       - name: Start application
         run: |
