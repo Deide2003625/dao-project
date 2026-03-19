@@ -1,105 +1,73 @@
+// app/api/check-email/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { RowDataPacket } from "mysql2";
 
-// CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+// Liste blanche des origines autorisées
+const ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "https://ton-domaine.com", // à remplacer par ton domaine en prod
+];
+
+function getCorsHeaders(origin: string | null) {
+  const allowedOrigin =
+    origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Vary": "Origin",
+  };
+}
 
 export async function GET(request: Request) {
-  // Handle OPTIONS method for CORS preflight
-  if (request.method === "OPTIONS") {
-    return new NextResponse(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
+  const origin = request.headers.get("origin");
 
-  // Diagnostic de la requête entrante
-  console.log("=== DIAGNOSTIC CHECK-EMAIL API ===");
-  console.log("URL complète:", request.url);
-  console.log("Méthode:", request.method);
-  
   const { searchParams } = new URL(request.url);
   const email = searchParams.get("email");
-  
-  console.log("Paramètres URL complets:", Object.fromEntries(searchParams.entries()));
-  console.log("Email extrait:", email);
-  console.log("Type de l'email:", typeof email);
-  console.log("Email vide?", !email);
-  console.log("=====================================");
 
   if (!email) {
-    console.log(" ERREUR 400: Email requis");
     return NextResponse.json(
-      {
-        success: false,
-        error: "Email requis",
-        debug: {
-          url: request.url,
-          hasEmailParam: searchParams.has("email"),
-          emailValue: email,
-          allParams: Object.fromEntries(searchParams.entries())
-        }
-      },
-      {
-        status: 400,
-        headers: corsHeaders,
-      },
+      { success: false, error: "Email requis" },
+      { status: 400, headers: getCorsHeaders(origin) }
     );
   }
 
   try {
     const connection = await db();
-    // Définition du type pour les lignes retournées
+
     interface UserRow extends RowDataPacket {
       id: number;
-      password: string;
     }
 
     const [rows] = await connection.execute<UserRow[]>(
-      "SELECT id, password FROM users WHERE email = ?",
-      [email],
+      "SELECT id FROM users WHERE email = ?",
+      [email]
     );
 
     const userExists = Array.isArray(rows) && rows.length > 0;
 
     return NextResponse.json(
-      {
-        success: userExists,
-        password: userExists ? rows[0].password : null,
-      },
-      {
-        headers: corsHeaders,
-      },
+      { success: userExists },
+      { headers: getCorsHeaders(origin) }
     );
   } catch (error: unknown) {
-    console.error("Erreur lors de la vérification de l'email:", error);
-
-    let errorMessage = "Erreur serveur";
-    let errorDetails: string | undefined;
-
-    if (error instanceof Error) {
-      errorMessage = error.message;
-      errorDetails =
-        process.env.NODE_ENV === "development" ? error.stack : undefined;
-    } else if (typeof error === "string") {
-      errorMessage = error;
-    }
+    const errorMessage =
+      error instanceof Error ? error.message : "Erreur serveur";
 
     return NextResponse.json(
-      {
-        success: false,
-        error: errorMessage,
-        ...(errorDetails && { details: errorDetails }),
-      },
-      {
-        status: 500,
-        headers: corsHeaders,
-      },
+      { success: false, error: errorMessage },
+      { status: 500, headers: getCorsHeaders(origin) }
     );
   }
+}
+
+// Preflight CORS
+export async function OPTIONS(request: Request) {
+  const origin = request.headers.get("origin");
+  return new NextResponse(null, {
+    status: 204,
+    headers: getCorsHeaders(origin),
+  });
 }
