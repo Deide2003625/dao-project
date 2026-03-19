@@ -25,28 +25,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 4️⃣ Appliquer patch automatique pour jspdf/fflate
+      # 4️⃣ Patch global JSPDF pour SSR (import dynamique)
       - name: Patch JSPDF imports for SSR
         run: |
+          npm install glob --no-save
           node -e "
           const fs = require('fs');
-          const path = './app/dash/DirecteurGeneral/page.tsx';
-          if (fs.existsSync(path)) {
-            let code = fs.readFileSync(path, 'utf8');
-            // Remplacer import jsPDF côté serveur par import dynamique
-            code = code.replace(/import\s+jsPDF\s+from\s+['\"]jspdf['\"];/g, '');
-            const patch = '\nconst generatePDF = async () => { const { jsPDF } = await import(\"jspdf\"); const doc = new jsPDF(); doc.text(\"Hello world\", 10, 10); doc.save(\"file.pdf\"); };\n';
-            if (!code.includes('generatePDF')) {
-              code += patch;
+          const glob = require('glob');
+
+          // Cherche tous les fichiers .tsx dans app/
+          glob.sync('./app/**/*.tsx').forEach(file => {
+            let code = fs.readFileSync(file, 'utf8');
+            if (/import\s+jsPDF\s+from\s+['\"]jspdf['\"]/.test(code)) {
+              code = code.replace(/import\s+jsPDF\s+from\s+['\"]jspdf['\"];/g, '');
+              const patch = '\nconst generatePDF = async () => { const { jsPDF } = await import(\"jspdf\"); const doc = new jsPDF(); doc.text(\"Hello world\", 10, 10); doc.save(\"file.pdf\"); };\n';
+              if (!code.includes('generatePDF')) {
+                code += patch;
+              }
+              fs.writeFileSync(file, code);
+              console.log(`Patch appliqué ✅ ${file}`);
             }
-            fs.writeFileSync(path, code);
-            console.log('Patch appliqué ✅');
-          } else {
-            console.log('Fichier page.tsx non trouvé, patch ignoré.');
-          }
+          });
           "
 
-      # 5️⃣ Build Next.js
+      # 5️⃣ Build Next.js (Turbopack désactivé)
       - name: Build app
         run: NEXT_DISABLE_TURBOPACK=1 npm run build
 
