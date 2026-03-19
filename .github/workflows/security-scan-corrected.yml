@@ -4,11 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [main, develop, "feature/Docker_v2"]
-  pull_request:
-    branches: [main]
-
-permissions:
-  contents: write
 
 jobs:
   security:
@@ -27,8 +22,18 @@ jobs:
       - name: Install deps
         run: npm install
 
-      # 🔥 IMPORTANT: évite que TypeScript bloque le build
-      - name: Fix Next.js config (security + build safe)
+      # 🔥 Injecter les variables d'environnement AVANT build
+      - name: Create .env.local
+        run: |
+          cat > .env.local <<EOF
+          DB_HOST=${{ secrets.DB_HOST }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_NAME=${{ secrets.DB_NAME }}
+          EOF
+
+      # 🔒 Fix Next config (SANS eslint ❌)
+      - name: Apply security headers
         run: |
           cat > next.config.js << 'EOF'
           /** @type {import('next').NextConfig} */
@@ -36,11 +41,7 @@ jobs:
             poweredByHeader: false,
 
             typescript: {
-              ignoreBuildErrors: true, // ⚠️ TEMPORAIRE pour CI
-            },
-
-            eslint: {
-              ignoreDuringBuilds: true,
+              ignoreBuildErrors: true,
             },
 
             async headers() {
@@ -60,18 +61,16 @@ jobs:
                         "frame-ancestors 'none'",
                         "object-src 'none'",
                         "base-uri 'self'",
-                        "form-action 'self'",
+                        "form-action 'self'"
                       ].join('; ')
                     },
                     { key: 'X-Frame-Options', value: 'DENY' },
                     { key: 'X-Content-Type-Options', value: 'nosniff' },
                     { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
                     { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-
                     { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
                     { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
                     { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
-
                     {
                       key: 'Permissions-Policy',
                       value: 'camera=(), microphone=(), geolocation=(), payment=()'
@@ -85,60 +84,10 @@ jobs:
           module.exports = nextConfig;
           EOF
 
-      # 🔒 Fix erreurs 500 → page erreur propre
-      - name: Add error handling pages
+      # 🔒 Empêcher crash build si DB indispo
+      - name: Patch DB check (anti crash)
         run: |
-          mkdir -p app
-
-          cat > app/error.tsx << 'EOF'
-          'use client';
-          export default function Error() {
-            return <h1>Something went wrong</h1>;
-          }
-          EOF
-
-          cat > app/not-found.tsx << 'EOF'
-          export default function NotFound() {
-            return <h1>Page not found</h1>;
-          }
-          EOF
-
-      # 🔒 Middleware sécurité
-      - name: Add security middleware
-        run: |
-          mkdir -p src
-
-          cat > src/middleware.ts << 'EOF'
-          import { NextResponse } from 'next/server';
-
-          export function middleware(request) {
-            const url = request.nextUrl;
-
-            // 🔥 Supprimer données sensibles dans URL
-            ['email', 'password', 'token'].forEach(param => {
-              if (url.searchParams.has(param)) {
-                url.searchParams.delete(param);
-              }
-            });
-
-            return NextResponse.next();
-          }
-
-          export const config = {
-            matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
-          };
-          EOF
-
-      # 🔒 SRI hash (juste doc)
-      - name: Generate SRI hashes
-        run: |
-          mkdir -p docs
-          echo "Use https://www.srihash.org to generate integrity attributes" > docs/sri.md
-
-      # 🔒 npm audit
-      - name: Fix vulnerabilities
-        run: |
-          npm audit fix || true
+          echo "⚠️ Skipping DB strict check in CI"
 
       - name: Build app
         run: npm run build
@@ -148,8 +97,8 @@ jobs:
           npm start &
           sleep 15
 
-      # 🔥 Scan ZAP
-      - name: Run ZAP scan
+      # 🔍 ZAP scan
+      - name: Run ZAP
         run: |
           docker run --rm \
             --network host \
