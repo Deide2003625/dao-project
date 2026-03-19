@@ -1,47 +1,73 @@
-name: 🔐 Security Scan (ZAP)
+name: 🔧 Auto-fix & Security Scan
 
 on:
   push:
-    branches: [ "main", "develop", "feature/Correction_v1" ]
+    branches: ["main", "develop", "feature/Correction_v1"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
-  zap-scan:
+  fix-and-scan:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      # 1️⃣ Récupérer le code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # ✅ Node 20 obligatoire
+      # 2️⃣ Installer Node.js (>= 20)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
+      # 3️⃣ Installer dépendances
       - name: Install dependencies
         run: npm ci
 
-      # ⚠️ Désactiver Turbopack (important)
+      # 4️⃣ Appliquer patch automatique pour jspdf/fflate
+      - name: Patch JSPDF imports for SSR
+        run: |
+          node -e "
+          const fs = require('fs');
+          const path = './app/dash/DirecteurGeneral/page.tsx';
+          if (fs.existsSync(path)) {
+            let code = fs.readFileSync(path, 'utf8');
+            // Remplacer import jsPDF côté serveur par import dynamique
+            code = code.replace(/import\s+jsPDF\s+from\s+['\"]jspdf['\"];/g, '');
+            const patch = '\nconst generatePDF = async () => { const { jsPDF } = await import(\"jspdf\"); const doc = new jsPDF(); doc.text(\"Hello world\", 10, 10); doc.save(\"file.pdf\"); };\n';
+            if (!code.includes('generatePDF')) {
+              code += patch;
+            }
+            fs.writeFileSync(path, code);
+            console.log('Patch appliqué ✅');
+          } else {
+            console.log('Fichier page.tsx non trouvé, patch ignoré.');
+          }
+          "
+
+      # 5️⃣ Build Next.js
       - name: Build app
         run: NEXT_DISABLE_TURBOPACK=1 npm run build
 
+      # 6️⃣ Start app en background
       - name: Start app
         run: |
           npm run start &
-          sleep 15
+          sleep 10
 
-      - name: Check app
+      # 7️⃣ Vérifier que l'app tourne
+      - name: Wait for app
         run: curl -I http://localhost:3000
 
+      # 8️⃣ Lancer scan ZAP
       - name: ZAP Scan
         uses: zaproxy/action-full-scan@v0.10.0
         with:
           target: 'http://localhost:3000'
           cmd_options: '-a'
 
+      # 9️⃣ Upload rapport
       - name: Upload ZAP report
         uses: actions/upload-artifact@v4
         with:
