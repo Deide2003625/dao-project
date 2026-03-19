@@ -9,10 +9,9 @@ import Footer from "@/components/Footer";
 
 interface ClientLayoutProps {
   children: React.ReactNode;
-  nonce: string;
 }
 
-export default function ClientLayout({ children, nonce }: ClientLayoutProps) {
+export default function ClientLayout({ children }: ClientLayoutProps) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
   const [user, setUser] = useState<{ id: number; role_id: number } | null>(null);

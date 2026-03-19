@@ -105,7 +105,7 @@ export default function Header() {
       const data = await response.json();
 
       if (data.success) {
-        setNotifications(data.data || []);
+        setNotifications(data.notifications || data.data || []);
       }
     } catch (error) {
       console.error("Erreur lors du chargement des notifications:", error);
@@ -199,6 +199,40 @@ export default function Header() {
         handleUserUpdated as EventListener,
       );
     };
+  }, []);
+
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
+  const toggleDropdown = async (name: string) => {
+    const isOpening = openDropdown !== name;
+    setOpenDropdown(prev => prev === name ? null : name);
+    
+    // Marquer les notifications comme lues quand on ouvre le dropdown
+    if (isOpening && name === "notifications" && user?.id) {
+      try {
+        await fetch("/api/notifications/read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: user.id })
+        });
+        // Mettre à jour localement
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      } catch (e) {
+        console.error("Erreur marquage notifications:", e);
+      }
+    }
+  };
+
+  // Fermer les dropdowns au clic extérieur
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.nav-item.dropdown')) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   // Charger les messages et notifications quand l'utilisateur change
@@ -307,15 +341,15 @@ export default function Header() {
           {/* Messages Dropdown */}
           <li className="nav-item dropdown mr-1">
             <a
-              className="nav-link dropdown-toggle d-flex justify-content-center align-items-center"
+              className="nav-link d-flex justify-content-center align-items-center"
               href="#"
-              data-bs-toggle="dropdown"
-              aria-expanded="false"
+              onClick={(e) => { e.preventDefault(); toggleDropdown("messages"); }}
+              aria-expanded={openDropdown === "messages"}
             >
               <i className="mdi mdi-message-text mx-0" style={{ fontSize: '20px' }}></i>
             </a>
 
-            <div className="dropdown-menu dropdown-menu-right navbar-dropdown" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <div className={`dropdown-menu dropdown-menu-right navbar-dropdown${openDropdown === 'messages' ? ' show' : ''}`} style={{ maxHeight: '400px', overflowY: 'auto' }}>
               <p className="mb-0 font-weight-normal float-left dropdown-header">
                 Messages
               </p>
@@ -360,8 +394,42 @@ export default function Header() {
           </li>
 
           {/* Notifications */}
-         
-
+          <li className="nav-item dropdown mr-1" style={{ position: "relative" }}>
+            <a
+              className="nav-link d-flex justify-content-center align-items-center"
+              href="#"
+              onClick={(e) => { e.preventDefault(); toggleDropdown("notifications"); }}
+              aria-expanded={openDropdown === "notifications"}
+            >
+              <i className="mdi mdi-bell mx-0" style={{ fontSize: "20px" }}></i>
+            </a>
+            {notifications?.filter((n) => !n.isRead).length > 0 && (
+              <span className="badge badge-danger" style={{ fontSize: "10px", position: "absolute", top: "4px", right: "4px", zIndex: 10 }}>
+                {notifications.filter((n) => !n.isRead).length}
+              </span>
+            )}
+            <div className={`dropdown-menu dropdown-menu-right navbar-dropdown${openDropdown === 'notifications' ? ' show' : ''}`} style={{ maxHeight: "400px", overflowY: "auto" }}>
+              <p className="mb-0 font-weight-normal float-left dropdown-header">Notifications</p>
+              {loadingNotifications ? (
+                <div className="dropdown-item">
+                  <p className="font-weight-light small-text text-muted mb-0">Chargement...</p>
+                </div>
+              ) : notifications?.length === 0 ? (
+                <div className="dropdown-item">
+                  <p className="font-weight-light small-text text-muted mb-0">Aucune notification</p>
+                </div>
+              ) : (
+                notifications.map((notif) => (
+                  <div key={notif.id || Math.random()} className="dropdown-item">
+                    <div className="item-content">
+                      <h6 className="font-weight-normal">{notif.title}</h6>
+                      <p className="font-weight-light small-text text-muted mb-0">{notif.message}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </li>
           {/* Profile Dropdown */}
           <li
             className="nav-item nav-profile dropdown"

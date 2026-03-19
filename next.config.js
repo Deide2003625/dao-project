@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredByHeader: false,
-  turbopack: {},
 
   async headers() {
     return [
@@ -13,9 +12,10 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://code.jquery.com https://cdn.jsdelivr.net",
-              "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-              "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
-              "img-src 'self' data: blob:",
+              "style-src 'self' 'unsafe-inline' 'unsafe-hashes' https://cdn.jsdelivr.net https://fonts.googleapis.com",
+              "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
+              "img-src 'self' data: blob: https:",
+              "media-src 'self' blob:",
               "connect-src 'self' ws://localhost:* wss://localhost:*",
               "frame-ancestors 'none'",
               "form-action 'self'",

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mysql from 'mysql2/promise';
+import { db } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,22 +17,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Connexion à la base de données
-    const connection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'dao',
-      port: parseInt(process.env.DB_PORT || '3306')
-    });
-
+    // Connexion via le pool centralisé
+    const connection = await db();
     // Insérer le message dans la table messages
     const [result] = await connection.execute(`
       INSERT INTO messages (task_id, user_id, content, mentioned_user_id, mentioned_user_name, is_public)
       VALUES (?, ?, ?, ?, ?, ?)
     `, [task_id, user_id, content, mentioned_user_id || null, mentioned_user_name || null, is_public !== false]);
+    console.log('✅ Message inséré avec succès, ID:', (result as any).insertId);
 
-    await connection.end();
+    // Créer une notification si un utilisateur est mentionné
+    if (mentioned_user_id && mentioned_user_id !== user_id) {
+      try {
+        const [senderRows] = await connection.execute(
+          "SELECT username FROM users WHERE id = ?",
+          [user_id]
+        ) as any[];
+        const senderName = senderRows.length > 0 ? (senderRows as any[])[0].username : "Quelqu'un";
+        await connection.execute(
+          "INSERT INTO notifications (user_id, type, title, message, is_read) VALUES (?, 'mention', ?, ?, 0)",
+          [
+            mentioned_user_id,
+            senderName + " vous a mentionné",
+            senderName + " vous a mentionné : " + content.substring(0, 100) + (content.length > 100 ? "..." : "")
+          ]
+        );
+      } catch (notifError) {
+        console.error("Erreur notification mention:", notifError);
+      }
+    }
 
     console.log('✅ Message inséré avec succès, ID:', (result as any).insertId);
 
@@ -69,14 +82,8 @@ export async function GET(request: NextRequest) {
     console.log('=== API MESSAGES - GET ===');
     console.log('Paramètres:', { task_id, user_id });
 
-    // Connexion à la base de données
-    const connection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'dao',
-      port: parseInt(process.env.DB_PORT || '3306')
-    });
+    // Connexion via le pool centralisé
+    const connection = await db();
 
     // Créer la table hidden_messages si elle n'existe pas
     await connection.execute(`
@@ -118,7 +125,6 @@ export async function GET(request: NextRequest) {
     query += ' ORDER BY m.created_at DESC';
 
     const [messages] = await connection.execute(query, params);
-    await connection.end();
 
     console.log(`✅ ${(messages as any[]).length} messages récupérés`);
 

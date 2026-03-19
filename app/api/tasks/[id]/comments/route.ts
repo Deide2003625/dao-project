@@ -71,7 +71,6 @@ export async function GET(
       ORDER BY tc.created_at ASC
     `, [taskId]);
 
-    await connection.end();
 
     return NextResponse.json({
       success: true,
@@ -116,7 +115,25 @@ export async function POST(
       VALUES (?, ?, ?, ?)
     `, [taskId, userId, userName, text]);
 
-    await connection.end();
+    // Notifier les membres de la tâche
+    try {
+      const [taskMembers] = await connection.execute(
+        "SELECT DISTINCT ta.user_id FROM task_assignment ta WHERE ta.task_id = ? AND ta.user_id != ?",
+        [taskId, userId]
+      ) as any[];
+      for (const member of taskMembers as any[]) {
+        await connection.execute(
+          "INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'comment', ?, ?)",
+          [
+            member.user_id,
+            "Nouveau commentaire de " + userName,
+            userName + " a commenté la tâche #" + taskId + " : " + text.substring(0, 100) + (text.length > 100 ? "..." : "")
+          ]
+        );
+      }
+    } catch (notifError) {
+      console.error("Erreur notification commentaire:", notifError);
+    }
 
     // Récupérer le commentaire créé
     const newComment = {
@@ -168,7 +185,6 @@ export async function PUT(
       WHERE id = ? AND task_id = ?
     `, [text, commentId, taskId]);
 
-    await connection.end();
 
     return NextResponse.json({
       success: true,
@@ -209,7 +225,6 @@ export async function DELETE(
       WHERE id = ? AND task_id = ?
     `, [commentId, taskId]);
 
-    await connection.end();
 
     return NextResponse.json({
       success: true,

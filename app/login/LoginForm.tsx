@@ -87,7 +87,7 @@ export default function LoginForm() {
 
       if (response.data.success) {
         setEmailExists(true);
-        if (response.data.password !== null) {
+        if (response.data.hasPassword) {
           setIsNewUser(false);
           setShowPassword(true);
           setShowPasswordConfirmation(false);
