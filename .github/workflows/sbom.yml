@@ -1,0 +1,409 @@
+name: SBOM — Software Bill of Materials
+
+on:
+  push:
+    branches: [main, master, develop, "feature/**"]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Génération automatique chaque lundi à 8h00
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  generate-sbom:
+    name: Générer le SBOM complet
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Installer les dépendances
+        run: npm ci --ignore-scripts
+
+      # ── SBOM CycloneDX JSON + XML ─────────────────────────
+      - name: Installer CycloneDX
+        run: npm install -g @cyclonedx/cyclonedx-npm
+
+      - name: Générer SBOM CycloneDX JSON
+        run: |
+          cyclonedx-npm \
+            --output-format JSON \
+            --output-file sbom.json
+
+      - name: Générer SBOM CycloneDX XML
+        run: |
+          cyclonedx-npm \
+            --output-format XML \
+            --output-file sbom.xml
+
+      # ── CVE avec npm audit ────────────────────────────────
+      - name: npm audit — CVE
+        run: |
+          npm audit --json > npm-audit.json || true
+          npm audit 2>&1 | tee npm-audit.txt || true
+
+      # ── Versions obsolètes ────────────────────────────────
+      - name: npm outdated — versions obsolètes
+        run: |
+          npm outdated --json > npm-outdated.json || true
+          npm outdated 2>&1 | tee npm-outdated.txt || true
+
+      # ── Arbre de dépendances complet ──────────────────────
+      - name: Arbre de dépendances
+        run: |
+          npm list --all --json > dependency-tree.json || true
+          npm list --all 2>&1 | tee dependency-tree.txt || true
+
+      # ── Rapport HTML enrichi ──────────────────────────────
+      - name: Générer rapport HTML enrichi
+        run: |
+          python3 << 'PYEOF'
+          import json, os
+          from datetime import datetime
+
+          # Charger SBOM
+          with open('sbom.json') as f:
+              sbom = json.load(f)
+
+          # Charger CVE
+          try:
+              with open('npm-audit.json') as f:
+                  audit = json.load(f)
+              vulnerabilities = audit.get('vulnerabilities', {})
+          except:
+              vulnerabilities = {}
+
+          # Charger versions obsolètes
+          try:
+              with open('npm-outdated.json') as f:
+                  outdated = json.load(f)
+          except:
+              outdated = {}
+
+          components = sbom.get('components', [])
+          metadata = sbom.get('metadata', {})
+          proj = metadata.get('component', {})
+          proj_name = proj.get('name', 'dao-project')
+          proj_version = proj.get('version', '0.1.0')
+          timestamp = metadata.get('timestamp', datetime.now().isoformat())[:10]
+
+          # Enrichir les composants avec CVE et outdated info
+          vuln_map = {}
+          for pkg_name, vuln_data in vulnerabilities.items():
+              vuln_map[pkg_name] = vuln_data
+
+          # Stats
+          total = len(components)
+          vuln_count = len(vulnerabilities)
+          outdated_count = len(outdated)
+
+          sev_counts = {'critical': 0, 'high': 0, 'moderate': 0, 'low': 0}
+          for v in vulnerabilities.values():
+              s = v.get('severity', 'low')
+              if s in sev_counts:
+                  sev_counts[s] += 1
+
+          lic_counts = {}
+          for c in components:
+              lics = c.get('licenses', [])
+              for l in lics:
+                  lid = l.get('license', {}).get('id') or l.get('license', {}).get('name', 'Unknown')
+                  lic_counts[lid] = lic_counts.get(lid, 0) + 1
+          if not lic_counts:
+              lic_counts = {'Unknown': total}
+
+          def lic_badge(lic):
+              if 'MIT' in lic: return 'mit'
+              if 'Apache' in lic: return 'apache'
+              if 'ISC' in lic: return 'isc'
+              if 'BSD' in lic: return 'bsd'
+              return 'other'
+
+          def sev_badge(sev):
+              colors = {'critical': '#dc3545', 'high': '#fd7e14', 'moderate': '#ffc107', 'low': '#17a2b8'}
+              return colors.get(sev, '#6c757d')
+
+          html = f'''<!DOCTYPE html>
+          <html lang="fr">
+          <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>SBOM — {proj_name}</title>
+          <style>
+            * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8f9fa; color: #212529; }}
+            .header {{ background: linear-gradient(135deg, #1e3a8a, #3155A7); color: white; padding: 32px 40px; }}
+            .header h1 {{ font-size: 26px; font-weight: 700; margin-bottom: 8px; }}
+            .header p {{ opacity: 0.85; font-size: 13px; }}
+            .stats {{ display: flex; gap: 12px; padding: 20px 40px; background: white; border-bottom: 1px solid #e9ecef; flex-wrap: wrap; }}
+            .stat {{ background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 14px 20px; text-align: center; min-width: 110px; }}
+            .stat .num {{ font-size: 28px; font-weight: 700; }}
+            .stat .label {{ font-size: 11px; color: #6c757d; margin-top: 4px; }}
+            .num-ok {{ color: #28a745; }}
+            .num-warn {{ color: #fd7e14; }}
+            .num-danger {{ color: #dc3545; }}
+            .num-info {{ color: #1e3a8a; }}
+            .section {{ padding: 20px 40px; background: white; border-bottom: 1px solid #e9ecef; }}
+            .section h2 {{ font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #495057; }}
+            .badges {{ display: flex; flex-wrap: wrap; gap: 6px; }}
+            .badge {{ padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }}
+            .mit {{ background: #d4edda; color: #155724; }}
+            .apache {{ background: #cce5ff; color: #004085; }}
+            .isc {{ background: #e2d9f3; color: #432874; }}
+            .bsd {{ background: #fff3cd; color: #856404; }}
+            .other {{ background: #e9ecef; color: #495057; }}
+            .cve-section {{ padding: 20px 40px; background: white; border-bottom: 1px solid #e9ecef; }}
+            .cve-item {{ border: 1px solid #e9ecef; border-radius: 6px; padding: 12px 16px; margin-bottom: 8px; border-left: 4px solid #fd7e14; }}
+            .cve-item.critical {{ border-left-color: #dc3545; }}
+            .cve-item.high {{ border-left-color: #fd7e14; }}
+            .cve-item.moderate {{ border-left-color: #ffc107; }}
+            .cve-item.low {{ border-left-color: #17a2b8; }}
+            .cve-name {{ font-weight: 600; font-size: 13px; }}
+            .cve-meta {{ font-size: 11px; color: #6c757d; margin-top: 4px; }}
+            .toolbar {{ padding: 12px 40px; background: white; border-bottom: 1px solid #e9ecef; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }}
+            .toolbar input {{ padding: 7px 14px; border: 1px solid #ced4da; border-radius: 6px; font-size: 13px; width: 280px; }}
+            .toolbar select {{ padding: 7px 14px; border: 1px solid #ced4da; border-radius: 6px; font-size: 13px; }}
+            .toolbar label {{ font-size: 13px; color: #6c757d; }}
+            .table-wrap {{ padding: 20px 40px; overflow-x: auto; }}
+            table {{ width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 12px; }}
+            thead {{ background: #1e3a8a; color: white; }}
+            th {{ padding: 10px 14px; text-align: left; font-weight: 600; white-space: nowrap; }}
+            td {{ padding: 9px 14px; border-bottom: 1px solid #f1f3f4; vertical-align: middle; }}
+            tr:hover td {{ background: #f8f9fa; }}
+            tr.has-vuln td {{ background: #fff5f5; }}
+            tr.is-outdated td {{ background: #fffbf0; }}
+            .ver {{ font-family: monospace; background: #e9ecef; padding: 2px 6px; border-radius: 4px; font-size: 11px; }}
+            .ver-new {{ font-family: monospace; background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 4px; font-size: 11px; }}
+            .ver-outdated {{ font-family: monospace; background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 4px; font-size: 11px; }}
+            .sev-pill {{ font-size: 10px; padding: 2px 7px; border-radius: 10px; color: white; font-weight: 600; }}
+            .hash {{ font-family: monospace; font-size: 10px; color: #adb5bd; }}
+            a {{ color: #1e3a8a; text-decoration: none; }}
+            a:hover {{ text-decoration: underline; }}
+            .icon-vuln {{ color: #dc3545; font-size: 14px; }}
+            .icon-ok {{ color: #28a745; font-size: 14px; }}
+            .icon-outdated {{ color: #fd7e14; font-size: 14px; }}
+            .footer {{ text-align: center; padding: 20px; color: #6c757d; font-size: 11px; border-top: 1px solid #e9ecef; margin-top: 20px; }}
+          </style>
+          </head>
+          <body>
+
+          <div class="header">
+            <h1>Software Bill of Materials (SBOM)</h1>
+            <p>
+              Projet : <strong>{proj_name} v{proj_version}</strong>
+              &nbsp;|&nbsp; Généré le : <strong>{timestamp}</strong>
+              &nbsp;|&nbsp; Format : <strong>CycloneDX 1.6</strong>
+              &nbsp;|&nbsp; Branche : <strong>${{{{ github.ref_name }}}}</strong>
+              &nbsp;|&nbsp; Commit : <strong>${{{{ github.sha[:7] if github.sha else "local" }}}}</strong>
+            </p>
+          </div>
+
+          <div class="stats">
+            <div class="stat"><div class="num num-info">{total}</div><div class="label">Dépendances totales</div></div>
+            <div class="stat"><div class="num {'num-danger' if sev_counts['critical'] > 0 else 'num-ok'}">{sev_counts['critical']}</div><div class="label">CVE Critiques</div></div>
+            <div class="stat"><div class="num {'num-warn' if sev_counts['high'] > 0 else 'num-ok'}">{sev_counts['high']}</div><div class="label">CVE Hautes</div></div>
+            <div class="stat"><div class="num {'num-warn' if sev_counts['moderate'] > 0 else 'num-ok'}">{sev_counts['moderate']}</div><div class="label">CVE Modérées</div></div>
+            <div class="stat"><div class="num {'num-warn' if outdated_count > 0 else 'num-ok'}">{outdated_count}</div><div class="label">Versions obsolètes</div></div>
+            <div class="stat"><div class="num num-info">{len(lic_counts)}</div><div class="label">Licences distinctes</div></div>
+          </div>
+          '''
+
+          # CVE section
+          if vulnerabilities:
+              html += f'<div class="cve-section"><h2>Vulnérabilités détectées ({vuln_count})</h2>'
+              for pkg, vuln in sorted(vulnerabilities.items(), key=lambda x: ['critical','high','moderate','low','info'].index(x[1].get('severity','low')) if x[1].get('severity','low') in ['critical','high','moderate','low','info'] else 5):
+                  sev = vuln.get('severity', 'low')
+                  via = vuln.get('via', [])
+                  via_str = ', '.join(v if isinstance(v, str) else v.get('title', '') for v in via[:3] if v)
+                  fix = vuln.get('fixAvailable', False)
+                  fix_str = 'Fix disponible' if fix else 'Pas de fix'
+                  html += f'''<div class="cve-item {sev}">
+                    <div class="cve-name">{pkg} <span class="sev-pill" style="background:{sev_badge(sev)}">{sev.upper()}</span></div>
+                    <div class="cve-meta">Via : {via_str or "direct"} &nbsp;|&nbsp; {fix_str} &nbsp;|&nbsp; Version affectée : {vuln.get("range", "N/A")}</div>
+                  </div>'''
+              html += '</div>'
+          else:
+              html += '<div class="cve-section"><h2>Vulnérabilités CVE</h2><p style="color:#28a745;font-weight:600">Aucune vulnérabilité détectée.</p></div>'
+
+          # Licenses section
+          html += '<div class="section"><h2>Distribution des licences</h2><div class="badges">'
+          for lic, count in sorted(lic_counts.items(), key=lambda x: -x[1]):
+              html += f'<span class="badge {lic_badge(lic)}">{lic} ({count})</span>'
+          html += '</div></div>'
+
+          # Toolbar
+          html += '''<div class="toolbar">
+            <input type="text" id="search" placeholder="Rechercher une dépendance..." oninput="filterTable()">
+            <label>Filtre : </label>
+            <select id="filter-vuln" onchange="filterTable()">
+              <option value="all">Toutes</option>
+              <option value="vuln">Avec CVE</option>
+              <option value="outdated">Obsolètes</option>
+              <option value="ok">Sans problème</option>
+            </select>
+          </div>'''
+
+          # Table
+          html += '''<div class="table-wrap"><table id="sbom-table">
+            <thead><tr>
+              <th>#</th><th>Statut</th><th>Nom</th>
+              <th>Version installée</th><th>Dernière version</th>
+              <th>Licence</th><th>CVE</th><th>PURL</th><th>Hash SHA-1</th>
+            </tr></thead><tbody>'''
+
+          for i, c in enumerate(sorted(components, key=lambda x: x.get('name','').lower()), 1):
+              name = c.get('name', '')
+              version = c.get('version', '')
+              purl = c.get('purl', '')
+
+              lics = c.get('licenses', [])
+              lic_str = ', '.join(
+                  l.get('license', {}).get('id') or l.get('license', {}).get('name', 'Unknown')
+                  for l in lics
+              ) if lics else 'Unknown'
+
+              hashes = c.get('hashes', [])
+              hash_val = next((h.get('content', '') for h in hashes if h.get('alg') == 'SHA-1'), '')
+
+              # Outdated info
+              out_info = outdated.get(name, {})
+              latest = out_info.get('latest', '')
+              wanted = out_info.get('wanted', '')
+              is_outdated = bool(out_info)
+
+              # CVE info
+              vuln_info = vuln_map.get(name, {})
+              has_vuln = bool(vuln_info)
+              vuln_sev = vuln_info.get('severity', '') if has_vuln else ''
+
+              row_class = 'has-vuln' if has_vuln else ('is-outdated' if is_outdated else '')
+              status_icon = '&#9888;' if has_vuln else ('&#9651;' if is_outdated else '&#10003;')
+              status_class = 'icon-vuln' if has_vuln else ('icon-outdated' if is_outdated else 'icon-ok')
+
+              ver_class = 'ver-outdated' if is_outdated else 'ver'
+              latest_display = f'<span class="ver-new">{latest}</span>' if latest else '<span style="color:#adb5bd">—</span>'
+
+              cve_display = f'<span class="sev-pill" style="background:{sev_badge(vuln_sev)}">{vuln_sev.upper()}</span>' if has_vuln else '<span style="color:#28a745">—</span>'
+
+              purl_short = purl.replace('pkg:npm/', '').split('?')[0] if purl else ''
+              npm_link = f'https://www.npmjs.com/package/{name}'
+
+              html += f'''<tr class="{row_class}" data-vuln="{str(has_vuln).lower()}" data-outdated="{str(is_outdated).lower()}">
+                <td>{i}</td>
+                <td class="{status_class}">{status_icon}</td>
+                <td><a href="{npm_link}" target="_blank">{name}</a></td>
+                <td><span class="{ver_class}">{version}</span></td>
+                <td>{latest_display}</td>
+                <td><span class="badge {lic_badge(lic_str)}">{lic_str}</span></td>
+                <td>{cve_display}</td>
+                <td style="font-size:10px;color:#6c757d;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{purl_short}</td>
+                <td><span class="hash">{hash_val[:20] + '...' if len(hash_val) > 20 else hash_val}</span></td>
+              </tr>'''
+
+          html += '''</tbody></table></div>
+          <div class="footer">
+            SBOM généré avec CycloneDX · Conforme NTIA Minimum Elements · dao-project
+          </div>
+          <script>
+          function filterTable() {
+            const q = document.getElementById("search").value.toLowerCase();
+            const f = document.getElementById("filter-vuln").value;
+            document.querySelectorAll("#sbom-table tbody tr").forEach(r => {
+              const text = r.textContent.toLowerCase();
+              const hasVuln = r.dataset.vuln === "true";
+              const isOutdated = r.dataset.outdated === "true";
+              const matchText = text.includes(q);
+              const matchFilter =
+                f === "all" ||
+                (f === "vuln" && hasVuln) ||
+                (f === "outdated" && isOutdated) ||
+                (f === "ok" && !hasVuln && !isOutdated);
+              r.style.display = matchText && matchFilter ? "" : "none";
+            });
+          }
+          </script>
+          </body></html>'''
+
+          with open('sbom-report.html', 'w', encoding='utf-8') as f:
+              f.write(html)
+          print(f"Rapport généré : {total} composants, {vuln_count} CVE, {outdated_count} obsolètes")
+          PYEOF
+
+      # ── Upload tous les artifacts ─────────────────────────
+      - name: Upload SBOM et rapports
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-complet-${{ github.sha }}
+          path: |
+            sbom.json
+            sbom.xml
+            npm-audit.json
+            npm-audit.txt
+            npm-outdated.json
+            npm-outdated.txt
+            dependency-tree.json
+            dependency-tree.txt
+            sbom-report.html
+          retention-days: 90
+        if: always()
+
+      # ── Résumé dans GitHub Actions ────────────────────────
+      - name: Résumé dans GitHub Actions
+        run: |
+          python3 << 'PYEOF'
+          import json, os
+
+          try:
+              with open('npm-audit.json') as f:
+                  audit = json.load(f)
+              vulns = audit.get('vulnerabilities', {})
+              by_sev = {}
+              for v in vulns.values():
+                  s = v.get('severity', 'unknown')
+                  by_sev[s] = by_sev.get(s, 0) + 1
+          except:
+              vulns, by_sev = {}, {}
+
+          try:
+              with open('npm-outdated.json') as f:
+                  outdated = json.load(f)
+          except:
+              outdated = {}
+
+          try:
+              with open('sbom.json') as f:
+                  sbom = json.load(f)
+              total = len(sbom.get('components', []))
+          except:
+              total = 0
+
+          summary = f"""## SBOM — dao-project
+
+          | Métrique | Valeur |
+          |---|---|
+          | Dépendances totales | {total} |
+          | CVE critiques | {by_sev.get('critical', 0)} |
+          | CVE hautes | {by_sev.get('high', 0)} |
+          | CVE modérées | {by_sev.get('moderate', 0)} |
+          | Packages obsolètes | {len(outdated)} |
+
+          > Télécharge le rapport HTML complet dans les **Artifacts** de ce workflow.
+          """
+
+          with open(os.environ.get('GITHUB_STEP_SUMMARY', '/dev/stdout'), 'a') as f:
+              f.write(summary)
+          print("Résumé généré")
+          PYEOF
+        if: always()
