@@ -276,15 +276,18 @@ INSERT INTO `roles` (id, name) VALUES
 
 -- -------------------------------------------------------
 -- IMPORTANT : hashes bcrypt générés avec cost=10
--- Mot de passe : admin123 pour tous les comptes
+-- Mot de passe : defini via variable d'environnement avant deploiement
 --
 -- Si la connexion échoue encore, régénère ces hashes
 -- DEPUIS TON PROJET avec :
---   node -e "require('bcrypt').hash('admin123',10).then(console.log)"
+--   node -e "require('bcrypt').hash(process.env.ADMIN_PASSWORD,12).then(console.log)"
 -- puis remplace les valeurs ci-dessous.
 -- -------------------------------------------------------
+-- SECURITE : Le mot de passe admin doit etre genere avant le deploiement.
+-- Commande : node -e "require('bcrypt').hash('VOTRE_MOT_DE_PASSE',12).then(console.log)"
+-- Puis remplacez BCRYPT_HASH_A_REMPLACER par le hash genere.
 INSERT INTO `users` (id, username, email, password, role_id) VALUES
-(1, 'admin',      'admin@dao.com',      '$2b$10$wTvd0d0TXmjgX09vjNRQLeNRqqBStfXbQ4xvfTmrZO8Xxd0tPNTWK', 2);
+(1, 'admin', 'admin@dao.com', 'BCRYPT_HASH_A_REMPLACER', 2);
 
 INSERT INTO `task` (id, nom) VALUES
 (1,  'Résumé sommaire DAO et Création du drive'),

@@ -18,6 +18,18 @@ interface Dao {
   team_id?: string;
 }
 
+
+const escapeHtml = (str: string | undefined | null): string => {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+
 export default function HistoryPage() {
   const router = useRouter();
   const [daos, setDaos] = useState<Dao[]>([]);
@@ -132,11 +144,11 @@ export default function HistoryPage() {
             <tbody>
               ${filteredDaos.map((dao, index) => `
                 <tr style="background: ${index % 2 === 0 ? "#f8fafc" : "white"}; border-bottom: 1px solid #e2e8f0;">
-                  <td style="padding: 8px; font-weight: bold; border-right: 1px solid #e2e8f0;">${dao.numero}</td>
+                  <td style="padding: 8px; font-weight: bold; border-right: 1px solid #e2e8f0;">${escapeHtml(dao.numero)}</td>
                   <td style="padding: 8px; border-right: 1px solid #e2e8f0;">AMI</td>
-                  <td style="padding: 8px; border-right: 1px solid #e2e8f0;">${dao.reference}</td>
-                  <td style="padding: 8px; border-right: 1px solid #e2e8f0;">${dao.autorite || "N/A"}</td>
-                  <td style="padding: 8px; border-right: 1px solid #e2e8f0;">${dao.chef_projet || "N/A"}</td>
+                  <td style="padding: 8px; border-right: 1px solid #e2e8f0;">${escapeHtml(dao.reference)}</td>
+                  <td style="padding: 8px; border-right: 1px solid #e2e8f0;">${escapeHtml(dao.autorite) || "N/A"}</td>
+                  <td style="padding: 8px; border-right: 1px solid #e2e8f0;">${escapeHtml(dao.chef_projet) || "N/A"}</td>
                   <td style="padding: 8px; border-right: 1px solid #e2e8f0;">-</td>
                   <td style="padding: 8px; text-align: center;">
                     <span style="background: #dbeafe; color: #1e3a8a; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;">

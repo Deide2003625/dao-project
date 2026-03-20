@@ -6,6 +6,19 @@ import { MessageSquare, FileText, User } from "lucide-react";
 import html2canvas from "html2canvas";
 // jsPDF chargé dynamiquement (voir usage)
 
+
+// Fonction de sanitisation pour éviter les failles XSS dans les templates HTML
+const escapeHtml = (str: string | undefined | null): string => {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+
 interface DAO {
   id: number;
   reference?: string;
@@ -410,12 +423,12 @@ export default function LecteurDashboard() {
         const isFirstDao = daoIndex === 0;
         
         return `
-          <!-- Section individuelle pour ${dao.reference} adaptative -->
+          <!-- Section individuelle pour ${escapeHtml(dao.reference as string)} adaptative -->
           <div style="margin-bottom: 15mm; ${isFirstDao ? 'page-break-before: avoid;' : 'page-break-before: always;'} page-break-inside: avoid;">
             <div style="background: white; border: 2px solid #e5e7eb; border-radius: ${isMobile ? '8px' : '10px'}; box-shadow: 0 3px 6px rgba(0,0,0,0.08); overflow: hidden;">
               <div style="background: linear-gradient(135deg, #6493FF, #3155A7); color: white; padding: ${isMobile ? '12px 16px' : '16px 20px'}; text-align: center;">
-                <h2 style="margin: 0; font-size: ${isMobile ? '16px' : '20px'}; font-weight: bold; letter-spacing: 0.5px;">${dao.reference}</h2>
-                <p style="margin: ${isMobile ? '4px' : '6px'} 0 0 0; font-size: ${isMobile ? '10px' : '12px'}; opacity: 0.9;">${dao.objet}</p>
+                <h2 style="margin: 0; font-size: ${isMobile ? '16px' : '20px'}; font-weight: bold; letter-spacing: 0.5px;">${escapeHtml(dao.reference as string)}</h2>
+                <p style="margin: ${isMobile ? '4px' : '6px'} 0 0 0; font-size: ${isMobile ? '10px' : '12px'}; opacity: 0.9;">${escapeHtml(dao.objet as string)}</p>
               </div>
               
               <div style="padding: ${isMobile ? '16px' : '20px'};">
@@ -539,8 +552,8 @@ export default function LecteurDashboard() {
                     
                     return `
                       <tr style="background: ${rowColor}; ${index === daos.length - 1 ? '' : 'border-bottom: 1px solid #e2e8f0;'}">
-                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; font-weight: 600; color: #1f2937; border-right: 1px solid #e2e8f0; white-space: nowrap;">${dao.reference}</td>
-                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; color: #374151; border-right: 1px solid #e2e8f0; max-width: ${isMobile ? '120px' : '200px'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${dao.objet}</td>
+                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; font-weight: 600; color: #1f2937; border-right: 1px solid #e2e8f0; white-space: nowrap;">${escapeHtml(dao.reference as string)}</td>
+                        <td style="padding: ${isMobile ? '6px 4px' : '8px'}; color: #374151; border-right: 1px solid #e2e8f0; max-width: ${isMobile ? '120px' : '200px'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(dao.objet as string)}</td>
                         <td style="padding: ${isMobile ? '6px 4px' : '8px'}; color: #374151; border-right: 1px solid #e2e8f0; white-space: nowrap;">${dao.autorite || 'N/A'}</td>
                         <td style="padding: ${isMobile ? '6px 4px' : '8px'}; color: #374151; border-right: 1px solid #e2e8f0; white-space: nowrap;">${dao.date_depot ? new Date(dao.date_depot).toLocaleDateString('fr-FR') : 'N/A'}</td>
                         <td style="padding: ${isMobile ? '6px 4px' : '8px'}; text-align: center; border-right: 1px solid #e2e8f0; white-space: nowrap;">

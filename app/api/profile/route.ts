@@ -57,13 +57,38 @@ export async function PUT(req: Request) {
       const bytes = await image.arrayBuffer();
       const buffer = Buffer.from(bytes);
 
-      // Stockage dans private/uploads (hors de public/)
+      // Whitelist stricte des extensions autorisées (protection path traversal)
+      const ALLOWED_EXTENSIONS: Record<string, string> = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+        "image/gif": "gif",
+      };
+      const ext = ALLOWED_EXTENSIONS[image.type];
+      if (!ext) {
+        return NextResponse.json(
+          { success: false, message: "Type de fichier non autorisé" },
+          { status: 400 }
+        );
+      }
+
+      // Nom de fichier sans caractères spéciaux (protection path traversal)
+      const safeUserId = String(userId).replace(/[^0-9]/g, "");
+      const safeTimestamp = Date.now();
+      const filename = `user_${safeUserId}_${safeTimestamp}.${ext}`;
+
+      // Vérification que le chemin final reste dans uploadDir
       const uploadDir = path.join(process.cwd(), "private", "uploads");
       if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-      const ext = image.type.split("/")[1];
-      const filename = `user_${userId}_${Date.now()}.${ext}`;
       const filepath = path.join(uploadDir, filename);
+      if (!filepath.startsWith(uploadDir)) {
+        return NextResponse.json(
+          { success: false, message: "Chemin de fichier invalide" },
+          { status: 400 }
+        );
+      }
+
       fs.writeFileSync(filepath, buffer);
 
       // URL via la route API sécurisée
