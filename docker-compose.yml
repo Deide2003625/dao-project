@@ -51,6 +51,7 @@ services:
       - app_logs:/app/logs
     networks:
       - dao-network
+      - coolify
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${APP_PORT:-3000}/api/health"]
       interval: 30s
@@ -113,4 +114,6 @@ volumes:
 networks:
   dao-network:
     driver: bridge
+  coolify: 
+    external: true
    
