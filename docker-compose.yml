@@ -52,12 +52,12 @@ services:
     networks:
       - dao-network
       - coolify
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${APP_PORT:-3000}/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:${APP_PORT:-3000}/api/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 40s
 
   # ── Base de données MySQL ──────────────────────────────────
   mysql:
@@ -88,14 +88,14 @@ services:
       --slow-query-log=1
       --slow-query-log-file=/var/log/mysql/slow.log
       --long-query-time=2
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost",
-             "-u", "${MYSQL_USER:-dao_user}",
-             "-p${MYSQL_PASSWORD:-dao_secure_password_2024}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+    # healthcheck:
+    #   test: ["CMD", "mysqladmin", "ping", "-h", "localhost",
+    #          "-u", "${MYSQL_USER:-dao_user}",
+    #          "-p${MYSQL_PASSWORD:-dao_secure_password_2024}"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 5
+    #   start_period: 30s
 
 
 
