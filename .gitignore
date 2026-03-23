@@ -11,12 +11,22 @@ out/
 build/
 dist/
 
-# Environment variables
+# ── SECURITE — ne jamais committer ────────────────────────
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+private/
+
+# ── Uploads privés (hors public/) ─────────────────────────
+private/uploads/
 
 # IDE and editor files
 .vscode/
@@ -35,94 +45,83 @@ ehthumbs.db
 Thumbs.db
 
 # Logs
-logs
+logs/
 *.log
 
 # Runtime data
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
+# Coverage
 coverage/
 *.lcov
-
-# nyc test coverage
 .nyc_output
 
-# Dependency directories
-jspm_packages/
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm cache directory
+# Cache
 .npm
-
-# Optional eslint cache
 .eslintcache
-
-# Optional stylelint cache
 .stylelintcache
-
-# Microbundle cache
 .rpt2_cache/
 .rts2_cache_cjs/
 .rts2_cache_es/
 .rts2_cache_umd/
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
+.node_repl_history
 
-# Next.js build output
-.next
+# TypeScript
+*.tsbuildinfo
 
-# Nuxt.js build / generate output
-.nuxt
+# Package managers
+*.tgz
+.yarn-integrity
+jspm_packages/
+yarn.lock
+pnpm-lock.yaml
 
-# Storybook build outputs
-.out
-.storybook-out
+# Next.js
+.next/
+.nuxt/
 
-# Temporary folders
+# Storybook
+.out/
+.storybook-out/
+
+# Temp
 tmp/
 temp/
 
-# Database files
+# Database
 *.sqlite
 *.sqlite3
 *.db
-
-# Docker
-.dockerignore
-
-# Test files
 test-connection.sql
 temp_user.sql
 test_login.json
 
-# Scripts and batch files
+# Docker
+.dockerignore
+
+# Scripts de test
 test-docker.bat
 test-docker.sh
 fix-font-paths.ps1
 
-# Documentation files (keep README)
+# Docs internes
 compte-rendu-recette.md
 guide.md
 README-SEEDS.md
 README-DOCKER.md
 
-# Lock files (keep package-lock.json but ignore others)
-yarn.lock
-pnpm-lock.yaml
+# Rapports de sécurité (ne pas committer)
+npm-audit.json
+npm-outdated.json
+sbom-report.html
+nuclei-results.*
+rapport-nikto.*
+dependency-check-report/
+
+# Fichiers de build temporaires
+*.map
