@@ -113,7 +113,4 @@ volumes:
 networks:
   dao-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: "${DOCKER_SUBNET:-172.25.0.0/24}"
-          gateway: "${DOCKER_GATEWAY:-172.25.0.1}"
+   
