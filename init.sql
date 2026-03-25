@@ -1,8 +1,10 @@
 -- ===========================================
 -- INITIALISATION BASE DE DONNÉES DOCKER
 -- ===========================================
--- Base : dao_project (doit correspondre à MYSQL_DATABASE dans docker-compose)
--- Exécuté automatiquement au premier démarrage du container MySQL
+-- Le nom de la base est défini par MYSQL_DATABASE dans le .env
+-- MySQL sélectionne automatiquement la bonne base au démarrage
+-- Ne jamais mettre CREATE DATABASE ou USE ici
+-- ===========================================
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -14,16 +16,6 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-
--- ===========================================
--- SÉLECTION EXPLICITE DE LA BASE
--- (évite tout ambiguïté avec le MYSQL_DATABASE du docker-compose)
--- ===========================================
-CREATE DATABASE IF NOT EXISTS `dao_project`
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_general_ci;
-
-USE `dao_project`;
 
 -- ===========================================
 -- SUPPRESSION (ordre inverse des dépendances)
@@ -154,11 +146,11 @@ CREATE TABLE `dao_sequences` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `dao_types` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int NOT NULL AUTO_INCREMENT,
   `code` varchar(20) NOT NULL,
   `libelle` varchar(100) NOT NULL,
   `description` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_dao_types_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -274,20 +266,14 @@ INSERT INTO `roles` (id, name) VALUES
 (4, 'MembreEquipe'),
 (5, 'Lecteur');
 
--- -------------------------------------------------------
--- IMPORTANT : hashes bcrypt générés avec cost=10
--- Mot de passe : defini via variable d'environnement avant deploiement
---
--- Si la connexion échoue encore, régénère ces hashes
--- DEPUIS TON PROJET avec :
---   node -e "require('bcrypt').hash(process.env.ADMIN_PASSWORD,12).then(console.log)"
--- puis remplace les valeurs ci-dessous.
--- -------------------------------------------------------
--- SECURITE : Le mot de passe admin doit etre genere avant le deploiement.
--- Commande : node -e "require('bcrypt').hash('VOTRE_MOT_DE_PASSE',12).then(console.log)"
--- Puis remplacez BCRYPT_HASH_A_REMPLACER par le hash genere.
+-- ===========================================
+-- UTILISATEUR ADMIN
+-- Générer le hash avant déploiement :
+-- node -e "require('bcrypt').hash('VOTRE_MOT_DE_PASSE',12).then(console.log)"
+-- Remplacer BCRYPT_HASH_A_REMPLACER par le hash généré
+-- ===========================================
 INSERT INTO `users` (id, username, email, password, role_id) VALUES
-(1, 'admin', 'admin@dao.com', 'BCRYPT_HASH_A_REMPLACER', 2);
+(1, 'admin', 'admin@dao.com', '$2b$12$HpL12Vnv178cTnrc8oQms.gPmQcJbl9tdm6NXvwdiAqWjYs/90Dj2', 2);
 
 INSERT INTO `task` (id, nom) VALUES
 (1,  'Résumé sommaire DAO et Création du drive'),
@@ -326,4 +312,4 @@ INSERT INTO `purchases` (id, name, status_report, office, price, date, gross_amo
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
-SELECT 'Base dao_project initialisée avec succès ✓' AS message;
+SELECT 'Base initialisée avec succès ✓' AS message;

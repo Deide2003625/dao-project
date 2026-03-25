@@ -5,10 +5,15 @@
 # Stage 2 : builder  → build de l'application Next.js
 # Stage 3 : runner   → image finale légère (prod uniquement)
 #
-# Le port est configurable via la variable PORT
-# Valeur par défaut : 3000
-# Modifier dans .env → APP_PORT=XXXX
+# SÉCURITÉ :
+#   - Aucun secret réel passé en ARG ou ENV au build
+#   - Les vraies valeurs sont injectées au runtime via docker-compose
+#   - Utilisateur non-root (nextjs uid 1001)
+#   - Image finale basée sur node:20-alpine (surface d'attaque minimale)
+#
+# PORT configurable via .env → APP_PORT=XXXX (défaut : 3000)
 # ══════════════════════════════════════════════════════════════
+
 
 # ── Stage 1 : Installation des dépendances ───────────────────
 FROM node:20-alpine AS deps
@@ -19,16 +24,12 @@ WORKDIR /app
 
 COPY package.json package-lock.json* ./
 
-# Installation complète (prod + dev) pour le stage builder
-# autoprefixer, postcss, tailwindcss sont maintenant dans
-# dependencies donc npm ci les installe sans flag spécial
+# Toutes les dépendances (prod + dev) pour le build
 RUN npm ci && npm cache clean --force
-
-# Copie pour le stage builder
 RUN cp -r node_modules node_modules_all
 
-# Installation prod uniquement pour le stage runner
-RUN npm ci --only=production && npm cache clean --force
+# Dépendances prod uniquement pour le runner final
+RUN npm ci --omit=dev && npm cache clean --force
 
 
 # ── Stage 2 : Build de l'application ─────────────────────────
@@ -36,41 +37,29 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# NODE_ENV=production — plus de warning Next.js
-# autoprefixer/postcss/tailwindcss sont dans dependencies
-# donc disponibles même en prod
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# ── Variables factices pour le build ─────────────────────────
-# /api/check-email et d'autres routes valident les variables
-# DB à l'import du module pendant "Collecting page data".
-# Ces valeurs placeholder satisfont la validation sans exposer
-# les vraies credentials.
-# Les vraies valeurs sont injectées au runtime via docker-compose.
-ARG DB_HOST=mysql
-ARG DB_PORT=3306
-ARG DB_USER=build_placeholder
-ARG DB_PASSWORD=build_placeholder
-ARG DB_NAME=dao
-ARG NEXTAUTH_URL=http://localhost:3000
-ARG NEXTAUTH_SECRET=build_placeholder_secret_32_chars_minimum_x
+# ── Variables placeholder pour le build uniquement ───────────
+# Ces valeurs permettent à Next.js de collecter les pages sans
+# connexion réelle à la base de données.
+# Les VRAIES valeurs sont injectées au runtime par docker-compose.
+# Ne jamais mettre de credentials réels ici — ils seraient
+# visibles dans `docker history`.
+ENV DB_HOST=mysql
+ENV DB_PORT=3306
+ENV DB_USER=build_placeholder
+ENV DB_PASSWORD=build_placeholder
+ENV DB_NAME=dao
+ENV NEXTAUTH_URL=http://localhost:3000
+ENV NEXTAUTH_SECRET=build_placeholder_secret_minimum_32_characters_xx
 
-ENV DB_HOST=$DB_HOST
-ENV DB_PORT=$DB_PORT
-ENV DB_USER=$DB_USER
-ENV DB_PASSWORD=$DB_PASSWORD
-ENV DB_NAME=$DB_NAME
-ENV NEXTAUTH_URL=$NEXTAUTH_URL
-ENV NEXTAUTH_SECRET=$NEXTAUTH_SECRET
-
-# Dépendances complètes depuis stage 1
+# Dépendances complètes depuis stage deps
 COPY --from=deps /app/node_modules_all ./node_modules
 
-# Copier le code source
+# Code source (le .dockerignore exclut .env, .git, node_modules…)
 COPY . .
 
-# Build Next.js
 RUN npm run build
 
 
@@ -84,21 +73,27 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 WORKDIR /app
 
+# curl pour le HEALTHCHECK
 RUN apk add --no-cache curl
 
+# Utilisateur non-root dédié
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 --ingroup nodejs nextjs
 
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
-
-# Dépendances prod uniquement — image légère
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
-
+# Artefacts du build uniquement — pas le code source complet
+COPY --from=builder --chown=nextjs:nodejs /app/public       ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next        ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
+# Dépendances prod uniquement (image légère)
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+
+# Répertoires d'écriture autorisés pour l'utilisateur nextjs
 RUN mkdir -p /app/uploads /app/logs && \
     chown -R nextjs:nodejs /app/uploads /app/logs
+
+# Système de fichiers en lecture seule sauf volumes montés
+# (les volumes docker-compose montent /app/uploads et /app/logs)
 
 USER nextjs
 
