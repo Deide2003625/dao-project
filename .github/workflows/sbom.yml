@@ -2,7 +2,7 @@ name: SBOM — Software Bill of Materials
 
 on:
   push:
-    branches: [main, master, develop, "feature/**"]
+    branches: ["**"]
   pull_request:
     branches: [main, master]
   schedule:
