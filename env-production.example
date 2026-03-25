@@ -1,19 +1,40 @@
-COMPOSE_PROJECT_NAME= # Nom du projet — préfixe conteneurs/volumes/réseaux
-APP_PORT= # Port app (ex: 3000)
-MYSQL_PORT= # Port MySQL hôte (ex: 3307)
-MYSQL_DATABASE= # DB MySQL
-MYSQL_USER= # User MySQL
-MYSQL_PASSWORD= # Password user MySQL (openssl rand -base64 16)
-MYSQL_ROOT_PASSWORD= # Password root MySQL (openssl rand -base64 16)
-NEXTAUTH_URL= # URL app (http://localhost:${APP_PORT})
-NEXTAUTH_SECRET= # Secret NextAuth (openssl rand -base64 32)
-EMAIL_HOST= # Serveur SMTP
-EMAIL_PORT= # Port SMTP (587=TLS, 465=SSL)
-EMAIL_USER= # Email SMTP
-EMAIL_PASSWORD= # Password SMTP
-EMAIL_FROM= # Email expéditeur
-EMAIL_FROM_NAME= # Nom expéditeur
-EMAIL_SENDER= # Email notifications système
-EMAIL_SENDER_NAME= # Nom notifications système
-EMAIL_RECEIVER= # Email admin (récepteur notifications)
-EMAIL_RECEIVER_NAME= # Nom admin
+# ══════════════════════════════════════════════════════════════
+# .env — Ne jamais commiter ce fichier
+# Copier : cp .env.example .env et remplir les valeurs
+# ══════════════════════════════════════════════════════════════
+
+# Nom du projet Docker
+COMPOSE_PROJECT_NAME=
+
+# Application
+APP_PORT=
+
+# Base de données
+MYSQL_PORT=
+MYSQL_DATABASE=
+MYSQL_USER=
+# Générer : openssl rand -base64 24
+MYSQL_PASSWORD=
+# Générer : openssl rand -base64 24
+MYSQL_ROOT_PASSWORD=
+
+# NextAuth
+NEXTAUTH_URL=
+# Générer : openssl rand -base64 32
+NEXTAUTH_SECRET=
+
+# Email
+EMAIL_HOST=
+EMAIL_PORT=
+EMAIL_USER=
+EMAIL_PASSWORD=
+EMAIL_FROM=
+EMAIL_FROM_NAME=
+EMAIL_SENDER=
+EMAIL_SENDER_NAME=
+EMAIL_RECEIVER=
+EMAIL_RECEIVER_NAME=
+
+# Réseau Docker
+DOCKER_SUBNET=
+DOCKER_GATEWAY=

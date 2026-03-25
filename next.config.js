@@ -1,8 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   poweredByHeader: false,
 
   async headers() {
+    const isDev = process.env.NODE_ENV === 'development';
+
     return [
       {
         source: "/(.*)",
@@ -11,12 +14,14 @@ const nextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://code.jquery.com https://cdn.jsdelivr.net",
+              // unsafe-eval retiré en prod
+              `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval'" : ""} https://code.jquery.com https://cdn.jsdelivr.net`,
               "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
               "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
               "img-src 'self' data: blob: https://cdn.jsdelivr.net https://fonts.gstatic.com https://lh3.googleusercontent.com",
               "media-src 'self' blob:",
-              "connect-src 'self' ws://localhost:* wss://localhost:*",
+              // cdn.jsdelivr.net ajouté pour Bootstrap sourcemaps
+              "connect-src 'self' https://cdn.jsdelivr.net ws://localhost:* wss://localhost:*",
               "frame-ancestors 'none'",
               "form-action 'self'",
               "base-uri 'self'",
@@ -27,7 +32,6 @@ const nextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-          { key: "X-Powered-By", value: "" },
         ],
       },
     ];
