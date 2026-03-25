@@ -325,6 +325,7 @@ docker compose logs mysql
 # ⚠️ Supprime toutes les données
 docker compose down -v
 docker compose up -d
+docker system prune -a --volumes -f
 ```
 
 ### Erreur de permissions sur les volumes
