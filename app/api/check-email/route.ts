@@ -5,7 +5,7 @@ import { RowDataPacket } from "mysql2";
 
 const ALLOWED_ORIGINS = [
   "http://localhost:3000",
-  "https://ton-domaine.com",
+  process.env.NEXT_PUBLIC_APP_URL || "https://ton-domaine.com",
 ];
 
 function getCorsHeaders(origin: string | null) {
