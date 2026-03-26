@@ -59,6 +59,29 @@ export async function GET(request: Request) {
   }
 
   try {
+    console.log("📊 [check-email] Configuration DB:", {
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT,
+      user: process.env.DB_USER,
+      database: process.env.DB_NAME,
+      password: process.env.DB_PASSWORD ? "***" : "missing"
+    });
+    
+    console.log("🔍 [check-email] Test de résolution de nom...");
+    try {
+      const dns = require('dns');
+      const addresses = await new Promise((resolve, reject) => {
+        dns.lookup(process.env.DB_HOST, (err: any, address: any, family: any) => {
+          if (err) reject(err);
+          else resolve(address);
+        });
+      });
+      console.log("✅ [check-email] DNS résolu:", addresses);
+    } catch (dnsError) {
+      console.error("❌ [check-email] Erreur DNS:", dnsError);
+      throw new Error(`Impossible de résoudre ${process.env.DB_HOST}: ${dnsError}`);
+    }
+
     console.log("📊 [check-email] Connexion à la base de données...");
     const connection = await db();
     console.log("✅ [check-email] Connexion DB établie");
