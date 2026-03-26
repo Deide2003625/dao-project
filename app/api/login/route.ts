@@ -19,6 +19,54 @@ function getRedirectByRole(roleId: number): string {
 export async function POST(request: Request) {
   console.log("=== DÉBUT API LOGIN ===");
   
+  // Mode bypass pour test production (à supprimer après)
+  if (process.env.NODE_ENV === "production" && process.env.BYPASS_DB === "true") {
+    console.log("⚠️ [login] Mode bypass DB activé");
+    
+    try {
+      const body = await request.json();
+      const { email, password } = body;
+      
+      if (email === "admin@dao.com" && password === "admin") {
+        return NextResponse.json({
+          success: true,
+          redirect: "/dash/DirecteurGeneral",
+          user: {
+            id: 1,
+            email: "admin@dao.com",
+            username: "admin",
+            role_id: 1,
+            url_photo: null
+          }
+        });
+      }
+      
+      return NextResponse.json({
+        success: false,
+        errors: { email: "Email ou mot de passe incorrect" }
+      }, { status: 401 });
+    } catch (error) {
+      return NextResponse.json({
+        success: false,
+        errors: { email: "Format de requête invalide" }
+      }, { status: 400 });
+    }
+  }
+  
+  // Vérification des variables d'environnement DB
+  if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD) {
+    console.error("❌ [login] Variables DB manquantes:", {
+      DB_HOST: process.env.DB_HOST,
+      DB_USER: process.env.DB_USER,
+      DB_PASSWORD: process.env.DB_PASSWORD ? "***" : "missing",
+      DB_NAME: process.env.DB_NAME
+    });
+    return NextResponse.json(
+      { success: false, error: "Configuration base de données manquante" },
+      { status: 500 }
+    );
+  }
+  
   try {
     let body;
     try {
