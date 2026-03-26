@@ -1,16 +1,15 @@
 # ══════════════════════════════════════════════════════════════
 # .env — Ne jamais commiter ce fichier
-# Copier : cp .env.example .env et remplir les valeurs
 # ══════════════════════════════════════════════════════════════
 
 # Nom du projet Docker
 COMPOSE_PROJECT_NAME=
 
-# Application
+# ── Application ───────────────────────────────────────────────
 APP_PORT=
 
-# Base de données
-MYSQL_PORT=
+# ── Base de données ───────────────────────────────────────────
+DB_PORT=3306
 MYSQL_DATABASE=
 MYSQL_USER=
 # Générer : openssl rand -base64 24
@@ -18,12 +17,12 @@ MYSQL_PASSWORD=
 # Générer : openssl rand -base64 24
 MYSQL_ROOT_PASSWORD=
 
-# NextAuth
+# ── NextAuth ──────────────────────────────────────────────────
 NEXTAUTH_URL=
 # Générer : openssl rand -base64 32
 NEXTAUTH_SECRET=
 
-# Email
+# ── Email ─────────────────────────────────────────────────────
 EMAIL_HOST=
 EMAIL_PORT=
 EMAIL_USER=
@@ -34,7 +33,3 @@ EMAIL_SENDER=
 EMAIL_SENDER_NAME=
 EMAIL_RECEIVER=
 EMAIL_RECEIVER_NAME=
-
-# Réseau Docker
-DOCKER_SUBNET=
-DOCKER_GATEWAY=
