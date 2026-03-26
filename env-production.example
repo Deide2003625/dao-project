@@ -9,6 +9,7 @@ COMPOSE_PROJECT_NAME=
 APP_PORT=
 
 # ── Base de données ───────────────────────────────────────────
+DB_HOST=mysql
 DB_PORT=3306
 MYSQL_DATABASE=
 MYSQL_USER=

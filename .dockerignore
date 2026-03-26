@@ -1,31 +1,36 @@
-# ══════════════════════════════════════════════════════════════
-# .dockerignore — Fichiers exclus du contexte de build Docker
-#
-# Ces fichiers ne seront jamais copiés dans l'image Docker.
-# Réduit la taille du contexte et évite les fuites de secrets.
-# ══════════════════════════════════════════════════════════════
-
-# Dépendances — seront réinstallées dans le conteneur
+# Node modules
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Build Next.js — sera regénéré dans le conteneur
+# Build outputs
 .next/
 out/
+build/
+dist/
 
-# Fichiers d'environnement — ne jamais inclure dans l'image
+# Environment files
 .env
 .env.local
-.env.production
-.env.development
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Git
 .git/
 .gitignore
-.gitattributes
 
 # Docker
 Dockerfile*
@@ -36,33 +41,44 @@ docker-compose*
 logs/
 *.log
 
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Temporary folders
+tmp/
+temp/
+
+# Documentation
+README.md
+docs/
+
+# Scripts
+scripts/
+
 # Tests
 __tests__/
 *.test.js
 *.test.ts
 *.spec.js
 *.spec.ts
-coverage/
-.nyc_output/
-
-# IDE et outils
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-
-# Documentation
-README*
-CHANGELOG*
-docs/
-
-# CI/CD
-.github/
-.gitlab-ci.yml
-.circleci/
-
-# Données locales
-uploads/
-backups/
