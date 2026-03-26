@@ -5,6 +5,8 @@ import { RowDataPacket } from "mysql2";
 
 const ALLOWED_ORIGINS = [
   "http://localhost:3000",
+  "http://localhost:2001",
+  "https://gestdao.pprod.2snd.bj",
   process.env.NEXT_PUBLIC_APP_URL || "https://ton-domaine.com",
 ];
 
@@ -39,6 +41,20 @@ export async function GET(request: Request) {
     return NextResponse.json(
       { success: email === "admin@dao.com", hasPassword: true },
       { headers: getCorsHeaders(origin) }
+    );
+  }
+
+  // Vérification des variables d'environnement DB
+  if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD) {
+    console.error("❌ [check-email] Variables DB manquantes:", {
+      DB_HOST: process.env.DB_HOST,
+      DB_USER: process.env.DB_USER,
+      DB_PASSWORD: process.env.DB_PASSWORD ? "***" : "missing",
+      DB_NAME: process.env.DB_NAME
+    });
+    return NextResponse.json(
+      { success: false, error: "Configuration base de données manquante" },
+      { status: 500, headers: getCorsHeaders(origin) }
     );
   }
 
