@@ -60,4 +60,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
   CMD curl -f http://localhost:$PORT/api/health || exit 1
 
 # standalone génère un server.js autonome — plus léger que npm start
-CMD ["sh", "-c", "PORT=$PORT node server.js"]
+CMD ["sh", "-c", "PORT=$PORT HOSTNAME=0.0.0.0 node server.js"]
