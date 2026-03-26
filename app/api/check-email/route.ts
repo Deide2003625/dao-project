@@ -24,6 +24,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const email = searchParams.get("email");
 
+  console.log("🔍 [check-email] Requête reçue:", { email, origin });
+
   if (!email) {
     return NextResponse.json(
       { success: false, error: "Email requis" },
@@ -31,14 +33,26 @@ export async function GET(request: Request) {
     );
   }
 
+  // Mode bypass pour test production (à supprimer après)
+  if (process.env.NODE_ENV === "production" && process.env.BYPASS_DB === "true") {
+    console.log("⚠️ [check-email] Mode bypass DB activé");
+    return NextResponse.json(
+      { success: email === "admin@dao.com", hasPassword: true },
+      { headers: getCorsHeaders(origin) }
+    );
+  }
+
   try {
+    console.log("📊 [check-email] Connexion à la base de données...");
     const connection = await db();
+    console.log("✅ [check-email] Connexion DB établie");
 
     interface UserRow extends RowDataPacket {
       id: number;
       password: string | null;
     }
 
+    console.log("🔎 [check-email] Recherche utilisateur:", email);
     const [rows] = await connection.execute<UserRow[]>(
       "SELECT id, password FROM users WHERE email = ?",
       [email]
@@ -47,11 +61,14 @@ export async function GET(request: Request) {
     const userExists = Array.isArray(rows) && rows.length > 0;
     const hasPassword = userExists && rows[0].password !== null && rows[0].password !== "";
 
+    console.log("📝 [check-email] Résultat:", { userExists, hasPassword });
+
     return NextResponse.json(
       { success: userExists, hasPassword },
       { headers: getCorsHeaders(origin) }
     );
   } catch (error: unknown) {
+    console.error("❌ [check-email] Erreur:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Erreur serveur";
     return NextResponse.json(

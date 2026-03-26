@@ -28,6 +28,13 @@ export const pool = mysql.createPool({
   keepAliveInitialDelay: 10000,
 });
 
+console.log("🗄️ [DB] Pool créé avec la config:", {
+  host: DB_HOST,
+  user: DB_USER,
+  database: DB_NAME,
+  port: DB_PORT,
+});
+
 export async function db() {
   return pool;
 }
