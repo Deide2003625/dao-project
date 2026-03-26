@@ -5,10 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "start": "next start",
+    "start": "next start -p $APP_PORT",
     "lint": "eslint",
     "seed": "tsx scripts/seed.ts"
-  },
+},
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.1.0",
     "@hookform/resolvers": "^5.2.2",

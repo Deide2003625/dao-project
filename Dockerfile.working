@@ -1,50 +1,37 @@
-# ── Stage 1 : Installation des dépendances ───────────────────
+# ── Stage 1 : Dépendances prod-only ──────────────────────────
 FROM node:20-alpine AS deps
 
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json package-lock.json* ./
-# --omit=dev pour économiser de l'espace
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev --no-audit --no-fund && \
+    npm cache clean --force
 
-
-# ── Stage 2 : Build ──────────────────────────────────────────
+# ── Stage 2 : Build standalone ───────────────────────────────
 FROM node:20-alpine AS builder
 
 WORKDIR /app
-
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV DB_HOST=mysql
-ENV DB_PORT=3306
-ENV DB_USER=build_placeholder
-ENV DB_PASSWORD=build_placeholder
-ENV DB_NAME=dao
-ENV NEXTAUTH_URL=http://localhost:3000
-ENV NEXTAUTH_SECRET=build_placeholder_secret_minimum_32_characters_xx
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
 RUN npm run build
 
-
-# ── Stage 3 : Runner minimal ──────────────────────────────────
+# ── Stage 3 : Runtime minimal sécurisé ───────────────────────
 FROM node:20-alpine AS runner
 
-ARG PORT=3000
-ENV PORT=$PORT
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV HOSTNAME=0.0.0.0
 
 WORKDIR /app
 
-# Uniquement curl pour le healthcheck
 RUN apk add --no-cache curl && \
     addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 --ingroup nodejs nextjs && \
     mkdir -p /app/uploads /app/logs && \
-    chown -R nextjs:nodejs /app/uploads /app/logs
+    chown -R nextjs:nodejs /app
 
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -52,10 +39,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
 
-EXPOSE $PORT
-
+# Healthcheck dynamique
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
-  CMD curl -f http://localhost:$PORT/api/health || exit 1
+  CMD curl -f http://localhost:$APP_PORT/api/health || exit 1
 
-# CMD inchangé comme demandé
-CMD ["sh", "-c", "PORT=$PORT HOSTNAME=0.0.0.0 node server.js"]
+CMD ["node", "server.js"]
