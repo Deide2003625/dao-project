@@ -15,7 +15,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: ${APP_PORT}
-      DB_HOST: ${COMPOSE_PROJECT_NAME}-mysql
+      DB_HOST: mysql
       DB_PORT: ${DB_PORT}
       DB_USER: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
