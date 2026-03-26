@@ -77,8 +77,35 @@ export async function GET(request: Request) {
         });
       });
       console.log("✅ [check-email] DNS résolu:", addresses);
+      
+      // Test de connexion TCP direct
+      const net = require('net');
+      const socket = new net.Socket();
+      
+      const tcpResult = await new Promise((resolve) => {
+        socket.connect({ host: process.env.DB_HOST, port: parseInt(process.env.DB_PORT || '3306') });
+        socket.on('connect', () => {
+          console.log("✅ [check-email] Connexion TCP réussie");
+          socket.destroy();
+          resolve(true);
+        });
+        socket.on('error', (err: any) => {
+          console.error("❌ [check-email] Connexion TCP échouée:", err.message);
+          resolve(false);
+        });
+        socket.setTimeout(5000, () => {
+          console.error("❌ [check-email] Timeout connexion TCP");
+          socket.destroy();
+          resolve(false);
+        });
+      });
+      
+      if (!tcpResult) {
+        throw new Error(`Connexion TCP impossible vers ${process.env.DB_HOST}:${process.env.DB_PORT}`);
+      }
+      
     } catch (dnsError) {
-      console.error("❌ [check-email] Erreur DNS:", dnsError);
+      console.error("❌ [check-email] Erreur DNS/TCP:", dnsError);
       throw new Error(`Impossible de résoudre ${process.env.DB_HOST}: ${dnsError}`);
     }
 
